@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'ui/dashboard/dashboard_page.dart';
 import '../src/services/alert_service.dart';
@@ -36,6 +35,20 @@ class _AppInitializerState extends State<_AppInitializer> {
       title: 'E-Metrics IoT',
       theme: ThemeData(
         brightness: Brightness.light,
+        primarySwatch: Colors.blueGrey,
+        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blueGrey).copyWith(
+          secondary: Colors.amber,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.blueGrey,
+          centerTitle: true,
+          elevation: 2,
+          titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        cardTheme: CardThemeData(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 4,
+        ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: const TextTheme(
           bodyMedium: TextStyle(fontSize: 16),
@@ -43,6 +56,20 @@ class _AppInitializerState extends State<_AppInitializer> {
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
+        primarySwatch: Colors.blueGrey,
+        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blueGrey, brightness: Brightness.dark).copyWith(
+          secondary: Colors.amber,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.blueGrey,
+          centerTitle: true,
+          elevation: 2,
+          titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        cardTheme: CardThemeData(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 4,
+        ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: const TextTheme(
           bodyMedium: TextStyle(fontSize: 18),

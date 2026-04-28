@@ -42,13 +42,34 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                     Expanded(
                       child: ListView.separated(
                         itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
                         itemBuilder: (context, i) {
                           final m = filtered[i];
-                          return ListTile(
-                            title: Text('${m.voltage.toStringAsFixed(2)} V, ${m.current.toStringAsFixed(2)} A, ${m.power.toStringAsFixed(2)} W'),
-                            subtitle: Text('${m.timestamp}'),
-                            trailing: Text('${m.energy.toStringAsFixed(2)} kWh'),
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 12),
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            child: ListTile(
+                              leading: const Icon(Icons.history, color: Colors.amber, size: 32),
+                              title: Text(
+                                '${m.voltage.toStringAsFixed(2)} V, ${m.current.toStringAsFixed(2)} A, ${m.power.toStringAsFixed(2)} W',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text('${m.timestamp}'),
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.bolt, color: Colors.blueGrey, size: 18),
+                                  Text('${m.energy.toStringAsFixed(2)} kWh', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                              onTap: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Registro de ${m.timestamp} selecionado.')),
+                                );
+                              },
+                            ),
                           );
                         },
                       ),
