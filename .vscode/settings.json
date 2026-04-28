@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "F:/DevIA/e_metrics_iot/windows/flutter"
+    "cmake.sourceDirectory": "F:/DevIA/e_metrics_iot/windows/flutter",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

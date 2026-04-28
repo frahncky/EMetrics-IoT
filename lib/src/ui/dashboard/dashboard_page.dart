@@ -4,14 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/metric_provider.dart';
 import 'realtime_chart.dart';
+import 'chart_selector.dart';
 import 'dashboard_drawer.dart';
 
-class DashboardPage extends ConsumerWidget {
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
+  @override
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends ConsumerState<DashboardPage> {
+  String _selectedField = 'voltage';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Ativa o salvamento automático dos dados MQTT recebidos
+  Widget build(BuildContext context) {
     ref.watch(mqttMetricSaverProvider);
     final metricsAsync = ref.watch(metricsProvider);
     final mqttStream = ref.watch(mqttStreamProvider);
@@ -31,6 +37,13 @@ class DashboardPage extends ConsumerWidget {
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: ChartSelector(
+              selected: _selectedField,
+              onChanged: (f) => setState(() => _selectedField = f),
+            ),
+          ),
           Expanded(
             child: metricsAsync.when(
               data: (metrics) {
@@ -50,9 +63,9 @@ class DashboardPage extends ConsumerWidget {
                         width: double.infinity,
                         child: Card(
                           color: Colors.grey[900],
-                          child: const Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: RealtimeChart(field: 'voltage'),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: RealtimeChart(field: _selectedField),
                           ),
                         ),
                       ),
