@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/mqtt_provider.dart';
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _brokerController = TextEditingController(text: 'test.mosquitto.org');
   final _topicController = TextEditingController(text: 'emetrics/pzem');
   final _intervalController = TextEditingController(text: '5');
@@ -15,6 +17,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final mqttService = ref.watch(mqttServiceProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
       body: ListView(
@@ -93,6 +96,42 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
                 label: const Text('Salvar'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Semantics(
+            label: 'Botão Conectar MQTT',
+            button: true,
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.cloud),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  try {
+                    await mqttService.connect();
+                    mqttService.subscribe();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Conectado ao broker MQTT!')),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Erro ao conectar: $e')),
+                      );
+                    }
+                  }
+                },
+                label: const Text('Conectar MQTT'),
               ),
             ),
           ),
