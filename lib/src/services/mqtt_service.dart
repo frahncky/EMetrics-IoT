@@ -1,3 +1,5 @@
+
+import 'dart:io';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
@@ -34,8 +36,14 @@ class MqttService {
         .startClean();
     try {
       await client.connect();
+    } on SocketException catch (e) {
+      // Trate o erro de rede de forma amigável
+      print('Erro de conexão MQTT: ${e.message}');
+      // Aqui você pode exibir um alerta visual ou notificar o usuário
+      throw Exception('Não foi possível conectar ao broker MQTT. Verifique sua conexão de rede.');
     } catch (e) {
-      rethrow;
+      print('Erro inesperado ao conectar MQTT: $e');
+      throw Exception('Erro inesperado ao conectar ao broker MQTT.');
     }
   }
 

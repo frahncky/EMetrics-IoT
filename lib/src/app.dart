@@ -34,48 +34,65 @@ class _AppInitializerState extends State<_AppInitializer> {
     return MaterialApp(
       title: 'E-Metrics IoT',
       theme: ThemeData(
-        brightness: Brightness.light,
-        primarySwatch: Colors.blueGrey,
-        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blueGrey).copyWith(
-          secondary: Colors.amber,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.blueGrey,
-          centerTitle: true,
-          elevation: 2,
-          titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        cardTheme: CardThemeData(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 4,
-        ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        textTheme: const TextTheme(
-          bodyMedium: TextStyle(fontSize: 16),
-        ),
-      ),
-      darkTheme: ThemeData(
         brightness: Brightness.dark,
-        primarySwatch: Colors.blueGrey,
-        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.blueGrey, brightness: Brightness.dark).copyWith(
-          secondary: Colors.amber,
+        scaffoldBackgroundColor: const Color(0xFF181F2A),
+        primaryColor: const Color(0xFF232B3E),
+        colorScheme: ColorScheme.dark(
+          primary: const Color(0xFF232B3E),
+          secondary: const Color(0xFFFFB300),
+          background: const Color(0xFF181F2A),
+          surface: const Color(0xFF232B3E),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.blueGrey,
+          backgroundColor: Color(0xFF232B3E),
           centerTitle: true,
           elevation: 2,
           titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
         ),
         cardTheme: CardThemeData(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: const Color(0xFF232B3E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
           elevation: 4,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFFFB300),
+            foregroundColor: Colors.black,
+            textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: Color(0xFFFFB300)),
+            textStyle: const TextStyle(fontWeight: FontWeight.bold),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFFFFB300),
+            textStyle: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: Color(0xFF232B3E),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderSide: BorderSide(color: Color(0xFFFFB300)),
+          ),
+          labelStyle: TextStyle(color: Colors.white70),
+          hintStyle: TextStyle(color: Colors.white38),
         ),
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: const TextTheme(
-          bodyMedium: TextStyle(fontSize: 18),
+          bodyMedium: TextStyle(fontSize: 16, color: Colors.white70),
+          titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.dark,
       home: const DashboardPage(),
     );
   }
