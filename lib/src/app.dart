@@ -161,4 +161,30 @@ class _MainMenuState extends State<_MainMenu> {
       ),
     );
   }
+
+}
+
+class _NavBarIcon extends StatelessWidget {
+  final IconData icon;
+  final bool selected;
+  const _NavBarIcon({required this.icon, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(4),
+      decoration: selected
+          ? BoxDecoration(
+              color: const Color(0xFFFFB300).withOpacity(0.18),
+              borderRadius: BorderRadius.circular(12),
+            )
+          : null,
+      child: Icon(
+        icon,
+        color: selected ? const Color(0xFFFFB300) : Colors.white70,
+        size: 28,
+      ),
+    );
+  }
 }
