@@ -1,4 +1,5 @@
 import 'history_export.dart';
+import '../dashboard/dashboard_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/metric_provider.dart';
@@ -52,7 +53,9 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                             child: ListTile(
                               leading: const Icon(Icons.history, color: Colors.amber, size: 32),
                               title: Text(
-                                '${m.voltage.toStringAsFixed(2)} V, ${m.current.toStringAsFixed(2)} A, ${m.power.toStringAsFixed(2)} W',
+                                '${formatWithSIPrefix(m.voltage)} V, '
+                                '${formatWithSIPrefix(m.current)} A, '
+                                '${formatWithSIPrefix(m.power)} W',
                                 style: const TextStyle(fontWeight: FontWeight.w600),
                               ),
                               subtitle: Text('${m.timestamp}'),
@@ -60,7 +63,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Icon(Icons.bolt, color: Colors.blueGrey, size: 18),
-                                  Text('${m.energy.toStringAsFixed(2)} kWh', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text('${formatWithSIPrefix(m.energy)} kWh', style: const TextStyle(fontWeight: FontWeight.bold)),
                                 ],
                               ),
                               contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),

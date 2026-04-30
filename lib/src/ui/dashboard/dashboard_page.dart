@@ -86,6 +86,35 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 }
 
 
+String formatWithSIPrefix(num value, {int? fractionDigits}) {
+  if (value == 0 || value.isNaN) return '--';
+  final abs = value.abs();
+  int digits(double v) {
+    if (v >= 100) return 0;
+    if (v >= 10) return 1;
+    return 2;
+  }
+  if (abs >= 1e9) {
+    final d = fractionDigits ?? digits(value / 1e9);
+    return (value / 1e9).toStringAsFixed(d) + ' G';
+  } else if (abs >= 1e6) {
+    final d = fractionDigits ?? digits(value / 1e6);
+    return (value / 1e6).toStringAsFixed(d) + ' M';
+  } else if (abs >= 1e3) {
+    final d = fractionDigits ?? digits(value / 1e3);
+    return (value / 1e3).toStringAsFixed(d) + ' K';
+  } else if (abs < 1e-3 && abs > 0) {
+    final d = fractionDigits ?? digits(value * 1e6);
+    return (value * 1e6).toStringAsFixed(d) + ' μ';
+  } else if (abs < 1 && abs >= 1e-3) {
+    final d = fractionDigits ?? digits(value * 1e3);
+    return (value * 1e3).toStringAsFixed(d) + ' m';
+  } else {
+    final d = fractionDigits ?? digits(value.toDouble());
+    return value.toStringAsFixed(d);
+  }
+}
+
 class _MainIndicators extends StatelessWidget {
   final double voltage;
   final double current;
@@ -114,23 +143,24 @@ class _MainIndicators extends StatelessWidget {
           children: [
             _IndicatorCard(
               label: 'Aparente',
-              value: apparent.isNaN ? '--' : apparent.toStringAsFixed(2),
-              icon: Icons.data_usage, // símbolo de fluxo/medida
+              value: formatWithSIPrefix(apparent),
+              icon: Icons.data_usage,
               color: Color(0xFF00E676),
               compact: true,
               unit: 'VA',
             ),
             _IndicatorCard(
               label: 'Ativa',
-              value: '${power.toStringAsFixed(2)} W',
-              icon: Icons.flash_on_outlined, // raio
+              value: formatWithSIPrefix(power),
+              icon: Icons.flash_on_outlined,
               color: Color(0xFFFFC300),
               compact: true,
+              unit: 'W',
             ),
             _IndicatorCard(
               label: 'Reativa',
-              value: reativa.isNaN ? '--' : reativa.toStringAsFixed(2),
-              icon: Icons.waves, // símbolo de onda
+              value: formatWithSIPrefix(reativa),
+              icon: Icons.waves,
               color: Color(0xFF00B8D4),
               compact: true,
               unit: 'VAr',
@@ -138,7 +168,7 @@ class _MainIndicators extends StatelessWidget {
             _IndicatorCard(
               label: 'FP',
               value: pf.isNaN ? '--' : pf.toStringAsFixed(2),
-              icon: Icons.speed_outlined, // velocímetro
+              icon: Icons.speed_outlined,
               color: Color(0xFFB388FF),
               compact: true,
             ),
@@ -150,31 +180,32 @@ class _MainIndicators extends StatelessWidget {
           children: [
             _IndicatorCard(
               label: 'Tensão',
-              value: voltage.isNaN ? '--' : voltage.toStringAsFixed(1),
-              icon: Icons.electrical_services, // plug
+              value: formatWithSIPrefix(voltage, fractionDigits: 1),
+              icon: Icons.electrical_services,
               color: Color(0xFF7DF9FF),
               compact: true,
               unit: 'V',
             ),
             _IndicatorCard(
               label: 'Corrente',
-              value: '${current.toStringAsFixed(2)} A',
-              icon: Icons.bolt_outlined, // raio
+              value: formatWithSIPrefix(current),
+              icon: Icons.bolt_outlined,
               color: Color(0xFF00C2FF),
               compact: true,
+              unit: 'A',
             ),
             _IndicatorCard(
               label: 'Freq.',
               value: '--',
-              icon: Icons.ssid_chart, // teste visual
+              icon: Icons.ssid_chart,
               color: Color(0xFF69F0AE),
               compact: true,
               unit: 'Hz',
             ),
             _IndicatorCard(
               label: 'Energia',
-              value: '${energy.toStringAsFixed(3)}',
-              icon: Icons.battery_charging_full_outlined, // símbolo de energia carregando
+              value: formatWithSIPrefix(energy, fractionDigits: 3),
+              icon: Icons.battery_charging_full_outlined,
               color: Color(0xFF7DF9FF),
               compact: true,
               unit: 'kWh',

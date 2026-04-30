@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dashboard_page.dart';
 import '../../providers/metric_provider.dart';
 
 typedef FieldSelectorBuilder = Widget Function(BuildContext context);
@@ -74,7 +75,8 @@ class RealtimeChart extends ConsumerWidget {
                         border: Border.all(color: mainColor.withOpacity(0.3)),
                       ),
                       child: Text(
-                        'Instantâneo: ${lastValue != null ? lastValue.toStringAsFixed(2) : '--'} ${unit}',
+                        'Instantâneo: '
+                        '${lastValue != null ? formatWithSIPrefix(lastValue) : '--'} ${unit}',
                         style: TextStyle(
                           color: mainColor,
                           fontWeight: FontWeight.w600,
@@ -100,15 +102,15 @@ class RealtimeChart extends ConsumerWidget {
                             gridData: FlGridData(
                               show: true,
                               drawVerticalLine: true,
-                              horizontalInterval: 0.5,
+                              horizontalInterval: 1,
                               verticalInterval: 5,
                               getDrawingHorizontalLine: (value) => FlLine(
-                                color: Colors.white.withOpacity(0.08),
-                                strokeWidth: 1,
+                                color: Colors.white.withOpacity(0.18),
+                                strokeWidth: 1.2,
                               ),
                               getDrawingVerticalLine: (value) => FlLine(
-                                color: Colors.white.withOpacity(0.08),
-                                strokeWidth: 1,
+                                color: Colors.white.withOpacity(0.15),
+                                strokeWidth: 1.2,
                               ),
                             ),
                             titlesData: FlTitlesData(
@@ -117,7 +119,7 @@ class RealtimeChart extends ConsumerWidget {
                                   showTitles: true,
                                   reservedSize: 32,
                                   getTitlesWidget: (value, meta) => Text(
-                                    value.toStringAsFixed(1),
+                                    formatWithSIPrefix(value, fractionDigits: 1),
                                     style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
                                   ),
                                 ),
