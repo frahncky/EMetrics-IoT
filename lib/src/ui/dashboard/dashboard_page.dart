@@ -138,8 +138,10 @@ class _MainIndicators extends StatelessWidget {
 
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
           children: [
             _IndicatorCard(
               label: 'Aparente',
@@ -172,12 +174,6 @@ class _MainIndicators extends StatelessWidget {
               color: Color(0xFFB388FF),
               compact: true,
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
             _IndicatorCard(
               label: 'Tensão',
               value: formatWithSIPrefix(voltage, fractionDigits: 1),

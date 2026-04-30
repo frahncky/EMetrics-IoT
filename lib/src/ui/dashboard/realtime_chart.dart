@@ -95,8 +95,8 @@ class RealtimeChart extends ConsumerWidget {
                       gridData: FlGridData(
                         show: true,
                         drawVerticalLine: true,
-                        horizontalInterval: 1,
-                        verticalInterval: 5,
+                        horizontalInterval: 2,
+                        verticalInterval: 2,
                         getDrawingHorizontalLine: (value) => FlLine(
                           color: Colors.white.withOpacity(0.18),
                           strokeWidth: 1.2,
@@ -141,12 +141,21 @@ class RealtimeChart extends ConsumerWidget {
                         show: true,
                         border: Border.all(color: mainColor.withOpacity(0.25), width: 1),
                       ),
-                      minX: 0,
-                      maxX: spots.length > 1 ? spots.length - 1 : 1,
+                      minX: spots.isEmpty ? 0 : 0,
+                      maxX: spots.isEmpty ? 10 : (spots.length > 1 ? spots.length - 1 : 1),
                       minY: spots.isEmpty ? 0 : null,
-                      maxY: spots.isEmpty ? 1 : null,
+                      maxY: spots.isEmpty ? 10 : null,
                       lineBarsData: spots.isEmpty
-                          ? []
+                          ? [
+                              LineChartBarData(
+                                spots: [const FlSpot(0, 0)],
+                                isCurved: false,
+                                color: Colors.transparent,
+                                barWidth: 0,
+                                dotData: FlDotData(show: false),
+                                belowBarData: BarAreaData(show: false),
+                              ),
+                            ]
                           : [
                               LineChartBarData(
                                 spots: spots,
