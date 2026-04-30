@@ -118,31 +118,46 @@ class _MainMenuState extends State<_MainMenu> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        backgroundColor: const Color(0xFF232B3E),
-        selectedItemColor: const Color(0xFFFFB300),
-        unselectedItemColor: Colors.white70,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Início',
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BottomNavigationBar(
+            currentIndex: _selectedIndex,
+            onTap: (index) => setState(() => _selectedIndex = index),
+            backgroundColor: const Color(0xFF232B3E),
+            selectedItemColor: const Color(0xFFFFB300),
+            unselectedItemColor: Colors.white70,
+            items: [
+              BottomNavigationBarItem(
+                icon: _NavBarIcon(
+                  icon: Icons.home,
+                  selected: _selectedIndex == 0,
+                ),
+                label: 'Início',
+              ),
+              BottomNavigationBarItem(
+                icon: _NavBarIcon(
+                  icon: Icons.history,
+                  selected: _selectedIndex == 1,
+                ),
+                label: 'Histórico',
+              ),
+              BottomNavigationBarItem(
+                icon: _NavBarIcon(
+                  icon: Icons.settings,
+                  selected: _selectedIndex == 2,
+                ),
+                label: 'Configurações',
+              ),
+            ],
+            type: BottomNavigationBarType.fixed,
+            selectedFontSize: 14,
+            unselectedFontSize: 13,
+            showUnselectedLabels: true,
+            elevation: 8,
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history),
-            label: 'Histórico',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Configurações',
-          ),
-        ],
-        type: BottomNavigationBarType.fixed,
-        selectedFontSize: 14,
-        unselectedFontSize: 13,
-        showUnselectedLabels: true,
-        elevation: 8,
+        ),
       ),
     );
   }

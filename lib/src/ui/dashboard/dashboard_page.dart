@@ -26,11 +26,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF181D23),
       appBar: AppBar(
+        toolbarHeight: 52, // altura levemente aumentada
         title: Row(
           children: [
-            Icon(Icons.bolt, color: Color(0xFFFFC300), size: 28),
+            Icon(Icons.bolt, color: Color(0xFFFFC300), size: 26),
             const SizedBox(width: 8),
-            const Text('E-Metrics IoT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, letterSpacing: 0.5, color: Colors.white)),
+            const Text('E-Metrics IoT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5, color: Colors.white)),
           ],
         ),
         centerTitle: false,
@@ -39,11 +40,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         elevation: 0,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.only(right: 14),
             child: mqttStream.when(
-              data: (_) => const Icon(Icons.cloud_done, color: Color(0xFF00C2FF), size: 26),
-              loading: () => const Icon(Icons.cloud_queue, color: Color(0xFFFFC300), size: 26),
-              error: (_, __) => const Icon(Icons.cloud_off, color: Colors.red, size: 26),
+              data: (_) => const Icon(Icons.cloud_done, color: Color(0xFF00C2FF), size: 24),
+              loading: () => const Icon(Icons.cloud_queue, color: Color(0xFFFFC300), size: 24),
+              error: (_, __) => const Icon(Icons.cloud_off, color: Colors.red, size: 24),
             ),
           ),
         ],
@@ -73,7 +74,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             // Dois gráficos em abas
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 16), // Espaço inferior para afastar do menu
                 child: DashboardTabs(),
               ),
             ),
