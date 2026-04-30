@@ -113,31 +113,32 @@ class _MainIndicators extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _IndicatorCard(
+              label: 'Aparente',
+              value: apparent.isNaN ? '--' : apparent.toStringAsFixed(2),
+              icon: Icons.data_usage, // símbolo de fluxo/medida
+              color: Color(0xFF00E676),
+              compact: true,
+              unit: 'VA',
+            ),
+            _IndicatorCard(
               label: 'Ativa',
               value: '${power.toStringAsFixed(2)} W',
-              icon: Icons.flash_on_outlined,
+              icon: Icons.flash_on_outlined, // raio
               color: Color(0xFFFFC300),
               compact: true,
             ),
             _IndicatorCard(
-              label: 'Corrente',
-              value: '${current.toStringAsFixed(2)} A',
-              icon: Icons.bolt_outlined,
-              color: Color(0xFF00C2FF),
+              label: 'Reativa',
+              value: reativa.isNaN ? '--' : reativa.toStringAsFixed(2),
+              icon: Icons.waves, // símbolo de onda
+              color: Color(0xFF00B8D4),
               compact: true,
-            ),
-            _IndicatorCard(
-              label: 'Energia',
-              value: '${energy.toStringAsFixed(3)}',
-              icon: Icons.battery_charging_full_outlined,
-              color: Color(0xFF7DF9FF),
-              compact: true,
-              unit: 'kWh',
+              unit: 'VAr',
             ),
             _IndicatorCard(
               label: 'FP',
               value: pf.isNaN ? '--' : pf.toStringAsFixed(2),
-              icon: Icons.speed_outlined,
+              icon: Icons.speed_outlined, // velocímetro
               color: Color(0xFFB388FF),
               compact: true,
             ),
@@ -148,36 +149,35 @@ class _MainIndicators extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _IndicatorCard(
-              label: 'Aparente',
-              value: apparent.isNaN ? '--' : apparent.toStringAsFixed(2),
-              icon: Icons.bolt,
-              color: Color(0xFF00E676),
+              label: 'Tensão',
+              value: voltage.isNaN ? '--' : voltage.toStringAsFixed(1),
+              icon: Icons.electrical_services, // plug
+              color: Color(0xFF7DF9FF),
               compact: true,
-              unit: 'VA',
+              unit: 'V',
             ),
             _IndicatorCard(
-              label: 'Reativa',
-              value: reativa.isNaN ? '--' : reativa.toStringAsFixed(2),
-              icon: Icons.bolt,
-              color: Color(0xFF00B8D4),
+              label: 'Corrente',
+              value: '${current.toStringAsFixed(2)} A',
+              icon: Icons.bolt_outlined, // raio
+              color: Color(0xFF00C2FF),
               compact: true,
-              unit: 'VAr',
             ),
             _IndicatorCard(
               label: 'Freq.',
               value: '--',
-              icon: Icons.waves,
+              icon: Icons.ssid_chart, // teste visual
               color: Color(0xFF69F0AE),
               compact: true,
               unit: 'Hz',
             ),
             _IndicatorCard(
-              label: 'Tensão',
-              value: voltage.isNaN ? '--' : voltage.toStringAsFixed(1),
-              icon: Icons.electrical_services,
+              label: 'Energia',
+              value: '${energy.toStringAsFixed(3)}',
+              icon: Icons.battery_charging_full_outlined, // símbolo de energia carregando
               color: Color(0xFF7DF9FF),
               compact: true,
-              unit: 'V',
+              unit: 'kWh',
             ),
           ],
         ),
