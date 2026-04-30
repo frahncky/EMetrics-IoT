@@ -87,8 +87,7 @@ class RealtimeChart extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: 180,
+                Expanded(
                   child: LineChart(
                     LineChartData(
                       backgroundColor: const Color(0xFF232A34),

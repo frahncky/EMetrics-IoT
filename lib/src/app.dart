@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'ui/dashboard/dashboard_page.dart';
+import 'ui/history/history_page.dart';
+import 'ui/settings/settings_page.dart';
 import '../src/services/alert_service.dart';
 import '../src/providers/alert_provider.dart';
 
@@ -93,7 +95,55 @@ class _AppInitializerState extends State<_AppInitializer> {
         ),
       ),
       themeMode: ThemeMode.dark,
-      home: const DashboardPage(),
+      home: const _MainMenu(),
+    );
+  }
+}
+
+class _MainMenu extends StatefulWidget {
+  const _MainMenu({Key? key}) : super(key: key);
+  @override
+  State<_MainMenu> createState() => _MainMenuState();
+}
+
+class _MainMenuState extends State<_MainMenu> {
+  int _selectedIndex = 0;
+  static final List<Widget> _pages = <Widget>[
+    DashboardPage(),
+    HistoryPage(),
+    SettingsPage(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _pages[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        backgroundColor: const Color(0xFF232B3E),
+        selectedItemColor: const Color(0xFFFFB300),
+        unselectedItemColor: Colors.white70,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Início',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history),
+            label: 'Histórico',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Configurações',
+          ),
+        ],
+        type: BottomNavigationBarType.fixed,
+        selectedFontSize: 14,
+        unselectedFontSize: 13,
+        showUnselectedLabels: true,
+        elevation: 8,
+      ),
     );
   }
 }

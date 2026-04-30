@@ -48,7 +48,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ),
         ],
       ),
-      drawer: const DashboardDrawer(),
+      // Drawer removido
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
