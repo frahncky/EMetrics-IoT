@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/metric_provider.dart';
 import 'realtime_chart.dart';
 import 'chart_selector.dart';
+import 'dashboard_tabs.dart';
 import 'dashboard_drawer.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
@@ -69,30 +70,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Erro ao carregar dados: $e', style: TextStyle(color: Color(0xFFFFC300)))),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: ChartSelector(
-                selected: _selectedField,
-                onChanged: (f) => setState(() => _selectedField = f),
-              ),
-            ),
+            // Dois gráficos em abas
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                child: RealtimeChart(field: _selectedField),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                child: DashboardTabs(),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: mqttStream.when(
-                data: (messages) => Text(
-                  'Última mensagem MQTT: ${messages.isNotEmpty ? messages.last.payload.toString() : "Nenhuma"}',
-                  style: const TextStyle(color: Color(0xFF00C2FF), fontSize: 13, fontWeight: FontWeight.w500),
-                ),
-                loading: () => const SizedBox.shrink(),
-                error: (e, _) => Text('Erro MQTT: $e', style: const TextStyle(color: Colors.redAccent)),
-              ),
-            ),
+            // Aviso de erro MQTT removido
           ],
         ),
       ),
@@ -117,41 +102,82 @@ class _MainIndicators extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Cálculos para aparente, reativa e frequência
+    final double apparent = voltage * current;
+    final double reativa = (voltage * current) * (1 - (pf.isNaN ? 0 : pf));
+    final double? freq = null; // Será passado pelo parâmetro futuramente se necessário
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _IndicatorCard(
-              label: 'Potência',
+              label: 'Ativa',
               value: '${power.toStringAsFixed(2)} W',
               icon: Icons.flash_on_outlined,
               color: Color(0xFFFFC300),
+              compact: true,
             ),
             _IndicatorCard(
               label: 'Corrente',
               value: '${current.toStringAsFixed(2)} A',
               icon: Icons.bolt_outlined,
               color: Color(0xFF00C2FF),
+              compact: true,
+            ),
+            _IndicatorCard(
+              label: 'Energia',
+              value: '${energy.toStringAsFixed(3)}',
+              icon: Icons.battery_charging_full_outlined,
+              color: Color(0xFF7DF9FF),
+              compact: true,
+              unit: 'kWh',
+            ),
+            _IndicatorCard(
+              label: 'FP',
+              value: pf.isNaN ? '--' : pf.toStringAsFixed(2),
+              icon: Icons.speed_outlined,
+              color: Color(0xFFB388FF),
+              compact: true,
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _IndicatorCard(
-              label: 'Energia',
-              value: '${energy.toStringAsFixed(3)} kWh',
-              icon: Icons.battery_charging_full_outlined,
-              color: Color(0xFF7DF9FF),
+              label: 'Aparente',
+              value: apparent.isNaN ? '--' : apparent.toStringAsFixed(2),
+              icon: Icons.bolt,
+              color: Color(0xFF00E676),
+              compact: true,
+              unit: 'VA',
             ),
             _IndicatorCard(
-              label: 'Fator Potência',
-              value: pf.isNaN ? '--' : pf.toStringAsFixed(2),
-              icon: Icons.speed_outlined,
-              color: Color(0xFFB388FF),
+              label: 'Reativa',
+              value: reativa.isNaN ? '--' : reativa.toStringAsFixed(2),
+              icon: Icons.bolt,
+              color: Color(0xFF00B8D4),
+              compact: true,
+              unit: 'VAr',
+            ),
+            _IndicatorCard(
+              label: 'Freq.',
+              value: '--',
+              icon: Icons.waves,
+              color: Color(0xFF69F0AE),
+              compact: true,
+              unit: 'Hz',
+            ),
+            _IndicatorCard(
+              label: 'Tensão',
+              value: voltage.isNaN ? '--' : voltage.toStringAsFixed(1),
+              icon: Icons.electrical_services,
+              color: Color(0xFF7DF9FF),
+              compact: true,
+              unit: 'V',
             ),
           ],
         ),
@@ -160,42 +186,69 @@ class _MainIndicators extends StatelessWidget {
   }
 }
 
+
 class _IndicatorCard extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
   final Color color;
-  const _IndicatorCard({required this.label, required this.value, required this.icon, required this.color});
+  final bool compact;
+  final String? unit;
+
+  const _IndicatorCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.compact = false,
+    this.unit,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       label: 'Indicador de $label: $value',
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        margin: EdgeInsets.symmetric(horizontal: compact ? 2 : 6, vertical: compact ? 2 : 8),
         child: Container(
-          width: 120,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          width: compact ? 80 : 120,
+          padding: EdgeInsets.symmetric(vertical: compact ? 8 : 16, horizontal: compact ? 4 : 8),
           decoration: BoxDecoration(
             color: const Color(0xFF232A34),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color, width: 1.2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color, width: 1.0),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 30, semanticLabel: 'Ícone de $label'),
-              const SizedBox(height: 8),
+              Icon(icon, color: color, size: compact ? 24 : 30, semanticLabel: 'Ícone de $label'),
+              SizedBox(height: compact ? 4 : 8),
               Text(
                 label,
-                style: const TextStyle(fontSize: 15, color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                style: TextStyle(fontSize: compact ? 12 : 15, color: Colors.white, fontWeight: FontWeight.w600, letterSpacing: 0.5),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 6),
-              Text(
-                value,
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color, letterSpacing: 0.5),
-                textAlign: TextAlign.center,
+              SizedBox(height: compact ? 2 : 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    value,
+                    style: TextStyle(fontSize: compact ? 15 : 20, fontWeight: FontWeight.bold, color: color, letterSpacing: 0.5),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (unit != null) ...[
+                    SizedBox(width: 3),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: compact ? 1 : 2),
+                      child: Text(
+                        unit!,
+                        style: TextStyle(fontSize: compact ? 10 : 13, color: Colors.white70, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

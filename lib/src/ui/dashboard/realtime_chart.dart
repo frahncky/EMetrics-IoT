@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/metric_provider.dart';
 
+typedef FieldSelectorBuilder = Widget Function(BuildContext context);
+
 class RealtimeChart extends ConsumerWidget {
   final String field;
-  const RealtimeChart({super.key, required this.field});
+  final FieldSelectorBuilder? fieldSelector;
+  const RealtimeChart({super.key, required this.field, this.fieldSelector});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,15 +55,17 @@ class RealtimeChart extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '$title (${unit.isNotEmpty ? unit : ''})',
-                      style: TextStyle(
-                        color: mainColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
+                    fieldSelector != null
+                        ? fieldSelector!(context)
+                        : Text(
+                            '$title (${unit.isNotEmpty ? unit : ''})',
+                            style: TextStyle(
+                              color: mainColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(

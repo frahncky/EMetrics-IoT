@@ -8,12 +8,9 @@ class ChartSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const fields = [
-      {'label': 'Tensão (V)', 'value': 'voltage'},
-      {'label': 'Corrente (A)', 'value': 'current'},
       {'label': 'Potência (W)', 'value': 'power'},
-      {'label': 'Fator Potência', 'value': 'pf'},
-      {'label': 'Frequência (Hz)', 'value': 'frequency'},
       {'label': 'Energia (kWh)', 'value': 'energy'},
+      {'label': 'Fator Potência', 'value': 'pf'},
     ];
     return Wrap(
       spacing: 8,
