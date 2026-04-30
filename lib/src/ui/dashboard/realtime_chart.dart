@@ -89,31 +89,31 @@ class RealtimeChart extends ConsumerWidget {
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 180,
-                  child: spots.isEmpty
-                      ? Center(
-                          child: Text(
-                            'Sem dados',
-                            style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 18, fontWeight: FontWeight.w500),
-                          ),
-                        )
-                      : LineChart(
-                          LineChartData(
-                            backgroundColor: const Color(0xFF232A34),
-                            gridData: FlGridData(
-                              show: true,
-                              drawVerticalLine: true,
-                              horizontalInterval: 1,
-                              verticalInterval: 5,
-                              getDrawingHorizontalLine: (value) => FlLine(
-                                color: Colors.white.withOpacity(0.18),
-                                strokeWidth: 1.2,
-                              ),
-                              getDrawingVerticalLine: (value) => FlLine(
-                                color: Colors.white.withOpacity(0.15),
-                                strokeWidth: 1.2,
-                              ),
-                            ),
-                            titlesData: FlTitlesData(
+                  child: LineChart(
+                    LineChartData(
+                      backgroundColor: const Color(0xFF232A34),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: true,
+                        horizontalInterval: 1,
+                        verticalInterval: 5,
+                        getDrawingHorizontalLine: (value) => FlLine(
+                          color: Colors.white.withOpacity(0.18),
+                          strokeWidth: 1.2,
+                        ),
+                        getDrawingVerticalLine: (value) => FlLine(
+                          color: Colors.white.withOpacity(0.15),
+                          strokeWidth: 1.2,
+                        ),
+                      ),
+                      titlesData: spots.isEmpty
+                          ? FlTitlesData(
+                              leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            )
+                          : FlTitlesData(
                               leftTitles: AxisTitles(
                                 sideTitles: SideTitles(
                                   showTitles: true,
@@ -137,13 +137,17 @@ class RealtimeChart extends ConsumerWidget {
                               rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                               topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                             ),
-                            borderData: FlBorderData(
-                              show: true,
-                              border: Border.all(color: mainColor.withOpacity(0.25), width: 1),
-                            ),
-                            minX: 0,
-                            maxX: spots.length > 1 ? spots.length - 1 : 1,
-                            lineBarsData: [
+                      borderData: FlBorderData(
+                        show: true,
+                        border: Border.all(color: mainColor.withOpacity(0.25), width: 1),
+                      ),
+                      minX: 0,
+                      maxX: spots.length > 1 ? spots.length - 1 : 1,
+                      minY: spots.isEmpty ? 0 : null,
+                      maxY: spots.isEmpty ? 1 : null,
+                      lineBarsData: spots.isEmpty
+                          ? []
+                          : [
                               LineChartBarData(
                                 spots: spots,
                                 isCurved: true,
@@ -156,8 +160,8 @@ class RealtimeChart extends ConsumerWidget {
                                 ),
                               ),
                             ],
-                          ),
-                        ),
+                    ),
+                  ),
                 ),
               ],
             ),
