@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/metric_model.dart';
 
@@ -9,12 +10,14 @@ class HistoryChart extends StatelessWidget {
   final List<Metric> metrics;
   final String field;
   final FieldSelectorBuilder? fieldSelector;
+  final bool showExpandButton;
 
   const HistoryChart({
     super.key,
     required this.metrics,
     required this.field,
     this.fieldSelector,
+    this.showExpandButton = true,
   });
 
   @override
@@ -32,8 +35,12 @@ class HistoryChart extends StatelessWidget {
 
     final titleColor = isDarkMode ? Colors.white : const Color(0xFF1F2937);
     final axisTextColor = meta.color.withValues(alpha: isDarkMode ? 0.74 : 0.8);
-    final horizontalGridColor = meta.color.withValues(alpha: isDarkMode ? 0.14 : 0.09);
-    final verticalGridColor = meta.color.withValues(alpha: isDarkMode ? 0.08 : 0.05);
+    final horizontalGridColor = meta.color.withValues(
+      alpha: isDarkMode ? 0.14 : 0.09,
+    );
+    final verticalGridColor = meta.color.withValues(
+      alpha: isDarkMode ? 0.08 : 0.05,
+    );
 
     final data = metrics.take(60).toList().reversed.toList();
     final hasData = data.isNotEmpty;
@@ -41,12 +48,7 @@ class HistoryChart extends StatelessWidget {
       for (int i = 0; i < data.length; i++)
         FlSpot(i.toDouble(), _getFieldValue(data[i], field)),
     ];
-    final chartSpots = hasData
-        ? spots
-        : const [
-            FlSpot(0, 0),
-            FlSpot(6, 0),
-          ];
+    final chartSpots = hasData ? spots : const [FlSpot(0, 0), FlSpot(6, 0)];
     final scale = hasData
         ? _computeScale(spots, field)
         : const _AxisScale(-1, 1, 0.5);
@@ -65,7 +67,10 @@ class HistoryChart extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: cardGradient,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: meta.color.withValues(alpha: 0.45), width: 1.2),
+        border: Border.all(
+          color: meta.color.withValues(alpha: 0.45),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isDarkMode ? 0.28 : 0.08),
@@ -79,216 +84,298 @@ class HistoryChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              runSpacing: 2,
-              spacing: 6,
-              children: [
-                fieldSelector != null
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          fieldSelector!(context),
-                          if (displayUnit.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '($displayUnit)',
-                              style: TextStyle(
-                                color: titleColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ],
-                      )
-                    : Text(
-                        '${meta.title} ${displayUnit.isNotEmpty ? '($displayUnit)' : ''}',
-                        style: TextStyle(
-                          color: titleColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compactHeader = constraints.maxWidth < 360;
+                final currentValue =
+                    '${lastValue != null ? _formatScaledValue(lastValue, unitScale, field == 'pf') : '--'}${displayUnit.isNotEmpty ? ' $displayUnit' : ''}';
+                final currentLabel = compactHeader
+                    ? currentValue
+                    : 'Instantâneo: $currentValue';
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: fieldSelector != null
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    fieldSelector!(context),
+                                    if (displayUnit.isNotEmpty) ...[
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '($displayUnit)',
+                                        style: TextStyle(
+                                          color: titleColor,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                )
+                              : Text(
+                                  '${meta.title} ${displayUnit.isNotEmpty ? '($displayUnit)' : ''}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: titleColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                  ),
+                                ),
                         ),
                       ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: meta.color.withValues(alpha: isDarkMode ? 0.18 : 0.12),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: meta.color.withValues(alpha: 0.42), width: 1.1),
-                  ),
-                  child: Text(
-                    'Instantâneo: ${lastValue != null ? _formatScaledValue(lastValue, unitScale, field == 'pf') : '--'}${displayUnit.isNotEmpty ? ' $displayUnit' : ''}',
-                    style: TextStyle(
-                      color: meta.color,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                      fontFamily: 'monospace',
                     ),
-                  ),
-                ),
-              ],
+                    const SizedBox(width: 6),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: meta.color.withValues(
+                              alpha: isDarkMode ? 0.18 : 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: meta.color.withValues(alpha: 0.42),
+                              width: 1.1,
+                            ),
+                          ),
+                          child: Text(
+                            currentLabel,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: meta.color,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                        if (showExpandButton) ...[
+                          const SizedBox(width: 2),
+                          IconButton(
+                            tooltip: 'Expandir gráfico',
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 30,
+                              height: 30,
+                            ),
+                            padding: EdgeInsets.zero,
+                            iconSize: 18,
+                            color: meta.color,
+                            onPressed: () => _openExpandedChart(context),
+                            icon: const Icon(Icons.open_in_full),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 4),
             Expanded(
               child: Padding(
-                  padding: const EdgeInsets.fromLTRB(2, 2, 2, 0),
+                padding: const EdgeInsets.fromLTRB(2, 2, 2, 0),
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     LineChart(
                       LineChartData(
-                          backgroundColor: Colors.transparent,
-                          minX: 0,
-                          maxX: hasData
-                              ? (chartSpots.length > 1 ? (chartSpots.length - 1).toDouble() : 1)
-                              : 6,
-                          minY: scale.minY,
-                          maxY: scale.maxY,
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: true,
-                            horizontalInterval: scale.horizontalInterval,
-                            verticalInterval: verticalInterval,
-                            getDrawingHorizontalLine: (value) =>
-                              FlLine(color: horizontalGridColor, strokeWidth: 0.6),
-                            getDrawingVerticalLine: (value) =>
-                              FlLine(color: verticalGridColor, strokeWidth: 0.6),
+                        backgroundColor: Colors.transparent,
+                        minX: 0,
+                        maxX: hasData
+                            ? (chartSpots.length > 1
+                                  ? (chartSpots.length - 1).toDouble()
+                                  : 1)
+                            : 6,
+                        minY: scale.minY,
+                        maxY: scale.maxY,
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: true,
+                          horizontalInterval: scale.horizontalInterval,
+                          verticalInterval: verticalInterval,
+                          getDrawingHorizontalLine: (value) => FlLine(
+                            color: horizontalGridColor,
+                            strokeWidth: 0.6,
                           ),
-                          titlesData: FlTitlesData(
-                            leftTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 32,
-                                interval: scale.horizontalInterval,
-                                getTitlesWidget: (value, metaData) => Text(
-                                  _formatScaledValue(value, unitScale, field == 'pf'),
-                                  style: TextStyle(color: axisTextColor, fontSize: 11),
+                          getDrawingVerticalLine: (value) => FlLine(
+                            color: verticalGridColor,
+                            strokeWidth: 0.6,
+                          ),
+                        ),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 32,
+                              interval: scale.horizontalInterval,
+                              getTitlesWidget: (value, metaData) => Text(
+                                _formatScaledValue(
+                                  value,
+                                  unitScale,
+                                  field == 'pf',
+                                ),
+                                style: TextStyle(
+                                  color: axisTextColor,
+                                  fontSize: 11,
                                 ),
                               ),
                             ),
-                            bottomTitles: AxisTitles(
-                              axisNameWidget: Transform.translate(
-                                offset: const Offset(0, 0),
-                                child: Text(
-                                  'Amostras',
-                                  style: TextStyle(
-                                    color: axisTextColor.withValues(alpha: 0.85),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                          ),
+                          bottomTitles: AxisTitles(
+                            axisNameWidget: Transform.translate(
+                              offset: const Offset(0, 0),
+                              child: Text(
+                                'Amostras',
+                                style: TextStyle(
+                                  color: axisTextColor.withValues(alpha: 0.85),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              axisNameSize: 16,
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 22,
-                                interval: verticalInterval,
-                                getTitlesWidget: (value, metaData) {
-                                  if (!hasData) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 0),
-                                      child: Text(
-                                        value.toInt().toString(),
-                                        style: TextStyle(color: axisTextColor, fontSize: 11),
-                                      ),
-                                    );
-                                  }
+                            ),
+                            axisNameSize: 16,
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 22,
+                              interval: verticalInterval,
+                              getTitlesWidget: (value, metaData) {
+                                if (!hasData) {
                                   return Padding(
                                     padding: const EdgeInsets.only(top: 0),
                                     child: Text(
-                                      _buildBottomLabel(value, data, labelStep),
-                                      style: TextStyle(color: axisTextColor, fontSize: 11),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            rightTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            topTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                          ),
-                          borderData: FlBorderData(
-                            show: true,
-                            border: Border(
-                              left: BorderSide(
-                                color: meta.color.withValues(alpha: 0.56),
-                                width: 1.0,
-                              ),
-                              bottom: BorderSide(
-                                color: meta.color.withValues(alpha: 0.56),
-                                width: 1.0,
-                              ),
-                              right: BorderSide.none,
-                              top: BorderSide.none,
-                            ),
-                          ),
-                          lineTouchData: LineTouchData(
-                            enabled: hasData,
-                            handleBuiltInTouches: true,
-                            touchTooltipData: LineTouchTooltipData(
-                              tooltipRoundedRadius: 10,
-                              tooltipPadding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 8,
-                              ),
-                              fitInsideHorizontally: true,
-                              fitInsideVertically: true,
-                              tooltipBorder: BorderSide(
-                                color: meta.color.withValues(alpha: 0.35),
-                                width: 1,
-                              ),
-                              tooltipBgColor: Colors.black.withValues(alpha: 0.82),
-                              getTooltipItems: (touchedSpots) {
-                                return touchedSpots.map((spot) {
-                                  final index = spot.x.toInt().clamp(0, data.length - 1);
-                                  final time = _formatTime(data[index].timestamp);
-                                  final value = _formatScaledValue(spot.y, unitScale, field == 'pf');
-                                  final unitText = displayUnit.isEmpty ? '' : ' $displayUnit';
-                                  return LineTooltipItem(
-                                    '$value$unitText\n',
-                                    TextStyle(
-                                      color: meta.color,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
-                                    ),
-                                    children: [
-                                      TextSpan(
-                                        text: time,
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.9),
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 11,
-                                        ),
+                                      value.toInt().toString(),
+                                      style: TextStyle(
+                                        color: axisTextColor,
+                                        fontSize: 11,
                                       ),
-                                    ],
+                                    ),
                                   );
-                                }).toList();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 0),
+                                  child: Text(
+                                    _buildBottomLabel(value, data, labelStep),
+                                    style: TextStyle(
+                                      color: axisTextColor,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                );
                               },
                             ),
                           ),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: chartSpots,
-                              isCurved: true,
-                              preventCurveOverShooting: true,
-                              curveSmoothness: 0.24,
-                              color: hasData ? meta.color : Colors.transparent,
-                              barWidth: hasData ? 2.8 : 0,
-                              isStrokeCapRound: true,
-                              dotData: FlDotData(show: false),
-                              belowBarData: BarAreaData(
-                                show: hasData,
-                                color: meta.color.withValues(alpha: 0.11),
-                              ),
-                            ),
-                          ],
+                          rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
                         ),
+                        borderData: FlBorderData(
+                          show: true,
+                          border: Border(
+                            left: BorderSide(
+                              color: meta.color.withValues(alpha: 0.56),
+                              width: 1.0,
+                            ),
+                            bottom: BorderSide(
+                              color: meta.color.withValues(alpha: 0.56),
+                              width: 1.0,
+                            ),
+                            right: BorderSide.none,
+                            top: BorderSide.none,
+                          ),
+                        ),
+                        lineTouchData: LineTouchData(
+                          enabled: hasData,
+                          handleBuiltInTouches: true,
+                          touchTooltipData: LineTouchTooltipData(
+                            tooltipRoundedRadius: 10,
+                            tooltipPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            fitInsideHorizontally: true,
+                            fitInsideVertically: true,
+                            tooltipBorder: BorderSide(
+                              color: meta.color.withValues(alpha: 0.35),
+                              width: 1,
+                            ),
+                            tooltipBgColor: Colors.black.withValues(
+                              alpha: 0.82,
+                            ),
+                            getTooltipItems: (touchedSpots) {
+                              return touchedSpots.map((spot) {
+                                final index = spot.x.toInt().clamp(
+                                  0,
+                                  data.length - 1,
+                                );
+                                final time = _formatTime(data[index].timestamp);
+                                final value = _formatScaledValue(
+                                  spot.y,
+                                  unitScale,
+                                  field == 'pf',
+                                );
+                                final unitText = displayUnit.isEmpty
+                                    ? ''
+                                    : ' $displayUnit';
+                                return LineTooltipItem(
+                                  '$value$unitText\n',
+                                  TextStyle(
+                                    color: meta.color,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                  children: [
+                                    TextSpan(
+                                      text: time,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList();
+                            },
+                          ),
+                        ),
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: chartSpots,
+                            isCurved: true,
+                            preventCurveOverShooting: true,
+                            curveSmoothness: 0.24,
+                            color: hasData ? meta.color : Colors.transparent,
+                            barWidth: hasData ? 2.8 : 0,
+                            isStrokeCapRound: true,
+                            dotData: FlDotData(show: false),
+                            belowBarData: BarAreaData(
+                              show: hasData,
+                              color: meta.color.withValues(alpha: 0.11),
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
                     if (!hasData)
                       Text(
                         'Sem dados',
@@ -402,7 +489,11 @@ class HistoryChart extends StatelessWidget {
     return '$hour:$minute';
   }
 
-  _UnitScale _computeUnitScale(List<FlSpot> spots, String selectedField, String unit) {
+  _UnitScale _computeUnitScale(
+    List<FlSpot> spots,
+    String selectedField,
+    String unit,
+  ) {
     if (selectedField == 'pf' || unit.isEmpty || spots.isEmpty) {
       return const _UnitScale(1, '');
     }
@@ -442,6 +533,118 @@ class HistoryChart extends StatelessWidget {
     if (value.abs() >= 10) return value.toStringAsFixed(1);
     return value.toStringAsFixed(2);
   }
+
+  void _openExpandedChart(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            _ExpandedHistoryChartPage(metrics: metrics, initialField: field),
+      ),
+    );
+  }
+}
+
+class _ExpandedHistoryChartPage extends StatefulWidget {
+  final List<Metric> metrics;
+  final String initialField;
+
+  const _ExpandedHistoryChartPage({
+    required this.metrics,
+    required this.initialField,
+  });
+
+  @override
+  State<_ExpandedHistoryChartPage> createState() =>
+      _ExpandedHistoryChartPageState();
+}
+
+class _ExpandedHistoryChartPageState extends State<_ExpandedHistoryChartPage> {
+  late String _field;
+
+  @override
+  void initState() {
+    super.initState();
+    _field = widget.initialField;
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setPreferredOrientations(const []);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = Theme.of(context).cardColor;
+    final textColor = isDarkMode ? Colors.white : const Color(0xFF1F2937);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Gráfico em tela cheia')),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: HistoryChart(
+            metrics: widget.metrics,
+            field: _field,
+            showExpandButton: false,
+            fieldSelector: (context) {
+              return DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _field,
+                  dropdownColor: backgroundColor,
+                  style: TextStyle(
+                    color: colorScheme.secondary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                  icon: Icon(
+                    Icons.arrow_drop_down,
+                    color: colorScheme.secondary,
+                  ),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _field = value);
+                    }
+                  },
+                  items: _metricFieldOptions.map((field) {
+                    return DropdownMenuItem<String>(
+                      value: field.value,
+                      child: Text(
+                        field.label,
+                        style: TextStyle(color: textColor),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const _metricFieldOptions = [
+  _MetricFieldOption('power', 'Potência'),
+  _MetricFieldOption('current', 'Corrente'),
+  _MetricFieldOption('voltage', 'Tensão'),
+  _MetricFieldOption('energy', 'Energia'),
+  _MetricFieldOption('pf', 'Fator Potência'),
+  _MetricFieldOption('frequency', 'Frequência'),
+];
+
+class _MetricFieldOption {
+  final String value;
+  final String label;
+
+  const _MetricFieldOption(this.value, this.label);
 }
 
 class _FieldMeta {
