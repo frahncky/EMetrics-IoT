@@ -196,7 +196,8 @@ class _AppInitializer extends ConsumerWidget {
 }
 
 class _MainMenu extends StatefulWidget {
-  const _MainMenu({Key? key}) : super(key: key);
+  const _MainMenu();
+
   @override
   State<_MainMenu> createState() => _MainMenuState();
 }

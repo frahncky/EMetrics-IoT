@@ -83,7 +83,7 @@ class RealtimeChart extends ConsumerWidget {
                       ),
                       child: Text(
                         'Instantâneo: '
-                        '${lastValue != null ? formatWithSIPrefix(lastValue) : '--'} ${unit}',
+                        '${lastValue != null ? formatWithSIPrefix(lastValue) : '--'} $unit',
                         style: TextStyle(
                           color: mainColor,
                           fontWeight: FontWeight.w600,

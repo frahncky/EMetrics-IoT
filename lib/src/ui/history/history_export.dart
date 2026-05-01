@@ -25,6 +25,9 @@ class HistoryExportButton extends StatelessWidget {
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/historico_emetrics.csv');
     await file.writeAsString(csv);
+    if (!context.mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Exportado para ${file.path}')),
     );
