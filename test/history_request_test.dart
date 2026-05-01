@@ -31,8 +31,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Solicitar histórico do medidor'), findsOneWidget);
-    await tester.tap(find.text('Solicitar histórico do medidor'));
+    expect(find.text('Solicitar do medidor'), findsOneWidget);
+    await tester.tap(find.text('Solicitar do medidor'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
