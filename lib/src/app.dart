@@ -211,6 +211,11 @@ class _MainMenuState extends State<_MainMenu> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cardColor = Theme.of(context).cardColor;
+    final unselectedColor = isDarkMode ? Colors.white60 : const Color(0xFF9CA3AF);
+    
     return Scaffold(
       body: _pages[_selectedIndex],
       bottomNavigationBar: Padding(
@@ -220,14 +225,15 @@ class _MainMenuState extends State<_MainMenu> {
           child: BottomNavigationBar(
             currentIndex: _selectedIndex,
             onTap: (index) => setState(() => _selectedIndex = index),
-            backgroundColor: const Color(0xFF232B3E),
-            selectedItemColor: const Color(0xFFFFB300),
-            unselectedItemColor: Colors.white70,
+            backgroundColor: cardColor,
+            selectedItemColor: primaryColor,
+            unselectedItemColor: unselectedColor,
             items: [
               BottomNavigationBarItem(
                 icon: _NavBarIcon(
                   icon: Icons.home,
                   selected: _selectedIndex == 0,
+                  primaryColor: primaryColor,
                 ),
                 label: 'Início',
               ),
@@ -235,6 +241,7 @@ class _MainMenuState extends State<_MainMenu> {
                 icon: _NavBarIcon(
                   icon: Icons.history,
                   selected: _selectedIndex == 1,
+                  primaryColor: primaryColor,
                 ),
                 label: 'Histórico',
               ),
@@ -242,6 +249,7 @@ class _MainMenuState extends State<_MainMenu> {
                 icon: _NavBarIcon(
                   icon: Icons.settings,
                   selected: _selectedIndex == 2,
+                  primaryColor: primaryColor,
                 ),
                 label: 'Configurações',
               ),
@@ -262,22 +270,26 @@ class _MainMenuState extends State<_MainMenu> {
 class _NavBarIcon extends StatelessWidget {
   final IconData icon;
   final bool selected;
-  const _NavBarIcon({required this.icon, required this.selected});
+  final Color primaryColor;
+  const _NavBarIcon({required this.icon, required this.selected, required this.primaryColor});
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final unselectedColor = isDarkMode ? Colors.white60 : const Color(0xFF9CA3AF);
+    
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.all(4),
       decoration: selected
           ? BoxDecoration(
-              color: const Color(0xFFFFB300).withValues(alpha: 0.18),
+              color: primaryColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             )
           : null,
       child: Icon(
         icon,
-        color: selected ? const Color(0xFFFFB300) : Colors.white70,
+        color: selected ? primaryColor : unselectedColor,
         size: 28,
       ),
     );
