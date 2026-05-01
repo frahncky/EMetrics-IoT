@@ -21,15 +21,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    final settings = ref.read(mqttSettingsProvider);
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final settings = await ref.read(mqttSettingsProvider.notifier).load();
+    if (!mounted) {
+      return;
+    }
     _brokerController.text = settings.broker;
     _clientIdController.text = settings.clientId;
     _topicController.text = settings.topic;
     _requestTopicController.text = settings.requestTopic;
   }
 
-  void _saveSettings() {
-    ref.read(mqttSettingsProvider.notifier).update(
+  Future<void> _saveSettings() async {
+    await ref.read(mqttSettingsProvider.notifier).update(
           broker: _brokerController.text,
           clientId: _clientIdController.text,
           topic: _topicController.text,
@@ -136,10 +143,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () {
-                  _saveSettings();
+                onPressed: () async {
+                  await _saveSettings();
+                  if (!context.mounted) {
+                    return;
+                  }
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Configurações MQTT salvas para esta sessão.')),
+                    const SnackBar(content: Text('Configurações MQTT salvas no dispositivo.')),
                   );
                 },
                 label: const Text('Salvar'),
@@ -163,21 +173,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 onPressed: () async {
                   try {
-                    _saveSettings();
+                    await _saveSettings();
                     final mqttService = ref.read(mqttServiceProvider);
                     await mqttService.connect();
                     mqttService.subscribe();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Conectado ao broker MQTT!')),
-                      );
+                    if (!context.mounted) {
+                      return;
                     }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Conectado ao broker MQTT!')),
+                    );
                   } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Erro ao conectar: $e')),
-                      );
+                    if (!context.mounted) {
+                      return;
                     }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erro ao conectar: $e')),
+                    );
                   }
                 },
                 label: const Text('Conectar MQTT'),

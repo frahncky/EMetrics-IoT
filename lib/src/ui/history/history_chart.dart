@@ -61,6 +61,7 @@ class HistoryChart extends StatelessWidget {
       spots.add(FlSpot(i.toDouble(), value));
     }
     final double? lastValue = data.isNotEmpty ? _getFieldValue(data.last, field) : null;
+    final labelStep = data.length > 6 ? (data.length / 4).ceil() : 1;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -74,8 +75,9 @@ class HistoryChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              runSpacing: 8,
               children: [
                 fieldSelector != null
                     ? fieldSelector!(context)
@@ -143,7 +145,7 @@ class HistoryChart extends StatelessWidget {
                               showTitles: true,
                               reservedSize: 28,
                               getTitlesWidget: (value, meta) => Text(
-                                value.toInt().toString(),
+                                _buildBottomLabel(value, data, labelStep),
                                 style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
                               ),
                             ),
@@ -206,5 +208,20 @@ class HistoryChart extends StatelessWidget {
       default:
         return 0;
     }
+  }
+
+  String _buildBottomLabel(double value, List<Metric> data, int labelStep) {
+    final index = value.toInt();
+    if (index < 0 || index >= data.length) {
+      return '';
+    }
+    if (index % labelStep != 0 && index != data.length - 1) {
+      return '';
+    }
+
+    final timestamp = data[index].timestamp;
+    final hour = timestamp.hour.toString().padLeft(2, '0');
+    final minute = timestamp.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 }

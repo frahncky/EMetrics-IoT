@@ -49,6 +49,8 @@ class _HistoryChartSelector extends StatelessWidget {
       {'label': 'Corrente', 'value': 'current'},
       {'label': 'Tensão', 'value': 'voltage'},
       {'label': 'Energia', 'value': 'energy'},
+      {'label': 'Fator Potência', 'value': 'pf'},
+      {'label': 'Frequência', 'value': 'frequency'},
     ];
     return DropdownButtonHideUnderline(
       child: DropdownButton<String>(
@@ -111,6 +113,14 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     }
   }
 
+  String _formatDateTime(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$day/$month $hour:$minute';
+  }
+
   Future<void> _requestHistoryFromMeter() async {
     final range = (_activeFrom, _activeTo);
     setState(() {
@@ -162,6 +172,20 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                 _activeTo = range.$2;
               });
             },
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.schedule, size: 16, color: Colors.white60),
+                const SizedBox(width: 6),
+                Text(
+                  'Periodo: ${_formatDateTime(_activeFrom)} ate ${_formatDateTime(_activeTo)}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           Padding(
