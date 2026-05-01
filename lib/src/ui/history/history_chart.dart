@@ -14,6 +14,13 @@ class HistoryChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final isDarkMode = brightness == Brightness.dark;
+    final gridColor = isDarkMode ? Colors.white.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.1);
+    final gridColorV = isDarkMode ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.08);
+    final textColor = isDarkMode ? Colors.white.withValues(alpha: 0.5) : Colors.black.withValues(alpha: 0.6);
+    final backgroundColor = Theme.of(context).cardColor;
+    
     Color mainColor;
     String title;
     String unit;
@@ -66,7 +73,7 @@ class HistoryChart extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF232A34),
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: mainColor.withValues(alpha: 0.25), width: 1.2),
       ),
@@ -113,14 +120,14 @@ class HistoryChart extends StatelessWidget {
             Expanded(
               child: LineChart(
                 LineChartData(
-                  backgroundColor: const Color(0xFF232A34),
+                  backgroundColor: backgroundColor,
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: true,
                     horizontalInterval: 2,
                     verticalInterval: 2,
-                    getDrawingHorizontalLine: (value) => FlLine(color: Colors.white.withValues(alpha: 0.18), strokeWidth: 1.2),
-                    getDrawingVerticalLine: (value) => FlLine(color: Colors.white.withValues(alpha: 0.15), strokeWidth: 1.2),
+                    getDrawingHorizontalLine: (value) => FlLine(color: gridColor, strokeWidth: 1.2),
+                    getDrawingVerticalLine: (value) => FlLine(color: gridColorV, strokeWidth: 1.2),
                   ),
                   titlesData: spots.isEmpty
                       ? FlTitlesData(
@@ -136,7 +143,7 @@ class HistoryChart extends StatelessWidget {
                               reservedSize: 32,
                               getTitlesWidget: (value, meta) => Text(
                                 formatWithSIPrefix(value, fractionDigits: 1),
-                                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+                                style: TextStyle(color: textColor, fontSize: 11),
                               ),
                             ),
                           ),
@@ -146,7 +153,7 @@ class HistoryChart extends StatelessWidget {
                               reservedSize: 28,
                               getTitlesWidget: (value, meta) => Text(
                                 _buildBottomLabel(value, data, labelStep),
-                                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
+                                style: TextStyle(color: textColor, fontSize: 11),
                               ),
                             ),
                           ),

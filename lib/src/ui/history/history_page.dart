@@ -52,12 +52,16 @@ class _HistoryChartSelector extends StatelessWidget {
       {'label': 'Fator Potência', 'value': 'pf'},
       {'label': 'Frequência', 'value': 'frequency'},
     ];
+    final secondaryColor = Theme.of(context).colorScheme.secondary;
+    final backgroundColor = Theme.of(context).cardColor;
+    final textColor = Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87;
+    
     return DropdownButtonHideUnderline(
       child: DropdownButton<String>(
         value: selected,
-        dropdownColor: const Color(0xFF232A34),
-        style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 16),
-        icon: const Icon(Icons.arrow_drop_down, color: Colors.amber),
+        dropdownColor: backgroundColor,
+        style: TextStyle(color: secondaryColor, fontWeight: FontWeight.bold, fontSize: 16),
+        icon: Icon(Icons.arrow_drop_down, color: secondaryColor),
         onChanged: (value) {
           if (value != null) {
             onChanged(value);
@@ -66,7 +70,7 @@ class _HistoryChartSelector extends StatelessWidget {
         items: fields.map((field) {
           return DropdownMenuItem<String>(
             value: field['value'],
-            child: Text(field['label']!, style: const TextStyle(color: Colors.white)),
+            child: Text(field['label']!, style: TextStyle(color: textColor)),
           );
         }).toList(),
       ),
@@ -212,7 +216,9 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                                 ? 'Sem dados no período selecionado.'
                                 : 'Dados disponíveis no período selecionado.',
                             style: TextStyle(
-                              color: metrics.isEmpty ? Colors.white70 : Colors.greenAccent,
+                              color: metrics.isEmpty 
+                                  ? (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black54)
+                                  : Colors.greenAccent,
                               fontSize: 13,
                             ),
                             textAlign: TextAlign.center,

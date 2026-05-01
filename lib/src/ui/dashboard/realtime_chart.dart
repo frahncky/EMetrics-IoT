@@ -14,6 +14,13 @@ class RealtimeChart extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metricsAsync = ref.watch(metricsProvider);
+    final brightness = Theme.of(context).brightness;
+    final isDarkMode = brightness == Brightness.dark;
+    final gridColor = isDarkMode ? Colors.white.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.1);
+    final gridColorV = isDarkMode ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.08);
+    final textColor = isDarkMode ? Colors.white.withValues(alpha: 0.5) : Colors.black.withValues(alpha: 0.6);
+    final backgroundColor = Theme.of(context).cardColor;
+    
     Color mainColor;
     String title;
     String unit;
@@ -44,9 +51,9 @@ class RealtimeChart extends ConsumerWidget {
         final double? lastValue = data.isNotEmpty ? _getFieldValue(data.last, field) : null;
         return Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF232A34),
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: mainColor.withOpacity(0.25), width: 1.2),
+            border: Border.all(color: mainColor.withValues(alpha: 0.25), width: 1.2),
           ),
           child: Padding(
             padding: const EdgeInsets.all(8.0),
@@ -70,9 +77,9 @@ class RealtimeChart extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: mainColor.withOpacity(0.12),
+                        color: mainColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: mainColor.withOpacity(0.3)),
+                        border: Border.all(color: mainColor.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         'Instantâneo: '
@@ -90,18 +97,18 @@ class RealtimeChart extends ConsumerWidget {
                 Expanded(
                   child: LineChart(
                     LineChartData(
-                      backgroundColor: const Color(0xFF232A34),
+                      backgroundColor: backgroundColor,
                       gridData: FlGridData(
                         show: true,
                         drawVerticalLine: true,
                         horizontalInterval: 2,
                         verticalInterval: 2,
                         getDrawingHorizontalLine: (value) => FlLine(
-                          color: Colors.white.withOpacity(0.18),
+                          color: gridColor,
                           strokeWidth: 1.2,
                         ),
                         getDrawingVerticalLine: (value) => FlLine(
-                          color: Colors.white.withOpacity(0.15),
+                          color: gridColorV,
                           strokeWidth: 1.2,
                         ),
                       ),
@@ -119,7 +126,7 @@ class RealtimeChart extends ConsumerWidget {
                                   reservedSize: 32,
                                   getTitlesWidget: (value, meta) => Text(
                                     formatWithSIPrefix(value, fractionDigits: 1),
-                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                                    style: TextStyle(color: textColor, fontSize: 11),
                                   ),
                                 ),
                               ),
@@ -129,7 +136,7 @@ class RealtimeChart extends ConsumerWidget {
                                   reservedSize: 28,
                                   getTitlesWidget: (value, meta) => Text(
                                     value.toInt().toString(),
-                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                                    style: TextStyle(color: textColor, fontSize: 11),
                                   ),
                                 ),
                               ),
@@ -138,7 +145,7 @@ class RealtimeChart extends ConsumerWidget {
                             ),
                       borderData: FlBorderData(
                         show: true,
-                        border: Border.all(color: mainColor.withOpacity(0.25), width: 1),
+                        border: Border.all(color: mainColor.withValues(alpha: 0.25), width: 1),
                       ),
                       minX: spots.isEmpty ? 0 : 0,
                       maxX: spots.isEmpty ? 10 : (spots.length > 1 ? spots.length - 1 : 1),
@@ -164,7 +171,7 @@ class RealtimeChart extends ConsumerWidget {
                                 dotData: FlDotData(show: false),
                                 belowBarData: BarAreaData(
                                   show: true,
-                                  color: mainColor.withOpacity(0.10),
+                                  color: mainColor.withValues(alpha: 0.10),
                                 ),
                               ),
                             ],

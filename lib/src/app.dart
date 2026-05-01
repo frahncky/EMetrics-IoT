@@ -100,24 +100,24 @@ class _AppInitializer extends ConsumerWidget {
   static ThemeData _buildLightTheme() {
     return ThemeData(
       brightness: Brightness.light,
-      scaffoldBackgroundColor: const Color(0xFFF5F5F5),
-      primaryColor: Colors.white,
+      scaffoldBackgroundColor: const Color(0xFFEBEBEB),
+      primaryColor: const Color(0xFFF5F5F5),
       colorScheme: ColorScheme.light(
-        primary: Colors.white,
+        primary: const Color(0xFFF5F5F5),
         secondary: const Color(0xFF1976D2),
-        surface: Colors.white,
+        surface: const Color(0xFFF5F5F5),
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
+        backgroundColor: Color(0xFFF5F5F5),
         centerTitle: true,
         elevation: 2,
         titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
       ),
       cardTheme: CardThemeData(
-        color: Colors.white,
+        color: const Color(0xFFF5F5F5),
         shape: RoundedRectangleBorder(
           borderRadius: const BorderRadius.all(Radius.circular(16)),
-          side: BorderSide(color: Colors.grey[300]!, width: 1),
+          side: BorderSide(color: Colors.grey[400]!, width: 1),
         ),
         elevation: 1,
       ),
@@ -148,7 +148,7 @@ class _AppInitializer extends ConsumerWidget {
         fillColor: Colors.grey[100],
         border: OutlineInputBorder(
           borderRadius: const BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(color: Colors.grey[400]!),
         ),
         labelStyle: const TextStyle(color: Colors.black87),
         hintStyle: const TextStyle(color: Colors.black45),
@@ -238,7 +238,7 @@ class _NavBarIcon extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: selected
           ? BoxDecoration(
-              color: const Color(0xFFFFB300).withOpacity(0.18),
+              color: const Color(0xFFFFB300).withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(12),
             )
           : null,

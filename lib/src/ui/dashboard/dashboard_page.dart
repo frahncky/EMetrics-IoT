@@ -17,27 +17,29 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     ref.watch(mqttMetricSaverProvider);
     final metricsAsync = ref.watch(metricsProvider);
     final mqttStream = ref.watch(mqttStreamProvider);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      backgroundColor: const Color(0xFF181D23),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         toolbarHeight: 52, // altura levemente aumentada
         title: Row(
           children: [
-            Icon(Icons.bolt, color: Color(0xFFFFC300), size: 26),
+            Icon(Icons.bolt, color: Theme.of(context).colorScheme.secondary, size: 26),
             const SizedBox(width: 8),
-            const Text('E-Metrics IoT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5, color: Colors.white)),
+            Text('E-Metrics IoT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 0.5, color: isDarkMode ? Colors.white : Colors.black87)),
           ],
         ),
         centerTitle: false,
-        backgroundColor: const Color(0xFF232A34),
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        foregroundColor: isDarkMode ? Colors.white : Colors.black87,
         elevation: 0,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: mqttStream.when(
-              data: (_) => const Icon(Icons.cloud_done, color: Color(0xFF00C2FF), size: 24),
-              loading: () => const Icon(Icons.cloud_queue, color: Color(0xFFFFC300), size: 24),
+              data: (_) => Icon(Icons.cloud_done, color: Theme.of(context).colorScheme.secondary, size: 24),
+              loading: () => Icon(Icons.cloud_queue, color: Theme.of(context).colorScheme.secondary, size: 24),
               error: (error, stackTrace) => const Icon(Icons.cloud_off, color: Colors.red, size: 24),
             ),
           ),
