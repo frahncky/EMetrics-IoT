@@ -30,7 +30,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             gradient: LinearGradient(
               colors: isDarkMode 
                 ? [const Color(0xFF1A202C), const Color(0xFF0F1419).withValues(alpha: 0.9)]
-                : [const Color(0xFFFFFEFD), const Color(0xFFFAFBFC).withValues(alpha: 0.8)],
+                : [const Color(0xFFFFFFFF), const Color(0xFFF5F7FA).withValues(alpha: 0.95)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
