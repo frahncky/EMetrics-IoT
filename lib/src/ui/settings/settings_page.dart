@@ -67,8 +67,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
-      appBar: AppBar(title: const Text('Configurações')),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDarkMode 
+                ? [const Color(0xFF1A202C), const Color(0xFF0F1419).withValues(alpha: 0.9)]
+                : [const Color(0xFFFFFEFD), const Color(0xFFFAFBFC).withValues(alpha: 0.8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        title: const Text('Configurações'),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(

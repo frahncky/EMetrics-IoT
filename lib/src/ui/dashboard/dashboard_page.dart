@@ -22,7 +22,20 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        toolbarHeight: 52, // altura levemente aumentada
+        toolbarHeight: 52,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDarkMode 
+                ? [const Color(0xFF1A202C), const Color(0xFF0F1419).withValues(alpha: 0.9)]
+                : [const Color(0xFFFFFEFD), const Color(0xFFFAFBFC).withValues(alpha: 0.8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         title: Row(
           children: [
             Icon(Icons.bolt, color: Theme.of(context).colorScheme.secondary, size: 26),
@@ -31,9 +44,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ],
         ),
         centerTitle: false,
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         foregroundColor: isDarkMode ? Colors.white : Colors.black87,
-        elevation: 0,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 14),
@@ -210,7 +221,7 @@ class _MainIndicators extends StatelessWidget {
 }
 
 
-class _IndicatorCard extends StatelessWidget {
+class _IndicatorCard extends StatefulWidget {
   final String label;
   final String value;
   final IconData icon;
@@ -228,25 +239,62 @@ class _IndicatorCard extends StatelessWidget {
   });
 
   @override
+  State<_IndicatorCard> createState() => _IndicatorCardState();
+}
+
+class _IndicatorCardState extends State<_IndicatorCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _fadeAnimation =
+        Tween<double>(begin: 0.0, end: 1.0).animate(_animationController);
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final cardBgColor = Theme.of(context).cardColor;
     final textColor = isDarkMode ? Colors.white : const Color(0xFF1F2937);
     
-    return Semantics(
-      label: 'Indicador de $label: $value',
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: compact ? 2 : 6, vertical: compact ? 2 : 8),
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Semantics(
+        label: 'Indicador de ${widget.label}: ${widget.value}',
         child: Container(
-          width: compact ? 80 : 120,
-          padding: EdgeInsets.symmetric(vertical: compact ? 8 : 16, horizontal: compact ? 4 : 8),
+          margin: EdgeInsets.symmetric(
+            horizontal: widget.compact ? 2 : 6,
+            vertical: widget.compact ? 2 : 8,
+          ),
+          width: widget.compact ? 80 : 120,
+          padding: EdgeInsets.symmetric(
+            vertical: widget.compact ? 8 : 16,
+            horizontal: widget.compact ? 4 : 8,
+          ),
           decoration: BoxDecoration(
             color: cardBgColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: 0.6), width: 1.5),
+            border: Border.all(
+              color: widget.color.withValues(alpha: 0.6),
+              width: 1.5,
+            ),
             boxShadow: [
               BoxShadow(
-                color: color.withValues(alpha: 0.1),
+                color: widget.color.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -254,31 +302,53 @@ class _IndicatorCard extends StatelessWidget {
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color, size: compact ? 24 : 30, semanticLabel: 'Ícone de $label'),
-              SizedBox(height: compact ? 4 : 8),
+              Icon(
+                widget.icon,
+                color: widget.color,
+                size: widget.compact ? 24 : 30,
+                semanticLabel: 'Ícone de ${widget.label}',
+              ),
+              SizedBox(height: widget.compact ? 4 : 8),
               Text(
-                label,
-                style: TextStyle(fontSize: compact ? 12 : 15, color: textColor, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                widget.label,
+                style: TextStyle(
+                  fontSize: widget.compact ? 12 : 15,
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: compact ? 2 : 6),
+              SizedBox(height: widget.compact ? 2 : 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    value,
-                    style: TextStyle(fontSize: compact ? 15 : 20, fontWeight: FontWeight.bold, color: color, letterSpacing: 0.5),
+                    widget.value,
+                    style: TextStyle(
+                      fontSize: widget.compact ? 15 : 20,
+                      fontWeight: FontWeight.bold,
+                      color: widget.color,
+                      letterSpacing: 0.5,
+                    ),
                     textAlign: TextAlign.center,
                   ),
-                  if (unit != null) ...[
-                    SizedBox(width: 3),
+                  if (widget.unit != null) ...[
+                    const SizedBox(width: 3),
                     Padding(
-                      padding: EdgeInsets.only(bottom: compact ? 1 : 2),
+                      padding: EdgeInsets.only(bottom: widget.compact ? 1 : 2),
                       child: Text(
-                        unit!,
-                        style: TextStyle(fontSize: compact ? 10 : 13, color: isDarkMode ? Colors.white70 : const Color(0xFF6B7280), fontWeight: FontWeight.w500),
+                        widget.unit!,
+                        style: TextStyle(
+                          fontSize: widget.compact ? 10 : 13,
+                          color: isDarkMode
+                              ? Colors.white70
+                              : const Color(0xFF6B7280),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],

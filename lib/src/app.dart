@@ -218,7 +218,17 @@ class _MainMenuState extends State<_MainMenu> {
     final unselectedColor = isDarkMode ? Colors.white60 : const Color(0xFF9CA3AF);
     
     return Scaffold(
-      body: _pages[_selectedIndex],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 400),
+        transitionBuilder: (child, animation) => SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.3, 0.0),
+            end: Offset.zero,
+          ).animate(animation),
+          child: FadeTransition(opacity: animation, child: child),
+        ),
+        child: _pages[_selectedIndex],
+      ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         child: ClipRRect(
