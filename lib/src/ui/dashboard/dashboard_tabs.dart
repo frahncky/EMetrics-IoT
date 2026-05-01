@@ -66,26 +66,23 @@ class _RealtimeChartWithInternalSelector extends StatelessWidget {
     final backgroundColor = Theme.of(context).cardColor;
     final textColor = Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF1F2937);
     
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: RealtimeChart(
-        field: selectedField,
-        fieldSelector: (context) {
-          return DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: selectedField,
-              dropdownColor: backgroundColor,
-              style: TextStyle(color: secondaryColor, fontWeight: FontWeight.bold, fontSize: 16),
-              icon: Icon(Icons.arrow_drop_down, color: secondaryColor),
-              onChanged: (v) => v != null ? onChanged(v) : null,
-              items: fields.map((f) => DropdownMenuItem(
-                value: f['value'],
-                child: Text(f['label']!, style: TextStyle(color: textColor)),
-              )).toList(),
-            ),
-          );
-        },
-      ),
+    return RealtimeChart(
+      field: selectedField,
+      fieldSelector: (context) {
+        return DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: selectedField,
+            dropdownColor: backgroundColor,
+            style: TextStyle(color: secondaryColor, fontWeight: FontWeight.bold, fontSize: 16),
+            icon: Icon(Icons.arrow_drop_down, color: secondaryColor),
+            onChanged: (v) => v != null ? onChanged(v) : null,
+            items: fields.map((f) => DropdownMenuItem(
+              value: f['value'],
+              child: Text(f['label']!, style: TextStyle(color: textColor)),
+            )).toList(),
+          ),
+        );
+      },
     );
   }
 }

@@ -15,6 +15,11 @@ class BackgroundMqttService {
   static const _notificationChannelId = 'mqtt_background_channel';
   static const _notificationId = 101;
 
+  static Future<bool> isRunning() async {
+    final service = FlutterBackgroundService();
+    return service.isRunning();
+  }
+
   static Future<void> initialize() async {
     final service = FlutterBackgroundService();
 

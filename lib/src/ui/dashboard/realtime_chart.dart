@@ -16,29 +16,55 @@ class RealtimeChart extends ConsumerWidget {
     final metricsAsync = ref.watch(metricsProvider);
     final brightness = Theme.of(context).brightness;
     final isDarkMode = brightness == Brightness.dark;
-    final gridColor = isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.06);
-    final gridColorV = isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.03);
-    final textColor = isDarkMode ? Colors.white.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.45);
+    final gridColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.06);
+    final gridColorV = isDarkMode
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.03);
+    final textColor = isDarkMode
+        ? Colors.white.withValues(alpha: 0.6)
+        : Colors.black.withValues(alpha: 0.45);
     final backgroundColor = Theme.of(context).cardColor;
-    
+
     Color mainColor;
     String title;
     String unit;
     switch (field) {
       case 'power':
-        mainColor = const Color(0xFFFFC300); title = 'Potência'; unit = 'W'; break;
+        mainColor = const Color(0xFFF59E0B);
+        title = 'Potência';
+        unit = 'W';
+        break;
       case 'current':
-        mainColor = const Color(0xFF00C2FF); title = 'Corrente'; unit = 'A'; break;
+        mainColor = const Color(0xFF06B6D4);
+        title = 'Corrente';
+        unit = 'A';
+        break;
       case 'voltage':
-        mainColor = const Color(0xFF7DF9FF); title = 'Tensão'; unit = 'V'; break;
+        mainColor = const Color(0xFF3B82F6);
+        title = 'Tensão';
+        unit = 'V';
+        break;
       case 'energy':
-        mainColor = const Color(0xFFB388FF); title = 'Energia'; unit = 'kWh'; break;
+        mainColor = const Color(0xFF8B5CF6);
+        title = 'Energia';
+        unit = 'kWh';
+        break;
       case 'pf':
-        mainColor = const Color(0xFFB388FF); title = 'Fator Potência'; unit = ''; break;
+        mainColor = const Color(0xFF6366F1);
+        title = 'Fator Potência';
+        unit = '';
+        break;
       case 'frequency':
-        mainColor = Colors.greenAccent; title = 'Frequência'; unit = 'Hz'; break;
+        mainColor = const Color(0xFF22C55E);
+        title = 'Frequência';
+        unit = 'Hz';
+        break;
       default:
-        mainColor = Colors.blueAccent; title = field; unit = '';
+        mainColor = Colors.blueAccent;
+        title = field;
+        unit = '';
     }
     return metricsAsync.when(
       data: (metrics) {
@@ -48,19 +74,24 @@ class RealtimeChart extends ConsumerWidget {
           final value = _getFieldValue(data[i], field);
           spots.add(FlSpot(i.toDouble(), value));
         }
-        final double? lastValue = data.isNotEmpty ? _getFieldValue(data.last, field) : null;
+        final double? lastValue = data.isNotEmpty
+            ? _getFieldValue(data.last, field)
+            : null;
         return Container(
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 8,
+                  spacing: 8,
                   children: [
                     fieldSelector != null
                         ? fieldSelector!(context)
@@ -70,15 +101,19 @@ class RealtimeChart extends ConsumerWidget {
                               color: mainColor,
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              letterSpacing: 0.5,
                             ),
                           ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: mainColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: mainColor.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: mainColor.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Text(
                         'Instantâneo: '
@@ -94,29 +129,35 @@ class RealtimeChart extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Expanded(
-                  child: LineChart(
-                    LineChartData(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 2, 2, 4),
+                    child: LineChart(
+                      LineChartData(
                       backgroundColor: backgroundColor,
                       gridData: FlGridData(
                         show: true,
                         drawVerticalLine: true,
                         horizontalInterval: 2,
                         verticalInterval: 2,
-                        getDrawingHorizontalLine: (value) => FlLine(
-                          color: gridColor,
-                          strokeWidth: 0.5,
-                        ),
-                        getDrawingVerticalLine: (value) => FlLine(
-                          color: gridColorV,
-                          strokeWidth: 0.5,
-                        ),
+                        getDrawingHorizontalLine: (value) =>
+                            FlLine(color: gridColor, strokeWidth: 0.5),
+                        getDrawingVerticalLine: (value) =>
+                            FlLine(color: gridColorV, strokeWidth: 0.5),
                       ),
                       titlesData: spots.isEmpty
                           ? FlTitlesData(
-                              leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
                             )
                           : FlTitlesData(
                               leftTitles: AxisTitles(
@@ -124,8 +165,14 @@ class RealtimeChart extends ConsumerWidget {
                                   showTitles: true,
                                   reservedSize: 32,
                                   getTitlesWidget: (value, meta) => Text(
-                                    formatWithSIPrefix(value, fractionDigits: 1),
-                                    style: TextStyle(color: textColor, fontSize: 11),
+                                    formatWithSIPrefix(
+                                      value,
+                                      fractionDigits: 1,
+                                    ),
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -135,18 +182,39 @@ class RealtimeChart extends ConsumerWidget {
                                   reservedSize: 28,
                                   getTitlesWidget: (value, meta) => Text(
                                     value.toInt().toString(),
-                                    style: TextStyle(color: textColor, fontSize: 11),
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ),
                               ),
-                              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
                             ),
                       borderData: FlBorderData(
-                        show: false,
+                        show: true,
+                        border: Border(
+                          left: BorderSide(
+                            color: textColor.withValues(alpha: 0.55),
+                            width: 1,
+                          ),
+                          bottom: BorderSide(
+                            color: textColor.withValues(alpha: 0.55),
+                            width: 1,
+                          ),
+                          right: BorderSide.none,
+                          top: BorderSide.none,
+                        ),
                       ),
                       minX: spots.isEmpty ? 0 : 0,
-                      maxX: spots.isEmpty ? 10 : (spots.length > 1 ? spots.length - 1 : 1),
+                      maxX: spots.isEmpty
+                          ? 10
+                          : (spots.length > 1 ? spots.length - 1 : 1),
                       minY: spots.isEmpty ? 0 : null,
                       maxY: spots.isEmpty ? 10 : null,
                       lineBarsData: spots.isEmpty
@@ -173,6 +241,7 @@ class RealtimeChart extends ConsumerWidget {
                                 ),
                               ),
                             ],
+                      ),
                     ),
                   ),
                 ),
@@ -182,7 +251,12 @@ class RealtimeChart extends ConsumerWidget {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Erro ao carregar gráfico: $e', style: TextStyle(color: Colors.redAccent))),
+      error: (e, _) => Center(
+        child: Text(
+          'Erro ao carregar gráfico: $e',
+          style: TextStyle(color: Colors.redAccent),
+        ),
+      ),
     );
   }
 

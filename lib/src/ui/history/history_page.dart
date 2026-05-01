@@ -4,6 +4,7 @@ import '../../providers/metric_provider.dart';
 import '../../providers/mqtt_provider.dart';
 import 'history_filter.dart';
 import 'history_chart.dart';
+
 // Função utilitária igual ao dashboard
 String formatWithSIPrefix(num value, {int? fractionDigits}) {
   if (value == 0 || value.isNaN) return '--';
@@ -14,6 +15,7 @@ String formatWithSIPrefix(num value, {int? fractionDigits}) {
 
     return 2;
   }
+
   if (abs >= 1e9) {
     final d = fractionDigits ?? digits(value / 1e9);
     return '${(value / 1e9).toStringAsFixed(d)} G';
@@ -35,12 +37,14 @@ String formatWithSIPrefix(num value, {int? fractionDigits}) {
   }
 }
 
-
 // Seletor igual ao Dashboard, mas para histórico
 class _HistoryChartSelector extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onChanged;
-  const _HistoryChartSelector({required this.selected, required this.onChanged});
+  const _HistoryChartSelector({
+    required this.selected,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -54,13 +58,19 @@ class _HistoryChartSelector extends StatelessWidget {
     ];
     final secondaryColor = Theme.of(context).colorScheme.secondary;
     final backgroundColor = Theme.of(context).cardColor;
-    final textColor = Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87;
-    
+    final textColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : Colors.black87;
+
     return DropdownButtonHideUnderline(
       child: DropdownButton<String>(
         value: selected,
         dropdownColor: backgroundColor,
-        style: TextStyle(color: secondaryColor, fontWeight: FontWeight.bold, fontSize: 16),
+        style: TextStyle(
+          color: secondaryColor,
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
         icon: Icon(Icons.arrow_drop_down, color: secondaryColor),
         onChanged: (value) {
           if (value != null) {
@@ -126,6 +136,13 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
 
   Future<void> _requestHistoryFromMeter() async {
     final range = (_activeFrom, _activeTo);
+    final query = MetricsRangeQuery(
+      from: _activeFrom.millisecondsSinceEpoch,
+      to: _activeTo.millisecondsSinceEpoch,
+    );
+    final rangeProvider = metricsByRangeProvider(query);
+    final baselineCount = ref.read(rangeProvider).asData?.value.length;
+
     setState(() {
       _isRequesting = true;
     });
@@ -134,25 +151,64 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       final mqttService = ref.read(mqttServiceProvider);
       await mqttService.requestHistory(from: range.$1, to: range.$2);
 
-      ref.invalidate(
-        metricsByRangeProvider(
-          MetricsRangeQuery(
-            from: _activeFrom.millisecondsSinceEpoch,
-            to: _activeTo.millisecondsSinceEpoch,
+      var updated = false;
+      for (var attempt = 0; attempt < 5; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        ref.invalidate(rangeProvider);
+        final refreshed = await ref.read(rangeProvider.future);
+        final hasGrowth =
+            baselineCount == null || refreshed.length > baselineCount;
+        if (hasGrowth || refreshed.isNotEmpty) {
+          updated = true;
+          break;
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            updated
+                ? 'Histórico solicitado e atualizado.'
+                : 'Solicitação enviada. Aguardando novas métricas.',
           ),
         ),
       );
-    } catch (_) {
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      final text = e.toString();
+      const prefix = 'Exception: ';
+      final message = text.startsWith(prefix)
+          ? text.substring(prefix.length)
+          : text;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Falha ao solicitar histórico: $message')),
+      );
     } finally {
-      setState(() {
-        _isRequesting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isRequesting = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+    final mutedTextColor = isDarkMode
+        ? Colors.white70
+        : colorScheme.onSurface.withValues(alpha: 0.68);
+    final successTextColor = isDarkMode
+        ? const Color(0xFF22C55E)
+        : const Color(0xFF15803D);
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -160,9 +216,15 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: isDarkMode 
-                ? [const Color(0xFF1A202C), const Color(0xFF0F1419).withValues(alpha: 0.9)]
-                : [const Color(0xFFFFFFFF), const Color(0xFFF8FAFC).withValues(alpha: 0.9)],
+              colors: isDarkMode
+                  ? [
+                      const Color(0xFF1A202C),
+                      const Color(0xFF0F1419).withValues(alpha: 0.9),
+                    ]
+                  : [
+                      const Color(0xFFFFFFFF),
+                      const Color(0xFFF8FAFC).withValues(alpha: 0.9),
+                    ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -189,11 +251,11 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.schedule, size: 16, color: Colors.white60),
+                Icon(Icons.schedule, size: 16, color: mutedTextColor),
                 const SizedBox(width: 6),
                 Text(
-                  'Periodo: ${_formatDateTime(_activeFrom)} ate ${_formatDateTime(_activeTo)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  'Período: ${_formatDateTime(_activeFrom)} até ${_formatDateTime(_activeTo)}',
+                  style: TextStyle(color: mutedTextColor, fontSize: 13),
                 ),
               ],
             ),
@@ -206,7 +268,11 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
               child: ElevatedButton.icon(
                 onPressed: _isRequesting ? null : _requestHistoryFromMeter,
                 icon: const Icon(Icons.download),
-                label: Text(_isRequesting ? 'Solicitando histórico...' : 'Solicitar histórico do medidor'),
+                label: Text(
+                  _isRequesting
+                      ? 'Solicitando histórico...'
+                      : 'Solicitar histórico do medidor',
+                ),
               ),
             ),
           ),
@@ -232,9 +298,9 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                                 ? 'Sem dados no período selecionado.'
                                 : 'Dados disponíveis no período selecionado.',
                             style: TextStyle(
-                              color: metrics.isEmpty 
-                                  ? (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black54)
-                                  : Colors.greenAccent,
+                              color: metrics.isEmpty
+                                  ? mutedTextColor
+                                  : successTextColor,
                               fontSize: 13,
                             ),
                             textAlign: TextAlign.center,
@@ -246,7 +312,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                             field: _selectedField1,
                             fieldSelector: (context) => _HistoryChartSelector(
                               selected: _selectedField1,
-                              onChanged: (f) => setState(() => _selectedField1 = f),
+                              onChanged: (f) =>
+                                  setState(() => _selectedField1 = f),
                             ),
                           ),
                         ),
@@ -257,15 +324,18 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                             field: _selectedField2,
                             fieldSelector: (context) => _HistoryChartSelector(
                               selected: _selectedField2,
-                              onChanged: (f) => setState(() => _selectedField2 = f),
+                              onChanged: (f) =>
+                                  setState(() => _selectedField2 = f),
                             ),
                           ),
                         ),
                       ],
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('Erro ao carregar histórico: $e')),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, _) =>
+                      Center(child: Text('Erro ao carregar histórico: $e')),
                 ),
           ),
         ],

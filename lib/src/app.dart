@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'ui/dashboard/dashboard_page.dart';
 import 'ui/history/history_page.dart';
 import 'ui/settings/settings_page.dart';
-import '../src/services/alert_service.dart';
 import '../src/providers/alert_provider.dart';
 import '../src/providers/theme_provider.dart';
 
@@ -12,9 +11,7 @@ class EmetricsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ProviderScope(
-      child: _AppInitializer(),
-    );
+    return ProviderScope(child: _AppInitializer());
   }
 }
 
@@ -23,10 +20,9 @@ class _AppInitializer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    AlertService.init();
     ref.read(alertProvider);
     final isDarkMode = ref.watch(themeProvider);
-    
+
     return MaterialApp(
       title: 'E-Metrics IoT',
       theme: _buildLightTheme(),
@@ -53,7 +49,11 @@ class _AppInitializer extends ConsumerWidget {
         centerTitle: true,
         elevation: 4,
         shadowColor: Color(0x4D000000),
-        titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFE2E8F0)),
+        titleTextStyle: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFFE2E8F0),
+        ),
       ),
       cardTheme: CardThemeData(
         color: const Color(0xFF1A202C),
@@ -69,7 +69,9 @@ class _AppInitializer extends ConsumerWidget {
           backgroundColor: const Color(0xFF00D8FF),
           foregroundColor: Colors.black87,
           textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           elevation: 4,
         ),
       ),
@@ -78,7 +80,9 @@ class _AppInitializer extends ConsumerWidget {
           foregroundColor: const Color(0xFF00D8FF),
           side: const BorderSide(color: Color(0xFF00D8FF), width: 2),
           textStyle: const TextStyle(fontWeight: FontWeight.bold),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -102,15 +106,26 @@ class _AppInitializer extends ConsumerWidget {
           borderRadius: BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide(color: Color(0xFF00D8FF), width: 2),
         ),
-        labelStyle: TextStyle(color: Color(0xFFCBD5E0), fontWeight: FontWeight.w500),
+        labelStyle: TextStyle(
+          color: Color(0xFFCBD5E0),
+          fontWeight: FontWeight.w500,
+        ),
         hintStyle: TextStyle(color: Color(0xFF718096)),
       ),
       visualDensity: VisualDensity.adaptivePlatformDensity,
       textTheme: const TextTheme(
         bodyMedium: TextStyle(fontSize: 16, color: Color(0xFFCBD5E0)),
         bodySmall: TextStyle(fontSize: 14, color: Color(0xFFA0AEC0)),
-        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFE2E8F0)),
-        titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFFF7FAFC)),
+        titleLarge: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFFE2E8F0),
+        ),
+        titleMedium: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFFF7FAFC),
+        ),
       ),
     );
   }
@@ -132,7 +147,11 @@ class _AppInitializer extends ConsumerWidget {
         centerTitle: true,
         elevation: 1,
         shadowColor: Color(0x0A000000),
-        titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+        titleTextStyle: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF0F172A),
+        ),
       ),
       cardTheme: CardThemeData(
         color: const Color(0xFFF9FAFB),
@@ -148,7 +167,9 @@ class _AppInitializer extends ConsumerWidget {
           backgroundColor: const Color(0xFF1E40AF),
           foregroundColor: Colors.white,
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           elevation: 1,
         ),
       ),
@@ -157,7 +178,9 @@ class _AppInitializer extends ConsumerWidget {
           foregroundColor: const Color(0xFF1E40AF),
           side: const BorderSide(color: Color(0xFF1E40AF), width: 1.5),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -181,15 +204,26 @@ class _AppInitializer extends ConsumerWidget {
           borderRadius: const BorderRadius.all(Radius.circular(12)),
           borderSide: const BorderSide(color: Color(0xFF1E40AF), width: 2),
         ),
-        labelStyle: const TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.w500),
+        labelStyle: const TextStyle(
+          color: Color(0xFF334155),
+          fontWeight: FontWeight.w500,
+        ),
         hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
       ),
       visualDensity: VisualDensity.adaptivePlatformDensity,
       textTheme: const TextTheme(
         bodyMedium: TextStyle(fontSize: 16, color: Color(0xFF1E293B)),
         bodySmall: TextStyle(fontSize: 14, color: Color(0xFF475569)),
-        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-        titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
+        titleLarge: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF0F172A),
+        ),
+        titleMedium: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF1E293B),
+        ),
       ),
     );
   }
@@ -215,8 +249,10 @@ class _MainMenuState extends State<_MainMenu> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
     final cardColor = Theme.of(context).cardColor;
-    final unselectedColor = isDarkMode ? Colors.white60 : const Color(0xFF9CA3AF);
-    
+    final unselectedColor = isDarkMode
+        ? Colors.white60
+        : const Color(0xFF9CA3AF);
+
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
@@ -275,20 +311,25 @@ class _MainMenuState extends State<_MainMenu> {
       ),
     );
   }
-
 }
 
 class _NavBarIcon extends StatelessWidget {
   final IconData icon;
   final bool selected;
   final Color primaryColor;
-  const _NavBarIcon({required this.icon, required this.selected, required this.primaryColor});
+  const _NavBarIcon({
+    required this.icon,
+    required this.selected,
+    required this.primaryColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final unselectedColor = isDarkMode ? Colors.white60 : const Color(0xFF9CA3AF);
-    
+    final unselectedColor = isDarkMode
+        ? Colors.white60
+        : const Color(0xFF9CA3AF);
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.all(4),
