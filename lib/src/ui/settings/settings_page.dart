@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_settings_provider.dart';
+import '../../providers/theme_provider.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -22,6 +23,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void initState() {
     super.initState();
     _loadSettings();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final isDarkMode = ref.read(themeProvider);
+    if (mounted) {
+      setState(() => _darkMode = isDarkMode);
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -122,10 +131,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             label: 'Alternar modo escuro',
             toggled: _darkMode,
             child: SwitchListTile(
-              title: const Text('Modo escuro'),
+              title: Text(_darkMode ? 'Modo escuro' : 'Modo claro'),
               value: _darkMode,
               secondary: const Icon(Icons.dark_mode),
-              onChanged: (v) => setState(() => _darkMode = v),
+              onChanged: (v) async {
+                setState(() => _darkMode = v);
+                await ref.read(themeProvider.notifier).setDarkMode(v);
+              },
             ),
           ),
           const SizedBox(height: 32),
@@ -137,12 +149,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               height: 48,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.save),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.secondary,
-                  foregroundColor: Colors.black,
-                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
                 onPressed: () async {
                   await _saveSettings();
                   if (!context.mounted) {
@@ -165,12 +171,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               height: 48,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.cloud),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
                 onPressed: () async {
                   try {
                     await _saveSettings();
@@ -196,6 +196,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
             ),
           ),
+          SizedBox(height: 140 + MediaQuery.of(context).padding.bottom),
         ],
       ),
     );

@@ -5,6 +5,7 @@ import 'ui/history/history_page.dart';
 import 'ui/settings/settings_page.dart';
 import '../src/services/alert_service.dart';
 import '../src/providers/alert_provider.dart';
+import '../src/providers/theme_provider.dart';
 
 class EmetricsApp extends StatelessWidget {
   const EmetricsApp({super.key});
@@ -17,85 +18,146 @@ class EmetricsApp extends StatelessWidget {
   }
 }
 
-class _AppInitializer extends StatefulWidget {
-  @override
-  State<_AppInitializer> createState() => _AppInitializerState();
-}
+class _AppInitializer extends ConsumerWidget {
+  const _AppInitializer();
 
-class _AppInitializerState extends State<_AppInitializer> {
   @override
-  void initState() {
-    super.initState();
+  Widget build(BuildContext context, WidgetRef ref) {
     AlertService.init();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Ativa o provider de alertas
-    ProviderScope.containerOf(context, listen: false).read(alertProvider);
+    ref.read(alertProvider);
+    final isDarkMode = ref.watch(themeProvider);
+    
     return MaterialApp(
       title: 'E-Metrics IoT',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF181F2A),
-        primaryColor: const Color(0xFF232B3E),
-        colorScheme: ColorScheme.dark(
-          primary: const Color(0xFF232B3E),
-          secondary: const Color(0xFFFFB300),
-          background: const Color(0xFF181F2A),
-          surface: const Color(0xFF232B3E),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF232B3E),
-          centerTitle: true,
-          elevation: 2,
-          titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-        ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF232B3E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
-          elevation: 4,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFFB300),
-            foregroundColor: Colors.black,
-            textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: const BorderSide(color: Color(0xFFFFB300)),
-            textStyle: const TextStyle(fontWeight: FontWeight.bold),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFFFFB300),
-            textStyle: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
-          filled: true,
-          fillColor: Color(0xFF232B3E),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-            borderSide: BorderSide(color: Color(0xFFFFB300)),
-          ),
-          labelStyle: TextStyle(color: Colors.white70),
-          hintStyle: TextStyle(color: Colors.white38),
-        ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        textTheme: const TextTheme(
-          bodyMedium: TextStyle(fontSize: 16, color: Colors.white70),
-          titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+      theme: _buildLightTheme(),
+      darkTheme: _buildDarkTheme(),
+      themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      home: const _MainMenu(),
+    );
+  }
+
+  static ThemeData _buildDarkTheme() {
+    return ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: const Color(0xFF181F2A),
+      primaryColor: const Color(0xFF232B3E),
+      colorScheme: ColorScheme.dark(
+        primary: const Color(0xFF232B3E),
+        secondary: const Color(0xFFFFB300),
+        surface: const Color(0xFF232B3E),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF232B3E),
+        centerTitle: true,
+        elevation: 2,
+        titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF232B3E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+        elevation: 4,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFFFB300),
+          foregroundColor: Colors.black,
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
-      themeMode: ThemeMode.dark,
-      home: const _MainMenu(),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          side: const BorderSide(color: Color(0xFFFFB300)),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFFFFB300),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        filled: true,
+        fillColor: Color(0xFF232B3E),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: Color(0xFFFFB300)),
+        ),
+        labelStyle: TextStyle(color: Colors.white70),
+        hintStyle: TextStyle(color: Colors.white38),
+      ),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+      textTheme: const TextTheme(
+        bodyMedium: TextStyle(fontSize: 16, color: Colors.white70),
+        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+      ),
+    );
+  }
+
+  static ThemeData _buildLightTheme() {
+    return ThemeData(
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+      primaryColor: Colors.white,
+      colorScheme: ColorScheme.light(
+        primary: Colors.white,
+        secondary: const Color(0xFF1976D2),
+        surface: Colors.white,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        centerTitle: true,
+        elevation: 2,
+        titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+      ),
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(16)),
+          side: BorderSide(color: Colors.grey[300]!, width: 1),
+        ),
+        elevation: 1,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF1976D2),
+          foregroundColor: Colors.white,
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF1976D2),
+          side: const BorderSide(color: Color(0xFF1976D2)),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF1976D2),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.grey[100],
+        border: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        labelStyle: const TextStyle(color: Colors.black87),
+        hintStyle: const TextStyle(color: Colors.black45),
+      ),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+      textTheme: const TextTheme(
+        bodyMedium: TextStyle(fontSize: 16, color: Colors.black87),
+        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+      ),
     );
   }
 }
