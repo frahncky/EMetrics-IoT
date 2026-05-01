@@ -78,7 +78,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             gradient: LinearGradient(
               colors: isDarkMode 
                 ? [const Color(0xFF1A202C), const Color(0xFF0F1419).withValues(alpha: 0.9)]
-                : [const Color(0xFFFFFFFF), const Color(0xFFF5F7FA).withValues(alpha: 0.95)],
+                : [const Color(0xFFFFFFFF), const Color(0xFFF8FAFC).withValues(alpha: 0.9)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
