@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../services/background_mqtt_service.dart';
 import 'settings_validators.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -205,11 +206,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     final mqttService = ref.read(mqttServiceProvider);
                     await mqttService.connect();
                     mqttService.subscribe();
+                    await BackgroundMqttService.start();
                     if (!context.mounted) {
                       return;
                     }
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Conectado ao broker MQTT!')),
+                      const SnackBar(
+                        content: Text(
+                          'Conectado ao broker MQTT e monitoramento em segundo plano ativado.',
+                        ),
+                      ),
                     );
                   } catch (e) {
                     if (!context.mounted) {
@@ -221,6 +227,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   }
                 },
                 label: const Text('Conectar MQTT'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Semantics(
+            label: 'Botão Parar segundo plano',
+            button: true,
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.pause_circle_outline),
+                onPressed: () async {
+                  await BackgroundMqttService.stop();
+                  if (!context.mounted) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Monitoramento em segundo plano pausado.')),
+                  );
+                },
+                label: const Text('Parar segundo plano'),
               ),
             ),
           ),

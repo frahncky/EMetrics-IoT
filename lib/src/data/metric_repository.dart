@@ -1,10 +1,15 @@
 import 'local_database.dart';
 import 'metric_model.dart';
+import 'package:sqflite/sqflite.dart';
 
 class MetricRepository {
   Future<void> insertMetric(Metric metric) async {
     final db = await LocalDatabase.database;
-    await db.insert('metrics', metric.toMap());
+    await db.insert(
+      'metrics',
+      metric.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
   }
 
   Future<List<Metric>> getMetrics({int? from, int? to}) async {

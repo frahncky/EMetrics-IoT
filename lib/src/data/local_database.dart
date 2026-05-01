@@ -15,7 +15,7 @@ class LocalDatabase {
     final path = join(dbPath, 'emetrics.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE IF NOT EXISTS metrics (
@@ -29,7 +29,20 @@ class LocalDatabase {
             energy REAL
           )
         ''');
+        await _createUniqueMetricIndex(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _createUniqueMetricIndex(db);
+        }
       },
     );
+  }
+
+  static Future<void> _createUniqueMetricIndex(Database db) async {
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_unique
+      ON metrics(timestamp, voltage, current, power, pf, frequency, energy)
+    ''');
   }
 }
