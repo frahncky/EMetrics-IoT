@@ -89,7 +89,6 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   late DateTime _activeFrom;
   late DateTime _activeTo;
   bool _isRequesting = false;
-  String? _requestStatus;
 
   @override
   void initState() {
@@ -125,16 +124,11 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final range = (_activeFrom, _activeTo);
     setState(() {
       _isRequesting = true;
-      _requestStatus = null;
     });
 
     try {
       final mqttService = ref.read(mqttServiceProvider);
       await mqttService.requestHistory(from: range.$1, to: range.$2);
-
-      setState(() {
-        _requestStatus = 'Solicitação enviada ao medidor. Os gráficos serão atualizados conforme os dados chegarem.';
-      });
 
       ref.invalidate(
         metricsByRangeProvider(
@@ -144,10 +138,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           ),
         ),
       );
-    } catch (e) {
-      setState(() {
-        _requestStatus = 'Falha ao solicitar histórico: $e';
-      });
+    } catch (_) {
     } finally {
       setState(() {
         _isRequesting = false;
@@ -199,17 +190,6 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
               ),
             ),
           ),
-          if (_requestStatus != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Text(
-                _requestStatus!,
-                style: TextStyle(
-                  color: _requestStatus!.startsWith('Falha') ? Colors.redAccent : Colors.white70,
-                  fontSize: 13,
-                ),
-              ),
-            ),
           const SizedBox(height: 8),
           Expanded(
             child: ref
@@ -225,15 +205,19 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                   data: (metrics) {
                     return Column(
                       children: [
-                        if (metrics.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 8),
-                            child: Text(
-                              'Sem dados no período selecionado. Solicitando ao medidor pode preencher os gráficos.',
-                              style: TextStyle(color: Colors.white70, fontSize: 13),
-                              textAlign: TextAlign.center,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            metrics.isEmpty
+                                ? 'Sem dados no período selecionado.'
+                                : 'Dados disponíveis no período selecionado.',
+                            style: TextStyle(
+                              color: metrics.isEmpty ? Colors.white70 : Colors.greenAccent,
+                              fontSize: 13,
                             ),
+                            textAlign: TextAlign.center,
                           ),
+                        ),
                         Expanded(
                           child: HistoryChart(
                             metrics: metrics,
