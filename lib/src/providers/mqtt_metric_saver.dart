@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'metric_provider.dart';
@@ -11,15 +12,21 @@ final backgroundRunningCheckProvider = Provider<BackgroundRunningCheck>((ref) {
   return BackgroundMqttService.isRunning;
 });
 
+/// Serializes MQTT metric writes and debounces invalidations to prevent
+/// race conditions and excessive provider recomputes during high-frequency
+/// message ingestion.
 final mqttMetricSaverProvider = Provider<void>((ref) {
-  final streamAsync = ref.watch(mqttStreamProvider);
-  streamAsync.whenData((messages) async {
+  Future<void> lastOperation = Future.value();
+  Timer? debounceTimer;
+  
+  ref.watch(mqttStreamProvider).whenData((messages) async {
     final isBackgroundActive = await ref.read(backgroundRunningCheckProvider)();
-    if (isBackgroundActive) {
+    if (isBackgroundActive || messages.isEmpty) {
       return;
     }
 
-    if (messages.isNotEmpty) {
+    // Serialize writes: chain operations to prevent concurrent DB writes
+    lastOperation = lastOperation.then((_) async {
       final last = messages.last;
       final payload = (last.payload as MqttPublishMessage).payload.message;
       final payloadString = String.fromCharCodes(payload);
@@ -27,9 +34,14 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
       if (metric != null) {
         final repo = ref.read(metricRepositoryProvider);
         await repo.insertMetric(metric);
-        ref.invalidate(metricsProvider);
-        ref.invalidate(metricsByRangeProvider);
+        
+        // Debounce invalidations: batch provider updates during high message rate
+        debounceTimer?.cancel();
+        debounceTimer = Timer(const Duration(milliseconds: 100), () {
+          ref.invalidate(metricsProvider);
+          ref.invalidate(metricsByRangeProvider);
+        });
       }
-    }
+    });
   });
 });

@@ -20,7 +20,8 @@ class _AppInitializer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.read(alertProvider);
+    // Initialize alert listener on first build without side effects in render cycle
+    ref.listen(alertProvider, (previous, next) {});
     final isDarkMode = ref.watch(themeProvider);
 
     return MaterialApp(
