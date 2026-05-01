@@ -263,15 +263,20 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isRequesting ? null : _requestHistoryFromMeter,
-                icon: const Icon(Icons.download),
-                label: Text(
-                  _isRequesting
-                      ? 'Solicitando histórico...'
-                      : 'Solicitar histórico do medidor',
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isRequesting ? null : _requestHistoryFromMeter,
+                    icon: const Icon(Icons.download),
+                    label: Text(
+                      _isRequesting
+                          ? 'Solicitando histórico...'
+                          : 'Solicitar histórico do medidor',
+                    ),
+                  ),
                 ),
               ),
             ),
