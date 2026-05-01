@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/theme_provider.dart';
+import 'settings_validators.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -12,6 +13,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
+  final _formKey = GlobalKey<FormState>();
   final _brokerController = TextEditingController();
   final _clientIdController = TextEditingController();
   final _topicController = TextEditingController();
@@ -53,19 +55,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         );
   }
 
+  String _toUserMessage(Object error) {
+    const prefix = 'Exception: ';
+    final text = error.toString();
+    if (text.startsWith(prefix)) {
+      return text.substring(prefix.length);
+    }
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
           Text('Configurações Gerais', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 24),
           Semantics(
             label: 'Campo Broker MQTT',
-            child: TextField(
+            child: TextFormField(
               controller: _brokerController,
+              validator: SettingsValidators.validateBroker,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.cloud),
                 labelText: 'Broker MQTT',
@@ -77,8 +91,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 20),
           Semantics(
             label: 'Campo Client ID MQTT',
-            child: TextField(
+            child: TextFormField(
               controller: _clientIdController,
+              validator: SettingsValidators.validateClientId,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.badge),
                 labelText: 'Client ID MQTT',
@@ -90,8 +105,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 20),
           Semantics(
             label: 'Campo Tópico MQTT',
-            child: TextField(
+            child: TextFormField(
               controller: _topicController,
+              validator: (value) =>
+                  SettingsValidators.validateTopic(value, fieldLabel: 'o tópico MQTT'),
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.topic),
                 labelText: 'Tópico MQTT',
@@ -103,8 +120,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 20),
           Semantics(
             label: 'Campo tópico de solicitação de histórico',
-            child: TextField(
+            child: TextFormField(
               controller: _requestTopicController,
+              validator: (value) =>
+                  SettingsValidators.validateTopic(value, fieldLabel: 'o tópico de solicitação'),
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.history_toggle_off),
                 labelText: 'Tópico de solicitação de histórico',
@@ -116,9 +135,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 20),
           Semantics(
             label: 'Campo Intervalo de atualização',
-            child: TextField(
+            child: TextFormField(
               controller: _intervalController,
               keyboardType: TextInputType.number,
+              validator: SettingsValidators.validateInterval,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.timer),
                 labelText: 'Intervalo de atualização (s)',
@@ -150,6 +170,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.save),
                 onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  if (!_formKey.currentState!.validate()) {
+                    return;
+                  }
                   await _saveSettings();
                   if (!context.mounted) {
                     return;
@@ -172,6 +196,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.cloud),
                 onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  if (!_formKey.currentState!.validate()) {
+                    return;
+                  }
                   try {
                     await _saveSettings();
                     final mqttService = ref.read(mqttServiceProvider);
@@ -188,7 +216,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       return;
                     }
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Erro ao conectar: $e')),
+                      SnackBar(content: Text('Erro ao conectar: ${_toUserMessage(e)}')),
                     );
                   }
                 },
@@ -198,6 +226,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           SizedBox(height: 140 + MediaQuery.of(context).padding.bottom),
         ],
+        ),
       ),
     );
   }

@@ -5,6 +5,15 @@ import 'dart:io';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
+class MqttServiceException implements Exception {
+  final String message;
+
+  const MqttServiceException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class MqttService {
   final String broker;
   final String clientId;
@@ -38,21 +47,49 @@ class MqttService {
         .withClientIdentifier(clientId)
         .authenticateAs(username, password)
         .startClean();
+
+    developer.log('Iniciando conexão MQTT em $broker:$port', name: 'MqttService');
+
     try {
       await client.connect();
+
+      final state = client.connectionStatus?.state;
+      if (state != MqttConnectionState.connected) {
+        final code = client.connectionStatus?.returnCode?.name ?? 'desconhecido';
+        client.disconnect();
+        throw MqttServiceException(
+          'Não foi possível conectar ao broker MQTT (código: $code).',
+        );
+      }
     } on SocketException catch (e) {
-      // Trate o erro de rede de forma amigável
       developer.log('Erro de conexão MQTT: ${e.message}', name: 'MqttService');
-      // Aqui você pode exibir um alerta visual ou notificar o usuário
-      throw Exception('Não foi possível conectar ao broker MQTT. Verifique sua conexão de rede.');
-    } catch (e) {
-      developer.log('Erro inesperado ao conectar MQTT: $e', name: 'MqttService');
-      throw Exception('Erro inesperado ao conectar ao broker MQTT.');
+      throw const MqttServiceException(
+        'Não foi possível conectar ao broker MQTT. Verifique sua conexão de rede.',
+      );
+    } on MqttServiceException {
+      rethrow;
+    } catch (e, stackTrace) {
+      developer.log(
+        'Erro inesperado ao conectar MQTT',
+        name: 'MqttService',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      throw const MqttServiceException('Erro inesperado ao conectar ao broker MQTT.');
     }
   }
 
   void subscribe() {
-    client.subscribe(topic, MqttQos.atLeastOnce);
+    if (!isConnected) {
+      throw const MqttServiceException('Conecte ao broker MQTT antes de se inscrever em tópicos.');
+    }
+
+    final result = client.subscribe(topic, MqttQos.atLeastOnce);
+    if (result == null) {
+      throw const MqttServiceException('Falha ao assinar o tópico MQTT configurado.');
+    }
+
+    developer.log('Inscrito no tópico MQTT: $topic', name: 'MqttService');
   }
 
   bool get isConnected =>
@@ -60,20 +97,40 @@ class MqttService {
 
   Future<void> requestHistory({required DateTime from, required DateTime to}) async {
     if (!isConnected) {
-      throw Exception('Conecte ao broker MQTT antes de solicitar histórico.');
+      throw const MqttServiceException('Conecte ao broker MQTT antes de solicitar histórico.');
+    }
+    if (to.isBefore(from)) {
+      throw const MqttServiceException('Período inválido para solicitação de histórico.');
     }
 
-    final payload = jsonEncode({
-      'from': from.millisecondsSinceEpoch,
-      'to': to.millisecondsSinceEpoch,
-      'requestedAt': DateTime.now().millisecondsSinceEpoch,
-    });
-    final builder = MqttClientPayloadBuilder()..addString(payload);
-    client.publishMessage(requestTopic, MqttQos.atLeastOnce, builder.payload!);
+    try {
+      final payload = jsonEncode({
+        'from': from.millisecondsSinceEpoch,
+        'to': to.millisecondsSinceEpoch,
+        'requestedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+      final builder = MqttClientPayloadBuilder()..addString(payload);
+      final data = builder.payload;
+      if (data == null) {
+        throw const MqttServiceException('Falha ao montar a mensagem de solicitação de histórico.');
+      }
+      client.publishMessage(requestTopic, MqttQos.atLeastOnce, data);
+      developer.log('Solicitação de histórico publicada em $requestTopic', name: 'MqttService');
+    } on MqttServiceException {
+      rethrow;
+    } catch (e, stackTrace) {
+      developer.log(
+        'Erro ao publicar solicitação de histórico',
+        name: 'MqttService',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      throw const MqttServiceException('Erro ao solicitar histórico via MQTT.');
+    }
   }
 
   void onDisconnected() {
-    // TODO: implementar reconexão e notificação visual
+    developer.log('Cliente MQTT desconectado', name: 'MqttService');
   }
 
   Stream<List<MqttReceivedMessage<MqttMessage>>> get updates =>
