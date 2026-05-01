@@ -2,7 +2,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/metric_model.dart';
-import '../dashboard/dashboard_page.dart';
 
 typedef FieldSelectorBuilder = Widget Function(BuildContext context);
 
@@ -51,6 +50,8 @@ class HistoryChart extends StatelessWidget {
     final scale = hasData
         ? _computeScale(spots, field)
         : const _AxisScale(-1, 1, 0.5);
+    final unitScale = _computeUnitScale(spots, field, meta.unit);
+    final displayUnit = _buildDisplayUnit(meta.unit, unitScale.prefix);
     final labelStep = hasData
         ? (data.length > 6 ? ((data.length - 1) / 4).ceil() : 1)
         : 1;
@@ -85,9 +86,25 @@ class HistoryChart extends StatelessWidget {
               spacing: 6,
               children: [
                 fieldSelector != null
-                    ? fieldSelector!(context)
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          fieldSelector!(context),
+                          if (displayUnit.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '($displayUnit)',
+                              style: TextStyle(
+                                color: titleColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ],
+                      )
                     : Text(
-                        '${meta.title} ${meta.unit.isNotEmpty ? '(${meta.unit})' : ''}',
+                        '${meta.title} ${displayUnit.isNotEmpty ? '($displayUnit)' : ''}',
                         style: TextStyle(
                           color: titleColor,
                           fontWeight: FontWeight.w700,
@@ -102,7 +119,7 @@ class HistoryChart extends StatelessWidget {
                     border: Border.all(color: meta.color.withValues(alpha: 0.42), width: 1.1),
                   ),
                   child: Text(
-                    'Instantâneo: ${lastValue != null ? formatWithSIPrefix(lastValue) : '--'} ${meta.unit}',
+                    'Instantâneo: ${lastValue != null ? _formatScaledValue(lastValue, unitScale, field == 'pf') : '--'}${displayUnit.isNotEmpty ? ' $displayUnit' : ''}',
                     style: TextStyle(
                       color: meta.color,
                       fontWeight: FontWeight.w700,
@@ -146,10 +163,7 @@ class HistoryChart extends StatelessWidget {
                                 reservedSize: 32,
                                 interval: scale.horizontalInterval,
                                 getTitlesWidget: (value, metaData) => Text(
-                                  formatWithSIPrefix(
-                                    value,
-                                    fractionDigits: field == 'pf' ? 2 : 1,
-                                  ),
+                                  _formatScaledValue(value, unitScale, field == 'pf'),
                                   style: TextStyle(color: axisTextColor, fontSize: 11),
                                 ),
                               ),
@@ -233,11 +247,8 @@ class HistoryChart extends StatelessWidget {
                                 return touchedSpots.map((spot) {
                                   final index = spot.x.toInt().clamp(0, data.length - 1);
                                   final time = _formatTime(data[index].timestamp);
-                                  final value = formatWithSIPrefix(
-                                    spot.y,
-                                    fractionDigits: field == 'pf' ? 2 : 1,
-                                  );
-                                  final unitText = meta.unit.isEmpty ? '' : ' ${meta.unit}';
+                                  final value = _formatScaledValue(spot.y, unitScale, field == 'pf');
+                                  final unitText = displayUnit.isEmpty ? '' : ' $displayUnit';
                                   return LineTooltipItem(
                                     '$value$unitText\n',
                                     TextStyle(
@@ -390,6 +401,47 @@ class HistoryChart extends StatelessWidget {
     final minute = timestamp.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
+
+  _UnitScale _computeUnitScale(List<FlSpot> spots, String selectedField, String unit) {
+    if (selectedField == 'pf' || unit.isEmpty || spots.isEmpty) {
+      return const _UnitScale(1, '');
+    }
+
+    var maxAbs = 0.0;
+    for (final spot in spots) {
+      final abs = spot.y.abs();
+      if (abs > maxAbs) {
+        maxAbs = abs;
+      }
+    }
+
+    if (maxAbs >= 1e9) return const _UnitScale(1e9, 'G');
+    if (maxAbs >= 1e6) return const _UnitScale(1e6, 'M');
+    if (maxAbs >= 1e3) return const _UnitScale(1e3, 'K');
+    if (maxAbs > 0 && maxAbs < 1e-3) return const _UnitScale(1e-6, 'μ');
+    if (maxAbs > 0 && maxAbs < 1) return const _UnitScale(1e-3, 'm');
+    return const _UnitScale(1, '');
+  }
+
+  String _buildDisplayUnit(String unit, String prefix) {
+    if (unit.isEmpty) {
+      return '';
+    }
+    if (prefix.isEmpty) {
+      return unit;
+    }
+    return '$prefix$unit';
+  }
+
+  String _formatScaledValue(double rawValue, _UnitScale scale, bool isPf) {
+    final value = rawValue / scale.divisor;
+    if (isPf) {
+      return value.toStringAsFixed(2);
+    }
+    if (value.abs() >= 100) return value.toStringAsFixed(0);
+    if (value.abs() >= 10) return value.toStringAsFixed(1);
+    return value.toStringAsFixed(2);
+  }
 }
 
 class _FieldMeta {
@@ -406,4 +458,11 @@ class _AxisScale {
   final double horizontalInterval;
 
   const _AxisScale(this.minY, this.maxY, this.horizontalInterval);
+}
+
+class _UnitScale {
+  final double divisor;
+  final String prefix;
+
+  const _UnitScale(this.divisor, this.prefix);
 }

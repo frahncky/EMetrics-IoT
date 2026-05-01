@@ -58,9 +58,12 @@ class _RealtimeChartWithInternalSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const fields = [
-      {'label': 'Potência (W)', 'value': 'power'},
-      {'label': 'Energia (kWh)', 'value': 'energy'},
+      {'label': 'Tensão', 'value': 'voltage'},
+      {'label': 'Corrente', 'value': 'current'},
+      {'label': 'Potência', 'value': 'power'},
       {'label': 'Fator Potência', 'value': 'pf'},
+      {'label': 'Frequência', 'value': 'frequency'},
+      {'label': 'Energia', 'value': 'energy'},
     ];
     final secondaryColor = Theme.of(context).colorScheme.secondary;
     final backgroundColor = Theme.of(context).cardColor;

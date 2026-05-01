@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/metric_model.dart';
 import '../../providers/metric_provider.dart';
-import 'dashboard_page.dart';
 
 class CompareMetricsPage extends ConsumerStatefulWidget {
   const CompareMetricsPage({super.key});
@@ -68,6 +67,18 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                   final data = metrics.take(40).toList().reversed.toList();
                   final last1 = data.isNotEmpty ? _getFieldValue(data.last, _field1) : null;
                   final last2 = data.isNotEmpty ? _getFieldValue(data.last, _field2) : null;
+                  final seriesSpots1 = [
+                    for (int i = 0; i < data.length; i++)
+                      FlSpot(i.toDouble(), _getFieldValue(data[i], _field1)),
+                  ];
+                  final seriesSpots2 = [
+                    for (int i = 0; i < data.length; i++)
+                      FlSpot(i.toDouble(), _getFieldValue(data[i], _field2)),
+                  ];
+                  final scale1 = _computeUnitScale(seriesSpots1, _field1, meta1.unit);
+                  final scale2 = _computeUnitScale(seriesSpots2, _field2, meta2.unit);
+                  final unit1 = _buildDisplayUnit(meta1.unit, scale1.prefix);
+                  final unit2 = _buildDisplayUnit(meta2.unit, scale2.prefix);
 
                   return Container(
                     decoration: BoxDecoration(
@@ -97,12 +108,12 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                               _LegendPill(
                                 color: meta1.color,
                                 label:
-                                    '${meta1.title}: ${last1 != null ? formatWithSIPrefix(last1) : '--'}${meta1.unit.isNotEmpty ? ' ${meta1.unit}' : ''}',
+                                '${meta1.title}: ${last1 != null ? _formatScaledValue(last1, scale1, _field1 == 'pf') : '--'}${unit1.isNotEmpty ? ' $unit1' : ''}',
                               ),
                               _LegendPill(
                                 color: meta2.color,
                                 label:
-                                    '${meta2.title}: ${last2 != null ? formatWithSIPrefix(last2) : '--'}${meta2.unit.isNotEmpty ? ' ${meta2.unit}' : ''}',
+                                '${meta2.title}: ${last2 != null ? _formatScaledValue(last2, scale2, _field2 == 'pf') : '--'}${unit2.isNotEmpty ? ' $unit2' : ''}',
                               ),
                             ],
                           ),
@@ -114,6 +125,10 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                                     data: data,
                                     meta1: meta1,
                                     meta2: meta2,
+                                  unitScale1: scale1,
+                                  unitScale2: scale2,
+                                  displayUnit1: unit1,
+                                  displayUnit2: unit2,
                                     axisTextColor: axisTextColor,
                                     horizontalGridColor: horizontalGridColor,
                                     verticalGridColor: verticalGridColor,
@@ -138,6 +153,10 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
     required List<Metric> data,
     required _FieldMeta meta1,
     required _FieldMeta meta2,
+    required _UnitScale unitScale1,
+    required _UnitScale unitScale2,
+    required String displayUnit1,
+    required String displayUnit2,
     required Color axisTextColor,
     required Color horizontalGridColor,
     required Color verticalGridColor,
@@ -151,7 +170,8 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
         FlSpot(i.toDouble(), _getFieldValue(data[i], _field2)),
     ];
     final allSpots = [...spots1, ...spots2];
-    final scale = _computeScale(allSpots, _field1 == 'pf' && _field2 == 'pf');
+    final allPf = _field1 == 'pf' && _field2 == 'pf';
+    final scale = _computeScale(allSpots, allPf);
     final labelStep = data.length > 6 ? ((data.length - 1) / 4).ceil() : 1;
     final verticalInterval =
         data.length > 4 ? ((data.length - 1) / 4).ceilToDouble() : 1.0;
@@ -184,7 +204,7 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                   reservedSize: 42,
                   interval: scale.horizontalInterval,
                   getTitlesWidget: (value, metaData) => Text(
-                    formatWithSIPrefix(value, fractionDigits: 1),
+                    _formatAxisValue(value, allPf),
                     style: TextStyle(color: axisTextColor, fontSize: 11),
                   ),
                 ),
@@ -229,8 +249,14 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                     final index = spot.x.toInt().clamp(0, data.length - 1);
                     final time = _formatTime(data[index].timestamp);
                     final spotMeta = spot.barIndex == 0 ? meta1 : meta2;
-                    final value = formatWithSIPrefix(spot.y, fractionDigits: 1);
-                    final unitText = spotMeta.unit.isEmpty ? '' : ' ${spotMeta.unit}';
+                    final isFirstSeries = spot.barIndex == 0;
+                    final isPfSeries = (isFirstSeries ? _field1 : _field2) == 'pf';
+                    final value = isFirstSeries
+                        ? _formatScaledValue(spot.y, unitScale1, isPfSeries)
+                        : _formatScaledValue(spot.y, unitScale2, isPfSeries);
+                    final unitText = isFirstSeries
+                        ? (displayUnit1.isNotEmpty ? ' $displayUnit1' : '')
+                        : (displayUnit2.isNotEmpty ? ' $displayUnit2' : '');
                     return LineTooltipItem(
                       '${spotMeta.title}: $value$unitText\n',
                       TextStyle(
@@ -383,6 +409,54 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
     final minute = timestamp.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
+
+  _UnitScale _computeUnitScale(List<FlSpot> spots, String selectedField, String unit) {
+    if (selectedField == 'pf' || unit.isEmpty || spots.isEmpty) {
+      return const _UnitScale(1, '');
+    }
+
+    var maxAbs = 0.0;
+    for (final spot in spots) {
+      final abs = spot.y.abs();
+      if (abs > maxAbs) {
+        maxAbs = abs;
+      }
+    }
+
+    if (maxAbs >= 1e9) return const _UnitScale(1e9, 'G');
+    if (maxAbs >= 1e6) return const _UnitScale(1e6, 'M');
+    if (maxAbs >= 1e3) return const _UnitScale(1e3, 'K');
+    if (maxAbs > 0 && maxAbs < 1e-3) return const _UnitScale(1e-6, 'μ');
+    if (maxAbs > 0 && maxAbs < 1) return const _UnitScale(1e-3, 'm');
+    return const _UnitScale(1, '');
+  }
+
+  String _buildDisplayUnit(String unit, String prefix) {
+    if (unit.isEmpty) {
+      return '';
+    }
+    if (prefix.isEmpty) {
+      return unit;
+    }
+    return '$prefix$unit';
+  }
+
+  String _formatScaledValue(double rawValue, _UnitScale scale, bool isPf) {
+    final value = rawValue / scale.divisor;
+    if (isPf) {
+      return value.toStringAsFixed(2);
+    }
+    return _formatAxisValue(value, false);
+  }
+
+  String _formatAxisValue(double value, bool isPf) {
+    if (isPf) {
+      return value.toStringAsFixed(2);
+    }
+    if (value.abs() >= 100) return value.toStringAsFixed(0);
+    if (value.abs() >= 10) return value.toStringAsFixed(1);
+    return value.toStringAsFixed(2);
+  }
 }
 
 class _MetricDropdown extends StatelessWidget {
@@ -456,6 +530,13 @@ class _AxisScale {
   final double horizontalInterval;
 
   const _AxisScale(this.minY, this.maxY, this.horizontalInterval);
+}
+
+class _UnitScale {
+  final double divisor;
+  final String prefix;
+
+  const _UnitScale(this.divisor, this.prefix);
 }
 
 class _ChartEmptyState extends StatelessWidget {
