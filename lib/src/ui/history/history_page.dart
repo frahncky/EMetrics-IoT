@@ -16,19 +16,19 @@ String formatWithSIPrefix(num value, {int? fractionDigits}) {
   }
   if (abs >= 1e9) {
     final d = fractionDigits ?? digits(value / 1e9);
-    return (value / 1e9).toStringAsFixed(d) + ' G';
+    return '${(value / 1e9).toStringAsFixed(d)} G';
   } else if (abs >= 1e6) {
     final d = fractionDigits ?? digits(value / 1e6);
-    return (value / 1e6).toStringAsFixed(d) + ' M';
+    return '${(value / 1e6).toStringAsFixed(d)} M';
   } else if (abs >= 1e3) {
     final d = fractionDigits ?? digits(value / 1e3);
-    return (value / 1e3).toStringAsFixed(d) + ' K';
+    return '${(value / 1e3).toStringAsFixed(d)} K';
   } else if (abs < 1e-3 && abs > 0) {
     final d = fractionDigits ?? digits(value * 1e6);
-    return (value * 1e6).toStringAsFixed(d) + ' μ';
+    return '${(value * 1e6).toStringAsFixed(d)} μ';
   } else if (abs < 1 && abs >= 1e-3) {
     final d = fractionDigits ?? digits(value * 1e3);
-    return (value * 1e3).toStringAsFixed(d) + ' m';
+    return '${(value * 1e3).toStringAsFixed(d)} m';
   } else {
     final d = fractionDigits ?? digits(value.toDouble());
     return value.toStringAsFixed(d);

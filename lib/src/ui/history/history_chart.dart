@@ -68,7 +68,7 @@ class HistoryChart extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF232A34),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: mainColor.withOpacity(0.25), width: 1.2),
+        border: Border.all(color: mainColor.withValues(alpha: 0.25), width: 1.2),
       ),
       child: Padding(
         padding: const EdgeInsets.all(8.0),
@@ -93,13 +93,13 @@ class HistoryChart extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: mainColor.withOpacity(0.12),
+                    color: mainColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: mainColor.withOpacity(0.3)),
+                    border: Border.all(color: mainColor.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     'Instantâneo: '
-                    '${lastValue != null ? formatWithSIPrefix(lastValue) : '--'} ${unit}',
+                    '${lastValue != null ? formatWithSIPrefix(lastValue) : '--'} $unit',
                     style: TextStyle(
                       color: mainColor,
                       fontWeight: FontWeight.w600,
@@ -119,8 +119,8 @@ class HistoryChart extends StatelessWidget {
                     drawVerticalLine: true,
                     horizontalInterval: 2,
                     verticalInterval: 2,
-                    getDrawingHorizontalLine: (value) => FlLine(color: Colors.white.withOpacity(0.18), strokeWidth: 1.2),
-                    getDrawingVerticalLine: (value) => FlLine(color: Colors.white.withOpacity(0.15), strokeWidth: 1.2),
+                    getDrawingHorizontalLine: (value) => FlLine(color: Colors.white.withValues(alpha: 0.18), strokeWidth: 1.2),
+                    getDrawingVerticalLine: (value) => FlLine(color: Colors.white.withValues(alpha: 0.15), strokeWidth: 1.2),
                   ),
                   titlesData: spots.isEmpty
                       ? FlTitlesData(
@@ -136,7 +136,7 @@ class HistoryChart extends StatelessWidget {
                               reservedSize: 32,
                               getTitlesWidget: (value, meta) => Text(
                                 formatWithSIPrefix(value, fractionDigits: 1),
-                                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
                               ),
                             ),
                           ),
@@ -146,7 +146,7 @@ class HistoryChart extends StatelessWidget {
                               reservedSize: 28,
                               getTitlesWidget: (value, meta) => Text(
                                 _buildBottomLabel(value, data, labelStep),
-                                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 11),
                               ),
                             ),
                           ),
@@ -155,7 +155,7 @@ class HistoryChart extends StatelessWidget {
                         ),
                   borderData: FlBorderData(
                     show: true,
-                    border: Border.all(color: mainColor.withOpacity(0.25), width: 1),
+                    border: Border.all(color: mainColor.withValues(alpha: 0.25), width: 1),
                   ),
                   minX: spots.isEmpty ? 0 : 0,
                   maxX: spots.isEmpty ? 10 : (spots.length > 1 ? spots.length - 1 : 1),
@@ -179,7 +179,7 @@ class HistoryChart extends StatelessWidget {
                             color: mainColor,
                             barWidth: 2.5,
                             dotData: FlDotData(show: false),
-                            belowBarData: BarAreaData(show: true, color: mainColor.withOpacity(0.10)),
+                            belowBarData: BarAreaData(show: true, color: mainColor.withValues(alpha: 0.10)),
                           ),
                         ],
                 ),
