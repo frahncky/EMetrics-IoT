@@ -16,9 +16,9 @@ class RealtimeChart extends ConsumerWidget {
     final metricsAsync = ref.watch(metricsProvider);
     final brightness = Theme.of(context).brightness;
     final isDarkMode = brightness == Brightness.dark;
-    final gridColor = isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.08);
-    final gridColorV = isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05);
-    final textColor = isDarkMode ? Colors.white.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.5);
+    final gridColor = isDarkMode ? Colors.white.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.06);
+    final gridColorV = isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.03);
+    final textColor = isDarkMode ? Colors.white.withValues(alpha: 0.6) : Colors.black.withValues(alpha: 0.45);
     final backgroundColor = Theme.of(context).cardColor;
     
     Color mainColor;
