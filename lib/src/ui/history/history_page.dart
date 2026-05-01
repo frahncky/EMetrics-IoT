@@ -212,6 +212,15 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final successTextColor = isDarkMode
         ? const Color(0xFF22C55E)
         : const Color(0xFF15803D);
+    final metricsAsync = ref.watch(
+      metricsByRangeProvider(
+        MetricsRangeQuery(
+          from: _activeFrom.millisecondsSinceEpoch,
+          to: _activeTo.millisecondsSinceEpoch,
+        ),
+      ),
+    );
+    final currentMetrics = metricsAsync.asData?.value ?? const <Metric>[];
 
     return Scaffold(
       appBar: AppBar(
@@ -267,39 +276,28 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 300),
-                child: SizedBox(
-                  width: double.infinity,
+            child: Row(
+              children: [
+                Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _isRequesting ? null : _requestHistoryFromMeter,
-                    icon: const Icon(Icons.download),
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _isRequesting
-                            ? 'Solicitando histórico...'
-                            : 'Solicitar histórico do medidor',
-                      ),
+                    icon: const Icon(Icons.sync),
+                    label: Text(
+                      _isRequesting
+                          ? 'Solicitando...'
+                          : 'Solicitar do medidor',
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                HistoryExportButton(metrics: currentMetrics),
+              ],
             ),
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: ref
-                .watch(
-                  metricsByRangeProvider(
-                    MetricsRangeQuery(
-                      from: _activeFrom.millisecondsSinceEpoch,
-                      to: _activeTo.millisecondsSinceEpoch,
-                    ),
-                  ),
-                )
-                .when(
+            child: metricsAsync.when(
                   data: (metrics) {
                     return Column(
                       children: [
@@ -317,10 +315,6 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                             ),
                             textAlign: TextAlign.center,
                           ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: HistoryExportButton(metrics: metrics),
                         ),
                         if (metrics.isNotEmpty)
                           Padding(
