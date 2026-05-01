@@ -84,8 +84,18 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   String _selectedField1 = 'power';
   String _selectedField2 = 'energy';
   HistoryPeriod _period = HistoryPeriod.dia;
+  late DateTime _activeFrom;
+  late DateTime _activeTo;
   bool _isRequesting = false;
   String? _requestStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    final range = _rangeForPeriod(_period);
+    _activeFrom = range.$1;
+    _activeTo = range.$2;
+  }
 
   (DateTime, DateTime) _rangeForPeriod(HistoryPeriod period) {
     final now = DateTime.now();
@@ -102,7 +112,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   }
 
   Future<void> _requestHistoryFromMeter() async {
-    final range = _rangeForPeriod(_period);
+    final range = (_activeFrom, _activeTo);
     setState(() {
       _isRequesting = true;
       _requestStatus = null;
@@ -119,8 +129,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       ref.invalidate(
         metricsByRangeProvider(
           MetricsRangeQuery(
-            from: range.$1.millisecondsSinceEpoch,
-            to: range.$2.millisecondsSinceEpoch,
+            from: _activeFrom.millisecondsSinceEpoch,
+            to: _activeTo.millisecondsSinceEpoch,
           ),
         ),
       );
@@ -137,7 +147,6 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final range = _rangeForPeriod(_period);
     return Scaffold(
       appBar: AppBar(title: const Text('Histórico de Consumo')),
       body: Column(
@@ -145,7 +154,14 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           const SizedBox(height: 12),
           HistoryFilter(
             selected: _period,
-            onChanged: (p) => setState(() => _period = p),
+            onChanged: (p) {
+              final range = _rangeForPeriod(p);
+              setState(() {
+                _period = p;
+                _activeFrom = range.$1;
+                _activeTo = range.$2;
+              });
+            },
           ),
           const SizedBox(height: 10),
           Padding(
@@ -176,8 +192,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                 .watch(
                   metricsByRangeProvider(
                     MetricsRangeQuery(
-                      from: range.$1.millisecondsSinceEpoch,
-                      to: range.$2.millisecondsSinceEpoch,
+                      from: _activeFrom.millisecondsSinceEpoch,
+                      to: _activeTo.millisecondsSinceEpoch,
                     ),
                   ),
                 )
