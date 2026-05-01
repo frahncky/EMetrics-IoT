@@ -229,6 +229,10 @@ class _IndicatorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final cardBgColor = Theme.of(context).cardColor;
+    final textColor = isDarkMode ? Colors.white : const Color(0xFF1F2937);
+    
     return Semantics(
       label: 'Indicador de $label: $value',
       child: Container(
@@ -237,9 +241,16 @@ class _IndicatorCard extends StatelessWidget {
           width: compact ? 80 : 120,
           padding: EdgeInsets.symmetric(vertical: compact ? 8 : 16, horizontal: compact ? 4 : 8),
           decoration: BoxDecoration(
-            color: const Color(0xFF232A34),
+            color: cardBgColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color, width: 1.0),
+            border: Border.all(color: color.withValues(alpha: 0.6), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -248,7 +259,7 @@ class _IndicatorCard extends StatelessWidget {
               SizedBox(height: compact ? 4 : 8),
               Text(
                 label,
-                style: TextStyle(fontSize: compact ? 12 : 15, color: Colors.white, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                style: TextStyle(fontSize: compact ? 12 : 15, color: textColor, fontWeight: FontWeight.w600, letterSpacing: 0.5),
                 textAlign: TextAlign.center,
               ),
               SizedBox(height: compact ? 2 : 6),
@@ -267,7 +278,7 @@ class _IndicatorCard extends StatelessWidget {
                       padding: EdgeInsets.only(bottom: compact ? 1 : 2),
                       child: Text(
                         unit!,
-                        style: TextStyle(fontSize: compact ? 10 : 13, color: Colors.white70, fontWeight: FontWeight.w500),
+                        style: TextStyle(fontSize: compact ? 10 : 13, color: isDarkMode ? Colors.white70 : const Color(0xFF6B7280), fontWeight: FontWeight.w500),
                       ),
                     ),
                   ],
