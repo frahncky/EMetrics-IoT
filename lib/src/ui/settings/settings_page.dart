@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/measurement_settings_provider.dart';
 import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -20,6 +21,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _topicController = TextEditingController();
   final _requestTopicController = TextEditingController();
   final _intervalController = TextEditingController(text: '5');
+  final _voltageMinController = TextEditingController();
+  final _voltageMaxController = TextEditingController();
+  final _energyLimitController = TextEditingController();
+  final _tariffController = TextEditingController();
   bool _darkMode = false;
 
   @override
@@ -45,6 +50,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _clientIdController.text = settings.clientId;
     _topicController.text = settings.topic;
     _requestTopicController.text = settings.requestTopic;
+
+    final measurementSettings = await ref
+        .read(measurementSettingsProvider.notifier)
+        .load();
+    if (!mounted) {
+      return;
+    }
+    _voltageMinController.text = _formatDecimal(measurementSettings.voltageMin);
+    _voltageMaxController.text = _formatDecimal(measurementSettings.voltageMax);
+    _energyLimitController.text = _formatDecimal(
+      measurementSettings.energyLimitKwh,
+    );
+    _tariffController.text = _formatDecimal(measurementSettings.tariffPerKwh);
   }
 
   Future<void> _saveSettings() async {
@@ -56,6 +74,47 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           topic: _topicController.text,
           requestTopic: _requestTopicController.text,
         );
+    await ref
+        .read(measurementSettingsProvider.notifier)
+        .update(
+          voltageMin: _parseDecimal(_voltageMinController.text),
+          voltageMax: _parseDecimal(_voltageMaxController.text),
+          energyLimitKwh: _parseDecimal(_energyLimitController.text),
+          tariffPerKwh: _parseDecimal(_tariffController.text),
+        );
+  }
+
+  double _parseDecimal(String value) {
+    return double.parse(value.trim().replaceAll(',', '.'));
+  }
+
+  String _formatDecimal(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(2);
+  }
+
+  String? _validateVoltageMax(String? value) {
+    final error = SettingsValidators.validateDecimal(
+      value,
+      fieldLabel: 'a tensão máxima',
+      min: 1,
+      max: 1000,
+      allowZero: false,
+    );
+    if (error != null) {
+      return error;
+    }
+
+    final minVoltage = double.tryParse(
+      _voltageMinController.text.trim().replaceAll(',', '.'),
+    );
+    final maxVoltage = double.tryParse(value!.trim().replaceAll(',', '.'));
+    if (minVoltage != null && maxVoltage != null && maxVoltage <= minVoltage) {
+      return 'A tensão máxima deve ser maior que a mínima.';
+    }
+    return null;
   }
 
   String _toUserMessage(Object error) {
@@ -180,6 +239,98 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.timer),
                       labelText: 'Intervalo de atualização (s)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            _SettingsSection(
+              title: 'Medição e alertas',
+              icon: Icons.tune,
+              children: [
+                Semantics(
+                  label: 'Campo tensão mínima para alerta',
+                  child: TextFormField(
+                    controller: _voltageMinController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    validator: (value) => SettingsValidators.validateDecimal(
+                      value,
+                      fieldLabel: 'a tensão mínima',
+                      min: 0,
+                      max: 1000,
+                      allowZero: false,
+                    ),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.electrical_services),
+                      labelText: 'Tensão mínima (V)',
+                      helperText: 'Dispara alerta abaixo deste valor',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Semantics(
+                  label: 'Campo tensão máxima para alerta',
+                  child: TextFormField(
+                    controller: _voltageMaxController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    validator: _validateVoltageMax,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.electrical_services),
+                      labelText: 'Tensão máxima (V)',
+                      helperText: 'Dispara alerta acima deste valor',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Semantics(
+                  label: 'Campo limite de consumo para alerta',
+                  child: TextFormField(
+                    controller: _energyLimitController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    validator: (value) => SettingsValidators.validateDecimal(
+                      value,
+                      fieldLabel: 'o limite de consumo',
+                      min: 0,
+                      max: 100000,
+                      allowZero: false,
+                    ),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.battery_alert_outlined),
+                      labelText: 'Limite de consumo (kWh)',
+                      helperText:
+                          'Dispara alerta quando a energia passar disso',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Semantics(
+                  label: 'Campo tarifa por kWh',
+                  child: TextFormField(
+                    controller: _tariffController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    validator: (value) => SettingsValidators.validateDecimal(
+                      value,
+                      fieldLabel: 'a tarifa por kWh',
+                      min: 0,
+                      max: 1000,
+                    ),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.attach_money),
+                      labelText: 'Tarifa (R\$/kWh)',
+                      helperText: 'Usada para estimar custo de consumo',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -332,6 +483,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _topicController.dispose();
     _requestTopicController.dispose();
     _intervalController.dispose();
+    _voltageMinController.dispose();
+    _voltageMaxController.dispose();
+    _energyLimitController.dispose();
+    _tariffController.dispose();
     super.dispose();
   }
 }

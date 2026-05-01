@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/metric_model.dart';
+import '../../providers/measurement_settings_provider.dart';
 import '../../providers/metric_provider.dart';
 import '../../providers/mqtt_provider.dart';
 import 'history_filter.dart';
 import 'history_chart.dart';
+import 'history_export.dart';
 
 // Função utilitária igual ao dashboard
 String formatWithSIPrefix(num value, {int? fractionDigits}) {
@@ -200,6 +203,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final measurementSettings = ref.watch(measurementSettingsProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
     final mutedTextColor = isDarkMode
@@ -314,6 +318,18 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                             textAlign: TextAlign.center,
                           ),
                         ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: HistoryExportButton(metrics: metrics),
+                        ),
+                        if (metrics.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                            child: _HistorySummary(
+                              metrics: metrics,
+                              tariffPerKwh: measurementSettings.tariffPerKwh,
+                            ),
+                          ),
                         Expanded(
                           child: HistoryChart(
                             metrics: metrics,
@@ -345,6 +361,99 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                   error: (e, _) =>
                       Center(child: Text('Erro ao carregar histórico: $e')),
                 ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistorySummary extends StatelessWidget {
+  final List<Metric> metrics;
+  final double tariffPerKwh;
+
+  const _HistorySummary({required this.metrics, required this.tariffPerKwh});
+
+  @override
+  Widget build(BuildContext context) {
+    final consumption = _periodConsumptionKwh(metrics);
+    final cost = consumption * tariffPerKwh;
+    final mutedColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white70
+        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.68);
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _SummaryChip(
+          icon: Icons.bolt,
+          label: 'Consumo: ${consumption.toStringAsFixed(3)} kWh',
+          textColor: mutedColor,
+        ),
+        _SummaryChip(
+          icon: Icons.payments_outlined,
+          label: tariffPerKwh > 0
+              ? 'Custo: ${_formatCurrency(cost)}'
+              : 'Custo: informe a tarifa',
+          textColor: mutedColor,
+        ),
+      ],
+    );
+  }
+
+  double _periodConsumptionKwh(List<Metric> metrics) {
+    if (metrics.length == 1) {
+      return metrics.first.energy < 0 ? 0 : metrics.first.energy;
+    }
+
+    final sorted = [...metrics]
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    final delta = sorted.last.energy - sorted.first.energy;
+    return delta < 0 ? 0 : delta;
+  }
+
+  String _formatCurrency(double value) {
+    final text = value.toStringAsFixed(2).replaceAll('.', ',');
+    return 'R\$ $text';
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color textColor;
+
+  const _SummaryChip({
+    required this.icon,
+    required this.label,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

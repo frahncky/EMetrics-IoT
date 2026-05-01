@@ -69,4 +69,32 @@ class SettingsValidators {
     }
     return null;
   }
+
+  static String? validateDecimal(
+    String? value, {
+    required String fieldLabel,
+    double min = 0,
+    double? max,
+    bool allowZero = true,
+  }) {
+    final text = value?.trim().replaceAll(',', '.') ?? '';
+    if (text.isEmpty) {
+      return 'Informe $fieldLabel.';
+    }
+
+    final parsed = double.tryParse(text);
+    if (parsed == null) {
+      return 'Valor inválido. Use apenas números.';
+    }
+    if (!allowZero && parsed == 0) {
+      return 'O valor deve ser maior que zero.';
+    }
+    if (parsed < min) {
+      return 'O valor mínimo permitido é $min.';
+    }
+    if (max != null && parsed > max) {
+      return 'O valor máximo permitido é $max.';
+    }
+    return null;
+  }
 }

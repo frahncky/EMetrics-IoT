@@ -12,7 +12,10 @@ void main() {
     });
 
     test('validateBroker rejeita URL com protocolo', () {
-      expect(SettingsValidators.validateBroker('https://broker.com'), isNotNull);
+      expect(
+        SettingsValidators.validateBroker('https://broker.com'),
+        isNotNull,
+      );
     });
 
     test('validateClientId rejeita espaços', () {
@@ -32,18 +35,27 @@ void main() {
 
     test('validateTopic rejeita curingas', () {
       expect(
-        SettingsValidators.validateTopic('emetrics/#', fieldLabel: 'o tópico MQTT'),
+        SettingsValidators.validateTopic(
+          'emetrics/#',
+          fieldLabel: 'o tópico MQTT',
+        ),
         isNotNull,
       );
       expect(
-        SettingsValidators.validateTopic('emetrics/+/data', fieldLabel: 'o tópico MQTT'),
+        SettingsValidators.validateTopic(
+          'emetrics/+/data',
+          fieldLabel: 'o tópico MQTT',
+        ),
         isNotNull,
       );
     });
 
     test('validateTopic aceita tópico específico', () {
       expect(
-        SettingsValidators.validateTopic('emetrics/pzem', fieldLabel: 'o tópico MQTT'),
+        SettingsValidators.validateTopic(
+          'emetrics/pzem',
+          fieldLabel: 'o tópico MQTT',
+        ),
         isNull,
       );
     });
@@ -57,6 +69,55 @@ void main() {
     test('validateInterval aceita faixa válida', () {
       expect(SettingsValidators.validateInterval('5'), isNull);
       expect(SettingsValidators.validateInterval('3600'), isNull);
+    });
+
+    test('validateDecimal aceita ponto e vírgula decimal', () {
+      expect(
+        SettingsValidators.validateDecimal('220.5', fieldLabel: 'a tensão'),
+        isNull,
+      );
+      expect(
+        SettingsValidators.validateDecimal('0,85', fieldLabel: 'a tarifa'),
+        isNull,
+      );
+    });
+
+    test('validateDecimal rejeita vazio, texto e zero obrigatório', () {
+      expect(
+        SettingsValidators.validateDecimal('', fieldLabel: 'a tensão'),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateDecimal('abc', fieldLabel: 'a tensão'),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateDecimal(
+          '0',
+          fieldLabel: 'o limite',
+          allowZero: false,
+        ),
+        isNotNull,
+      );
+    });
+
+    test('validateDecimal respeita faixa', () {
+      expect(
+        SettingsValidators.validateDecimal(
+          '-1',
+          fieldLabel: 'a tarifa',
+          min: 0,
+        ),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateDecimal(
+          '1001',
+          fieldLabel: 'a tarifa',
+          max: 1000,
+        ),
+        isNotNull,
+      );
     });
   });
 }
