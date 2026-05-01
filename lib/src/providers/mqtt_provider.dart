@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/mqtt_service.dart';
+import 'mqtt_settings_provider.dart';
 
 final mqttServiceProvider = Provider<MqttService>((ref) {
-  // Configurações podem vir de um provider de settings futuramente
+  final settings = ref.watch(mqttSettingsProvider);
   return MqttService(
-    broker: 'test.mosquitto.org',
-    clientId: 'emetrics_app',
-    topic: 'emetrics/pzem',
+    broker: settings.broker,
+    clientId: settings.clientId,
+    topic: settings.topic,
+    requestTopic: settings.requestTopic,
   );
 });

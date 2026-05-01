@@ -1,4 +1,5 @@
 
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:mqtt_client/mqtt_client.dart';
@@ -10,6 +11,7 @@ class MqttService {
   final String username;
   final String password;
   final String topic;
+  final String requestTopic;
   final int port;
 
   late MqttServerClient client;
@@ -18,10 +20,11 @@ class MqttService {
     required this.broker,
     required this.clientId,
     required this.topic,
+    String? requestTopic,
     this.username = '',
     this.password = '',
     this.port = 1883,
-  }) {
+  }) : requestTopic = requestTopic ?? '$topic/history/request' {
     client = MqttServerClient(broker, clientId);
     client.port = port;
     client.keepAlivePeriod = 20;
@@ -50,6 +53,23 @@ class MqttService {
 
   void subscribe() {
     client.subscribe(topic, MqttQos.atLeastOnce);
+  }
+
+  bool get isConnected =>
+      client.connectionStatus?.state == MqttConnectionState.connected;
+
+  Future<void> requestHistory({required DateTime from, required DateTime to}) async {
+    if (!isConnected) {
+      throw Exception('Conecte ao broker MQTT antes de solicitar histórico.');
+    }
+
+    final payload = jsonEncode({
+      'from': from.millisecondsSinceEpoch,
+      'to': to.millisecondsSinceEpoch,
+      'requestedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+    final builder = MqttClientPayloadBuilder()..addString(payload);
+    client.publishMessage(requestTopic, MqttQos.atLeastOnce, builder.payload!);
   }
 
   void onDisconnected() {

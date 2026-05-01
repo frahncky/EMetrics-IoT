@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/metric_provider.dart';
+import '../../providers/mqtt_provider.dart';
 import 'history_filter.dart';
 import 'history_chart.dart';
 // Função utilitária igual ao dashboard
@@ -48,16 +49,25 @@ class _HistoryChartSelector extends StatelessWidget {
       {'label': 'Corrente', 'value': 'current'},
       {'label': 'Tensão', 'value': 'voltage'},
       {'label': 'Energia', 'value': 'energy'},
-      {'label': 'Fator Potência', 'value': 'pf'},
-      {'label': 'Frequência', 'value': 'frequency'},
     ];
-    return Wrap(
-      spacing: 8,
-      children: fields.map((f) => ChoiceChip(
-        label: Text(f['label']!),
-        selected: selected == f['value'],
-        onSelected: (_) => onChanged(f['value']!),
-      )).toList(),
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: selected,
+        dropdownColor: const Color(0xFF232A34),
+        style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 16),
+        icon: const Icon(Icons.arrow_drop_down, color: Colors.amber),
+        onChanged: (value) {
+          if (value != null) {
+            onChanged(value);
+          }
+        },
+        items: fields.map((field) {
+          return DropdownMenuItem<String>(
+            value: field['value'],
+            child: Text(field['label']!, style: const TextStyle(color: Colors.white)),
+          );
+        }).toList(),
+      ),
     );
   }
 }
@@ -71,89 +81,149 @@ class HistoryPage extends ConsumerStatefulWidget {
 }
 
 class _HistoryPageState extends ConsumerState<HistoryPage> {
-    String _selectedField1 = 'power';
-    String _selectedField2 = 'energy';
+  String _selectedField1 = 'power';
+  String _selectedField2 = 'energy';
   HistoryPeriod _period = HistoryPeriod.dia;
+  bool _isRequesting = false;
+  String? _requestStatus;
+
+  (DateTime, DateTime) _rangeForPeriod(HistoryPeriod period) {
+    final now = DateTime.now();
+    switch (period) {
+      case HistoryPeriod.hora:
+        return (now.subtract(const Duration(hours: 1)), now);
+      case HistoryPeriod.dia:
+        return (DateTime(now.year, now.month, now.day), now);
+      case HistoryPeriod.semana:
+        return (now.subtract(const Duration(days: 7)), now);
+      case HistoryPeriod.mes:
+        return (DateTime(now.year, now.month, 1), now);
+    }
+  }
+
+  Future<void> _requestHistoryFromMeter() async {
+    final range = _rangeForPeriod(_period);
+    setState(() {
+      _isRequesting = true;
+      _requestStatus = null;
+    });
+
+    try {
+      final mqttService = ref.read(mqttServiceProvider);
+      await mqttService.requestHistory(from: range.$1, to: range.$2);
+
+      setState(() {
+        _requestStatus = 'Solicitação enviada ao medidor. Os gráficos serão atualizados conforme os dados chegarem.';
+      });
+
+      ref.invalidate(
+        metricsByRangeProvider(
+          MetricsRangeQuery(
+            from: range.$1.millisecondsSinceEpoch,
+            to: range.$2.millisecondsSinceEpoch,
+          ),
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _requestStatus = 'Falha ao solicitar histórico: $e';
+      });
+    } finally {
+      setState(() {
+        _isRequesting = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final metricsAsync = ref.watch(metricsProvider);
+    final range = _rangeForPeriod(_period);
     return Scaffold(
       appBar: AppBar(title: const Text('Histórico de Consumo')),
       body: Column(
         children: [
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           HistoryFilter(
             selected: _period,
             onChanged: (p) => setState(() => _period = p),
           ),
-          const SizedBox(height: 8),
-          // Seletor de campo agora está dentro do gráfico
-          Expanded(
-            child: metricsAsync.when(
-              data: (metrics) {
-                final filtered = _filterMetrics(metrics, _period);
-                // Apenas gráficos
-                return Column(
-                  children: [
-                    // Espaço fixo para o gráfico 1
-                    SizedBox(
-                      height: 180,
-                      child: HistoryChart(
-                        metrics: filtered.cast(),
-                        field: _selectedField1,
-                        fieldSelector: (context) => _HistoryChartSelector(
-                          selected: _selectedField1,
-                          onChanged: (f) => setState(() => _selectedField1 = f),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Espaço fixo para o gráfico 2
-                    SizedBox(
-                      height: 180,
-                      child: HistoryChart(
-                        metrics: filtered.cast(),
-                        field: _selectedField2,
-                        fieldSelector: (context) => _HistoryChartSelector(
-                          selected: _selectedField2,
-                          onChanged: (f) => setState(() => _selectedField2 = f),
-                        ),
-                      ),
-                    ),
-
-                  ],
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Erro ao carregar histórico: $e')),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isRequesting ? null : _requestHistoryFromMeter,
+                icon: const Icon(Icons.download),
+                label: Text(_isRequesting ? 'Solicitando histórico...' : 'Solicitar histórico do medidor'),
+              ),
             ),
+          ),
+          if (_requestStatus != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Text(
+                _requestStatus!,
+                style: TextStyle(
+                  color: _requestStatus!.startsWith('Falha') ? Colors.redAccent : Colors.white70,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ref
+                .watch(
+                  metricsByRangeProvider(
+                    MetricsRangeQuery(
+                      from: range.$1.millisecondsSinceEpoch,
+                      to: range.$2.millisecondsSinceEpoch,
+                    ),
+                  ),
+                )
+                .when(
+                  data: (metrics) {
+                    return Column(
+                      children: [
+                        if (metrics.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Sem dados no período selecionado. Solicitando ao medidor pode preencher os gráficos.',
+                              style: TextStyle(color: Colors.white70, fontSize: 13),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        Expanded(
+                          child: HistoryChart(
+                            metrics: metrics,
+                            field: _selectedField1,
+                            fieldSelector: (context) => _HistoryChartSelector(
+                              selected: _selectedField1,
+                              onChanged: (f) => setState(() => _selectedField1 = f),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: HistoryChart(
+                            metrics: metrics,
+                            field: _selectedField2,
+                            fieldSelector: (context) => _HistoryChartSelector(
+                              selected: _selectedField2,
+                              onChanged: (f) => setState(() => _selectedField2 = f),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('Erro ao carregar histórico: $e')),
+                ),
           ),
         ],
       ),
     );
-  }
-
-
-
-
-  List<dynamic> _filterMetrics(List<dynamic> metrics, HistoryPeriod period) {
-    final now = DateTime.now();
-    DateTime from;
-    switch (period) {
-      case HistoryPeriod.hora:
-        from = now.subtract(const Duration(hours: 1));
-        break;
-      case HistoryPeriod.dia:
-        from = DateTime(now.year, now.month, now.day);
-        break;
-      case HistoryPeriod.semana:
-        from = now.subtract(const Duration(days: 7));
-        break;
-      case HistoryPeriod.mes:
-        from = DateTime(now.year, now.month, 1);
-        break;
-    }
-    return metrics.where((m) => m.timestamp.isAfter(from)).toList();
   }
 }

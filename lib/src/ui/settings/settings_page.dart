@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/mqtt_provider.dart';
+import '../../providers/mqtt_settings_provider.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -10,14 +11,34 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  final _brokerController = TextEditingController(text: 'test.mosquitto.org');
-  final _topicController = TextEditingController(text: 'emetrics/pzem');
+  final _brokerController = TextEditingController();
+  final _clientIdController = TextEditingController();
+  final _topicController = TextEditingController();
+  final _requestTopicController = TextEditingController();
   final _intervalController = TextEditingController(text: '5');
   bool _darkMode = false;
 
   @override
+  void initState() {
+    super.initState();
+    final settings = ref.read(mqttSettingsProvider);
+    _brokerController.text = settings.broker;
+    _clientIdController.text = settings.clientId;
+    _topicController.text = settings.topic;
+    _requestTopicController.text = settings.requestTopic;
+  }
+
+  void _saveSettings() {
+    ref.read(mqttSettingsProvider.notifier).update(
+          broker: _brokerController.text,
+          clientId: _clientIdController.text,
+          topic: _topicController.text,
+          requestTopic: _requestTopicController.text,
+        );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final mqttService = ref.watch(mqttServiceProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
       body: ListView(
@@ -39,6 +60,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           const SizedBox(height: 20),
           Semantics(
+            label: 'Campo Client ID MQTT',
+            child: TextField(
+              controller: _clientIdController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.badge),
+                labelText: 'Client ID MQTT',
+                helperText: 'Identificador único do cliente MQTT',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Semantics(
             label: 'Campo Tópico MQTT',
             child: TextField(
               controller: _topicController,
@@ -46,6 +80,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 prefixIcon: Icon(Icons.topic),
                 labelText: 'Tópico MQTT',
                 helperText: 'Tópico para receber dados',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Semantics(
+            label: 'Campo tópico de solicitação de histórico',
+            child: TextField(
+              controller: _requestTopicController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.history_toggle_off),
+                labelText: 'Tópico de solicitação de histórico',
+                helperText: 'Tópico para publicar pedidos de histórico',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -90,9 +137,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () {
-                  // Salvar configurações (implementar persistência se necessário)
+                  _saveSettings();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Configurações salvas!')),
+                    const SnackBar(content: Text('Configurações MQTT salvas para esta sessão.')),
                   );
                 },
                 label: const Text('Salvar'),
@@ -116,6 +163,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 onPressed: () async {
                   try {
+                    _saveSettings();
+                    final mqttService = ref.read(mqttServiceProvider);
                     await mqttService.connect();
                     mqttService.subscribe();
                     if (mounted) {
@@ -143,7 +192,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   void dispose() {
     _brokerController.dispose();
+    _clientIdController.dispose();
     _topicController.dispose();
+    _requestTopicController.dispose();
     _intervalController.dispose();
     super.dispose();
   }

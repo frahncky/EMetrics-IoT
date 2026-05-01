@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../../data/metric_model.dart';
+import '../dashboard/dashboard_page.dart';
 
 
 typedef FieldSelectorBuilder = Widget Function(BuildContext context);
@@ -13,17 +14,63 @@ class HistoryChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Color mainColor;
+    String title;
+    String unit;
+    switch (field) {
+      case 'power':
+        mainColor = const Color(0xFFFFC300);
+        title = 'Potência';
+        unit = 'W';
+        break;
+      case 'current':
+        mainColor = const Color(0xFF00C2FF);
+        title = 'Corrente';
+        unit = 'A';
+        break;
+      case 'voltage':
+        mainColor = const Color(0xFF7DF9FF);
+        title = 'Tensão';
+        unit = 'V';
+        break;
+      case 'energy':
+        mainColor = const Color(0xFFB388FF);
+        title = 'Energia';
+        unit = 'kWh';
+        break;
+      case 'pf':
+        mainColor = const Color(0xFFB388FF);
+        title = 'Fator Potência';
+        unit = '';
+        break;
+      case 'frequency':
+        mainColor = Colors.greenAccent;
+        title = 'Frequência';
+        unit = 'Hz';
+        break;
+      default:
+        mainColor = Colors.blueAccent;
+        title = field;
+        unit = '';
+    }
+
     List<FlSpot> spots = [];
-    for (int i = 0; i < metrics.length; i++) {
-      final value = _getFieldValue(metrics[i], field);
+    final data = metrics.take(30).toList().reversed.toList();
+    for (int i = 0; i < data.length; i++) {
+      final value = _getFieldValue(data[i], field);
       spots.add(FlSpot(i.toDouble(), value));
     }
-    return Card(
+    final double? lastValue = data.isNotEmpty ? _getFieldValue(data.last, field) : null;
+
+    return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: const Color(0xFF232A34),
+      decoration: BoxDecoration(
+        color: const Color(0xFF232A34),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: mainColor.withOpacity(0.25), width: 1.2),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(8.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -32,11 +79,36 @@ class HistoryChart extends StatelessWidget {
               children: [
                 fieldSelector != null
                     ? fieldSelector!(context)
-                    : Text(_getTitle(field), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.amber)),
+                    : Text(
+                        '$title (${unit.isNotEmpty ? unit : ''})',
+                        style: TextStyle(
+                          color: mainColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: mainColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: mainColor.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    'Instantâneo: '
+                    '${lastValue != null ? formatWithSIPrefix(lastValue) : '--'} ${unit}',
+                    style: TextStyle(
+                      color: mainColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
               ],
             ),
-            SizedBox(
-              height: 150,
+            const SizedBox(height: 8),
+            Expanded(
               child: LineChart(
                 LineChartData(
                   backgroundColor: const Color(0xFF232A34),
@@ -48,27 +120,64 @@ class HistoryChart extends StatelessWidget {
                     getDrawingHorizontalLine: (value) => FlLine(color: Colors.white.withOpacity(0.18), strokeWidth: 1.2),
                     getDrawingVerticalLine: (value) => FlLine(color: Colors.white.withOpacity(0.15), strokeWidth: 1.2),
                   ),
-                  titlesData: FlTitlesData(show: false),
-                  borderData: FlBorderData(show: false),
+                  titlesData: spots.isEmpty
+                      ? FlTitlesData(
+                          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        )
+                      : FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 32,
+                              getTitlesWidget: (value, meta) => Text(
+                                formatWithSIPrefix(value, fractionDigits: 1),
+                                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                              ),
+                            ),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 28,
+                              getTitlesWidget: (value, meta) => Text(
+                                value.toInt().toString(),
+                                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                              ),
+                            ),
+                          ),
+                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(color: mainColor.withOpacity(0.25), width: 1),
+                  ),
+                  minX: spots.isEmpty ? 0 : 0,
+                  maxX: spots.isEmpty ? 10 : (spots.length > 1 ? spots.length - 1 : 1),
+                  minY: spots.isEmpty ? 0 : null,
+                  maxY: spots.isEmpty ? 10 : null,
                   lineBarsData: spots.isEmpty
                       ? [
                           LineChartBarData(
-                            spots: [const FlSpot(0, 0), const FlSpot(1, 0)],
-                            isCurved: true,
-                            color: Colors.amber.withOpacity(0.3),
-                            barWidth: 2.5,
+                            spots: [const FlSpot(0, 0)],
+                            isCurved: false,
+                            color: Colors.transparent,
+                            barWidth: 0,
                             dotData: FlDotData(show: false),
-                            belowBarData: BarAreaData(show: true, color: Colors.amber.withOpacity(0.08)),
+                            belowBarData: BarAreaData(show: false),
                           ),
                         ]
                       : [
                           LineChartBarData(
                             spots: spots,
                             isCurved: true,
-                            color: Colors.amber,
+                            color: mainColor,
                             barWidth: 2.5,
                             dotData: FlDotData(show: false),
-                            belowBarData: BarAreaData(show: true, color: Colors.amber.withOpacity(0.10)),
+                            belowBarData: BarAreaData(show: true, color: mainColor.withOpacity(0.10)),
                           ),
                         ],
                 ),
@@ -90,23 +199,12 @@ class HistoryChart extends StatelessWidget {
         return m.voltage;
       case 'energy':
         return m.energy;
+      case 'pf':
+        return m.pf;
+      case 'frequency':
+        return m.frequency;
       default:
         return 0;
-    }
-  }
-
-  String _getTitle(String field) {
-    switch (field) {
-      case 'power':
-        return 'Potência (W)';
-      case 'current':
-        return 'Corrente (A)';
-      case 'voltage':
-        return 'Tensão (V)';
-      case 'energy':
-        return 'Energia (kWh)';
-      default:
-        return field;
     }
   }
 }
