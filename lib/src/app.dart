@@ -135,13 +135,13 @@ class _AppInitializer extends ConsumerWidget {
         titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
       ),
       cardTheme: CardThemeData(
-        color: const Color(0xFFFFFFFF),
+        color: const Color(0xFFF9FAFB),
         shape: RoundedRectangleBorder(
           borderRadius: const BorderRadius.all(Radius.circular(16)),
           side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
         ),
-        elevation: 1,
-        shadowColor: const Color(0x08000000),
+        elevation: 0,
+        shadowColor: const Color(0x05000000),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

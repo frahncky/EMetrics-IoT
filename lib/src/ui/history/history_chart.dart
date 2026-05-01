@@ -75,7 +75,6 @@ class HistoryChart extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: mainColor.withValues(alpha: 0.25), width: 1.2),
       ),
       child: Padding(
         padding: const EdgeInsets.all(8.0),
@@ -126,8 +125,8 @@ class HistoryChart extends StatelessWidget {
                     drawVerticalLine: true,
                     horizontalInterval: 2,
                     verticalInterval: 2,
-                    getDrawingHorizontalLine: (value) => FlLine(color: gridColor, strokeWidth: 1.2),
-                    getDrawingVerticalLine: (value) => FlLine(color: gridColorV, strokeWidth: 1.2),
+                    getDrawingHorizontalLine: (value) => FlLine(color: gridColor, strokeWidth: 0.5),
+                    getDrawingVerticalLine: (value) => FlLine(color: gridColorV, strokeWidth: 0.5),
                   ),
                   titlesData: spots.isEmpty
                       ? FlTitlesData(
@@ -161,8 +160,7 @@ class HistoryChart extends StatelessWidget {
                           topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                         ),
                   borderData: FlBorderData(
-                    show: true,
-                    border: Border.all(color: mainColor.withValues(alpha: 0.25), width: 1),
+                    show: false,
                   ),
                   minX: spots.isEmpty ? 0 : 0,
                   maxX: spots.isEmpty ? 10 : (spots.length > 1 ? spots.length - 1 : 1),
