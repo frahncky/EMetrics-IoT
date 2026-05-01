@@ -241,7 +241,7 @@ class _MainIndicators extends StatelessWidget {
         unit: 'kWh',
       ),
       _IndicatorCard(
-        label: 'Freq.',
+        label: 'Frequência',
         value: '--',
         icon: Icons.ssid_chart,
         color: const Color(0xFF22C55E),
