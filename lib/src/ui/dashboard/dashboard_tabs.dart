@@ -67,7 +67,6 @@ class _RealtimeChartWithInternalSelector extends StatelessWidget {
       child: RealtimeChart(
         field: selectedField,
         fieldSelector: (context) {
-          final current = fields.firstWhere((f) => f['value'] == selectedField);
           return DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: selectedField,

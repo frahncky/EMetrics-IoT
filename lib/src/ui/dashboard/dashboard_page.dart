@@ -3,10 +3,7 @@ import '../../providers/mqtt_stream_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/metric_provider.dart';
-import 'realtime_chart.dart';
-import 'chart_selector.dart';
 import 'dashboard_tabs.dart';
-import 'dashboard_drawer.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -15,9 +12,6 @@ class DashboardPage extends ConsumerStatefulWidget {
 }
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
-  // Por padrão, mostrar o gráfico de Potência Ativa (W)
-  String _selectedField = 'power';
-
   @override
   Widget build(BuildContext context) {
     ref.watch(mqttMetricSaverProvider);
@@ -44,7 +38,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             child: mqttStream.when(
               data: (_) => const Icon(Icons.cloud_done, color: Color(0xFF00C2FF), size: 24),
               loading: () => const Icon(Icons.cloud_queue, color: Color(0xFFFFC300), size: 24),
-              error: (_, __) => const Icon(Icons.cloud_off, color: Colors.red, size: 24),
+              error: (error, stackTrace) => const Icon(Icons.cloud_off, color: Colors.red, size: 24),
             ),
           ),
         ],
@@ -135,7 +129,6 @@ class _MainIndicators extends StatelessWidget {
     // Cálculos para aparente, reativa e frequência
     final double apparent = voltage * current;
     final double reativa = (voltage * current) * (1 - (pf.isNaN ? 0 : pf));
-    final double? freq = null; // Será passado pelo parâmetro futuramente se necessário
 
     return Column(
       children: [

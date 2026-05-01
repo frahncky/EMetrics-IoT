@@ -3,7 +3,6 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'mqtt_stream_provider.dart';
 import 'mqtt_metric_parser.dart';
 import '../data/metric_repository.dart';
-import '../data/metric_model.dart';
 
 final mqttMetricSaverProvider = Provider<void>((ref) {
   final streamAsync = ref.watch(mqttStreamProvider);
