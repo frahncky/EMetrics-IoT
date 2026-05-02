@@ -174,7 +174,101 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           padding: const EdgeInsets.all(20),
           children: [
             _MqttStatusCard(status: mqttStatus),
-            const SizedBox(height: 28),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                    Expanded(
+                      child: Semantics(
+                        label: 'Botão Conectar MQTT',
+                        button: true,
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.cloud),
+                            iconAlignment: IconAlignment.start,
+                            onPressed: () async {
+                              FocusScope.of(context).unfocus();
+                              if (!_formKey.currentState!.validate()) {
+                                return;
+                              }
+                              try {
+                                await _saveSettings();
+                                final mqttService = ref.read(mqttServiceProvider);
+                                await mqttService.connect();
+                                mqttService.subscribe();
+                                await BackgroundMqttService.start();
+                                ref.read(mqttStatusProvider.notifier).setBackgroundActive(true);
+                                if (!context.mounted) {
+                                  return;
+                                }
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Conectado ao broker MQTT e monitoramento em segundo plano ativado.',
+                                    ),
+                                  ),
+                                );
+                              } catch (e) {
+                                if (!context.mounted) {
+                                  return;
+                                }
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Erro ao conectar: ${_toUserMessage(e)}',
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            label: const Text(
+                              'Conectar',
+                              maxLines: 1,
+                              softWrap: false,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Semantics(
+                        label: 'Botão Parar segundo plano',
+                        button: true,
+                        child: SizedBox(
+                          height: 48,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.pause_circle_outline, size: 18),
+                            iconAlignment: IconAlignment.start,
+                            onPressed: () async {
+                              await BackgroundMqttService.stop();
+                              ref.read(mqttStatusProvider.notifier).setBackgroundActive(false);
+                              ref.read(mqttStatusProvider.notifier).markDisconnected(
+                                'Monitoramento em segundo plano pausado.',
+                              );
+                              if (!context.mounted) {
+                                return;
+                              }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Monitoramento em segundo plano pausado.',
+                                  ),
+                                ),
+                              );
+                            },
+                            label: const Text(
+                              'Segundo plano',
+                              maxLines: 1,
+                              softWrap: false,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+              ],
+            ),
+            const SizedBox(height: 20),
             _SettingsSection(
               title: 'MQTT',
               icon: Icons.cloud_outlined,
@@ -187,39 +281,47 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.cloud),
                       labelText: 'Broker MQTT',
-                      helperText: 'IP ou domínio do broker',
                       border: OutlineInputBorder(),
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo porta MQTT',
-                  child: TextFormField(
-                    controller: _portController,
-                    keyboardType: TextInputType.number,
-                    validator: SettingsValidators.validatePort,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.settings_ethernet),
-                      labelText: 'Porta MQTT',
-                      helperText: 'Ex.: 1883 sem TLS, 8883 com TLS',
-                      border: OutlineInputBorder(),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Semantics(
+                        label: 'Campo porta MQTT',
+                        child: TextFormField(
+                          controller: _portController,
+                          keyboardType: TextInputType.number,
+                          validator: SettingsValidators.validatePort,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.settings_ethernet),
+                            labelText: 'Porta MQTT',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo Client ID MQTT',
-                  child: TextFormField(
-                    controller: _clientIdController,
-                    validator: SettingsValidators.validateClientId,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.badge),
-                      labelText: 'Client ID MQTT',
-                      helperText: 'Identificador único do cliente MQTT',
-                      border: OutlineInputBorder(),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: Semantics(
+                        label: 'Campo Client ID MQTT',
+                        child: TextFormField(
+                          controller: _clientIdController,
+                          validator: SettingsValidators.validateClientId,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.badge),
+                            labelText: 'Client ID MQTT',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 Semantics(
@@ -229,7 +331,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.person_outline),
                       labelText: 'Usuário MQTT',
-                      helperText: 'Opcional para brokers autenticados',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -243,7 +344,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.lock_outline),
                       labelText: 'Senha MQTT',
-                      helperText: 'Opcional para brokers autenticados',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -260,7 +360,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.topic),
                       labelText: 'Tópico MQTT',
-                      helperText: 'Tópico para receber dados',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -272,7 +371,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   child: SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Usar TLS/SSL'),
-                    subtitle: const Text('Ative para conexões seguras, como a porta 8883.'),
                     value: _useTls,
                     secondary: const Icon(Icons.security_outlined),
                     onChanged: (value) {
@@ -298,7 +396,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.history_toggle_off),
                       labelText: 'Tópico de solicitação de histórico',
-                      helperText: 'Tópico para publicar pedidos de histórico',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -324,44 +421,51 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               title: 'Medição e alertas',
               icon: Icons.tune,
               children: [
-                Semantics(
-                  label: 'Campo tensão mínima para alerta',
-                  child: TextFormField(
-                    controller: _voltageMinController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Semantics(
+                        label: 'Campo tensão mínima para alerta',
+                        child: TextFormField(
+                          controller: _voltageMinController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          validator: (value) => SettingsValidators.validateDecimal(
+                            value,
+                            fieldLabel: 'a tensão mínima',
+                            min: 0,
+                            max: 1000,
+                            allowZero: false,
+                          ),
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.electrical_services),
+                            labelText: 'Tensão mínima (V)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
                     ),
-                    validator: (value) => SettingsValidators.validateDecimal(
-                      value,
-                      fieldLabel: 'a tensão mínima',
-                      min: 0,
-                      max: 1000,
-                      allowZero: false,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Semantics(
+                        label: 'Campo tensão máxima para alerta',
+                        child: TextFormField(
+                          controller: _voltageMaxController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          validator: _validateVoltageMax,
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.electrical_services),
+                            labelText: 'Tensão máxima (V)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
                     ),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.electrical_services),
-                      labelText: 'Tensão mínima (V)',
-                      helperText: 'Dispara alerta abaixo deste valor',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo tensão máxima para alerta',
-                  child: TextFormField(
-                    controller: _voltageMaxController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: _validateVoltageMax,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.electrical_services),
-                      labelText: 'Tensão máxima (V)',
-                      helperText: 'Dispara alerta acima deste valor',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 Semantics(
@@ -381,8 +485,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.battery_alert_outlined),
                       labelText: 'Limite de consumo (kWh)',
-                      helperText:
-                          'Dispara alerta quando a energia passar disso',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -404,7 +506,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.attach_money),
                       labelText: 'Tarifa (R\$/kWh)',
-                      helperText: 'Usada para estimar custo de consumo',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -434,121 +535,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 28),
-            _SettingsSection(
-              title: 'Operação',
-              icon: Icons.play_circle_outline,
-              children: [
-                Semantics(
-                  label: 'Botão Salvar configurações',
-                  button: true,
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.save),
-                      onPressed: () async {
-                        FocusScope.of(context).unfocus();
-                        if (!_formKey.currentState!.validate()) {
-                          return;
-                        }
-                        await _saveSettings();
-                        if (!context.mounted) {
-                          return;
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Configurações MQTT salvas no dispositivo.',
-                            ),
-                          ),
-                        );
-                      },
-                      label: const Text('Salvar'),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Semantics(
-                  label: 'Botão Conectar MQTT',
-                  button: true,
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.cloud),
-                      onPressed: () async {
-                        FocusScope.of(context).unfocus();
-                        if (!_formKey.currentState!.validate()) {
-                          return;
-                        }
-                        try {
-                          await _saveSettings();
-                          final mqttService = ref.read(mqttServiceProvider);
-                          await mqttService.connect();
-                          mqttService.subscribe();
-                          await BackgroundMqttService.start();
-                          ref.read(mqttStatusProvider.notifier).setBackgroundActive(true);
-                          if (!context.mounted) {
-                            return;
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Conectado ao broker MQTT e monitoramento em segundo plano ativado.',
-                              ),
-                            ),
-                          );
-                        } catch (e) {
-                          if (!context.mounted) {
-                            return;
-                          }
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Erro ao conectar: ${_toUserMessage(e)}',
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      label: const Text('Conectar MQTT'),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Semantics(
-                  label: 'Botão Parar segundo plano',
-                  button: true,
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.pause_circle_outline),
-                      onPressed: () async {
-                        await BackgroundMqttService.stop();
-                        ref.read(mqttStatusProvider.notifier).setBackgroundActive(false);
-                        ref.read(mqttStatusProvider.notifier).markDisconnected(
-                          'Monitoramento em segundo plano pausado.',
-                        );
-                        if (!context.mounted) {
-                          return;
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Monitoramento em segundo plano pausado.',
-                            ),
-                          ),
-                        );
-                      },
-                      label: const Text('Parar segundo plano'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 140 + MediaQuery.of(context).padding.bottom),
           ],
         ),
       ),
@@ -590,32 +576,31 @@ class _MqttStatusCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
-                Icon(Icons.podcasts, color: phaseColor),
-                const SizedBox(width: 8),
+                Icon(Icons.podcasts, color: phaseColor, size: 18),
+                const SizedBox(width: 6),
                 Text(
                   'Status operacional MQTT',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: 15,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text('Broker: ${status.broker}:${status.port}'),
-            Text('Tópico: ${status.topic}'),
-            Text('Segurança: ${status.useTls ? 'TLS/SSL' : 'Sem TLS'}'),
             Text('Conexão: ${_phaseLabel(status.phase)}'),
-            Text(
-              'Segundo plano: ${status.backgroundActive ? 'ativo' : 'inativo'}',
-            ),
+            Text('Segundo plano: ${status.backgroundActive ? 'ativo' : 'inativo'}'),
             if (status.lastConnectedAt != null)
               Text('Última conexão: ${_formatTimestamp(status.lastConnectedAt!)}'),
             if (status.lastMessage != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(status.lastMessage!),
             ],
           ],

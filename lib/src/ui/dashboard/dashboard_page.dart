@@ -1,6 +1,5 @@
 import '../../providers/mqtt_metric_saver.dart';
 import '../../providers/mqtt_status_provider.dart';
-import '../../providers/mqtt_stream_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/metric_provider.dart';
@@ -25,9 +24,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   Widget build(BuildContext context) {
     ref.watch(mqttMetricSaverProvider);
     final metricsAsync = ref.watch(metricsProvider);
-    final mqttStream = ref.watch(mqttStreamProvider);
     final mqttStatus = ref.watch(mqttStatusProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final lastMetricTime = metricsAsync.asData?.value.isNotEmpty == true
+        ? metricsAsync.asData!.value.first.timestamp
+        : null;
+    final statusVisual = _buildMonitoringStatusVisual(mqttStatus, lastMetricTime);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -75,19 +77,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 14),
-            child: mqttStream.when(
-              data: (_) => Icon(
-                Icons.cloud_done,
-                color: Theme.of(context).colorScheme.secondary,
+            child: Tooltip(
+              message: statusVisual.message,
+              child: Icon(
+                statusVisual.icon,
+                color: statusVisual.color,
                 size: 24,
               ),
-              loading: () => Icon(
-                Icons.cloud_queue,
-                color: Theme.of(context).colorScheme.secondary,
-                size: 24,
-              ),
-              error: (error, stackTrace) =>
-                  const Icon(Icons.cloud_off, color: Colors.red, size: 24),
             ),
           ),
         ],
@@ -97,13 +93,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: _OperationalStatusBanner(
-                status: mqttStatus,
-                metricsAsync: metricsAsync,
-              ),
-            ),
             metricsAsync.when(
               data: (metrics) {
                 final last = metrics.isNotEmpty ? metrics.first : null;
@@ -151,121 +140,96 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 }
 
-class _OperationalStatusBanner extends StatelessWidget {
-  final MqttStatusState status;
-  final AsyncValue<List<dynamic>> metricsAsync;
+_MonitoringStatusVisual _buildMonitoringStatusVisual(
+  MqttStatusState status,
+  DateTime? lastMetricTime,
+) {
+  final phaseLabel = _phaseLabel(status.phase);
 
-  const _OperationalStatusBanner({
-    required this.status,
-    required this.metricsAsync,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final lastMetricTime = metricsAsync.asData?.value.isNotEmpty == true
-        ? (metricsAsync.asData!.value.first as dynamic).timestamp as DateTime
-        : null;
-    final chips = [
-      _StatusChip(
-        label: 'MQTT: ${_phaseLabel(status.phase)}',
-        color: _phaseColor(status.phase),
-      ),
-      _StatusChip(
-        label: status.backgroundActive ? 'Segundo plano ativo' : 'Segundo plano inativo',
-        color: status.backgroundActive
-            ? const Color(0xFF15803D)
-            : const Color(0xFF64748B),
-      ),
-      _StatusChip(
-        label: lastMetricTime != null
-            ? 'Última leitura ${_relativeTime(lastMetricTime)}'
-            : 'Sem leitura recente',
-        color: lastMetricTime != null
-            ? const Color(0xFF2563EB)
-            : const Color(0xFFD97706),
-      ),
-    ];
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Saúde do monitoramento',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Wrap(spacing: 8, runSpacing: 8, children: chips),
-            if (status.lastMessage != null) ...[
-              const SizedBox(height: 8),
-              Text(status.lastMessage!),
-            ],
-          ],
-        ),
-      ),
+  if (status.phase == MqttConnectionPhase.error) {
+    return _MonitoringStatusVisual(
+      icon: Icons.error_outline,
+      color: const Color(0xFFDC2626),
+      message: status.lastMessage ?? 'Monitoramento com erro.',
     );
   }
 
-  static Color _phaseColor(MqttConnectionPhase phase) {
-    switch (phase) {
-      case MqttConnectionPhase.connected:
-        return const Color(0xFF15803D);
-      case MqttConnectionPhase.connecting:
-        return const Color(0xFFD97706);
-      case MqttConnectionPhase.error:
-        return const Color(0xFFDC2626);
-      case MqttConnectionPhase.disconnected:
-        return const Color(0xFF64748B);
-    }
+  if (status.phase == MqttConnectionPhase.connecting) {
+    return _MonitoringStatusVisual(
+      icon: Icons.sync,
+      color: const Color(0xFFD97706),
+      message: 'MQTT conectando.',
+    );
   }
 
-  static String _phaseLabel(MqttConnectionPhase phase) {
-    switch (phase) {
-      case MqttConnectionPhase.connected:
-        return 'conectado';
-      case MqttConnectionPhase.connecting:
-        return 'conectando';
-      case MqttConnectionPhase.error:
-        return 'erro';
-      case MqttConnectionPhase.disconnected:
-        return 'desconectado';
+  if (status.phase == MqttConnectionPhase.connected) {
+    if (lastMetricTime == null) {
+      return _MonitoringStatusVisual(
+        icon: Icons.sensors,
+        color: const Color(0xFFD97706),
+        message: 'MQTT conectado, aguardando leituras.',
+      );
     }
+
+    final stale = DateTime.now().difference(lastMetricTime).inMinutes >= 5;
+    if (stale) {
+      return _MonitoringStatusVisual(
+        icon: Icons.sensors,
+        color: const Color(0xFFD97706),
+        message: 'Última leitura ${_relativeTime(lastMetricTime)}.',
+      );
+    }
+
+    return _MonitoringStatusVisual(
+      icon: status.backgroundActive ? Icons.sensors : Icons.sensors_outlined,
+      color: const Color(0xFF15803D),
+      message: status.backgroundActive
+          ? 'Monitoramento ativo em segundo plano.'
+          : 'MQTT conectado com leitura recente.',
+    );
   }
 
-  static String _relativeTime(DateTime value) {
-    final difference = DateTime.now().difference(value);
-    if (difference.inMinutes < 1) {
-      return 'há instantes';
-    }
-    if (difference.inHours < 1) {
-      return 'há ${difference.inMinutes} min';
-    }
-    return 'há ${difference.inHours} h';
+  return _MonitoringStatusVisual(
+    icon: Icons.cloud_off,
+    color: const Color(0xFF64748B),
+    message: status.lastMessage ?? 'MQTT $phaseLabel.',
+  );
+}
+
+String _phaseLabel(MqttConnectionPhase phase) {
+  switch (phase) {
+    case MqttConnectionPhase.connected:
+      return 'conectado';
+    case MqttConnectionPhase.connecting:
+      return 'conectando';
+    case MqttConnectionPhase.error:
+      return 'erro';
+    case MqttConnectionPhase.disconnected:
+      return 'desconectado';
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _StatusChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600),
-      ),
-    );
+String _relativeTime(DateTime value) {
+  final difference = DateTime.now().difference(value);
+  if (difference.inMinutes < 1) {
+    return 'há instantes';
   }
+  if (difference.inHours < 1) {
+    return 'há ${difference.inMinutes} min';
+  }
+  return 'há ${difference.inHours} h';
+}
+
+class _MonitoringStatusVisual {
+  final IconData icon;
+  final Color color;
+  final String message;
+
+  const _MonitoringStatusVisual({
+    required this.icon,
+    required this.color,
+    required this.message,
+  });
 }
 
 String formatWithSIPrefix(num value, {int? fractionDigits}) {
