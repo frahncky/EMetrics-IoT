@@ -15,6 +15,8 @@ import 'mqtt_service.dart';
 class BackgroundMqttService {
   static const _notificationChannelId = 'mqtt_background_channel';
   static const _notificationId = 101;
+  static const _historyRequestEvent = 'requestHistory';
+  static const _historyRequestResultEvent = 'requestHistoryResult';
 
   static Future<bool> isRunning() async {
     try {
@@ -84,10 +86,34 @@ class BackgroundMqttService {
       );
     }
 
-    service.invoke('requestHistory', {
+    final requestId =
+        '${DateTime.now().microsecondsSinceEpoch}_${from.millisecondsSinceEpoch}_${to.millisecondsSinceEpoch}';
+
+    service.invoke(_historyRequestEvent, {
+      'requestId': requestId,
       'from': from.millisecondsSinceEpoch,
       'to': to.millisecondsSinceEpoch,
     });
+
+    final response = await service
+        .on(_historyRequestResultEvent)
+        .firstWhere((payload) => payload?['requestId'] == requestId)
+        .timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => throw TimeoutException(
+            'Tempo limite ao solicitar historico em segundo plano.',
+          ),
+        );
+
+    final ok = response?['ok'] == true;
+    if (!ok) {
+      final rawError = response?['error'];
+      final message =
+          rawError is String && rawError.trim().isNotEmpty
+          ? rawError
+          : 'Falha ao solicitar historico no monitoramento em segundo plano.';
+      throw MqttServiceException(message);
+    }
   }
 
   @pragma('vm:entry-point')
@@ -177,12 +203,29 @@ class BackgroundMqttService {
       await service.stopSelf();
     });
 
-    service.on('requestHistory').listen((payload) async {
+    service.on(_historyRequestEvent).listen((payload) async {
+      final data = payload ?? <String, dynamic>{};
+      final requestId = data['requestId'];
+
+      Future<void> sendResult({required bool ok, String? error}) async {
+        if (requestId is! String || requestId.isEmpty) {
+          return;
+        }
+        service.invoke(_historyRequestResultEvent, {
+          'requestId': requestId,
+          'ok': ok,
+          if (error != null && error.isNotEmpty) 'error': error,
+        });
+      }
+
       try {
-        final data = payload ?? const <Object?, Object?>{};
         final fromMillis = data['from'];
         final toMillis = data['to'];
         if (fromMillis is! int || toMillis is! int) {
+          await sendResult(
+            ok: false,
+            error: 'Payload invalido para solicitacao de historico.',
+          );
           return;
         }
 
@@ -190,15 +233,18 @@ class BackgroundMqttService {
           await connectAndListen();
         }
         if (mqtt == null || !mqtt!.isConnected) {
-          throw const MqttServiceException(
-            'Nao foi possivel conectar ao broker MQTT em segundo plano.',
+          await sendResult(
+            ok: false,
+            error: 'Nao foi possivel conectar ao broker MQTT em segundo plano.',
           );
+          return;
         }
 
         await mqtt!.requestHistory(
           from: DateTime.fromMillisecondsSinceEpoch(fromMillis),
           to: DateTime.fromMillisecondsSinceEpoch(toMillis),
         );
+        await sendResult(ok: true);
       } catch (e, stackTrace) {
         developer.log(
           'Falha ao solicitar historico via servico MQTT em segundo plano',
@@ -206,6 +252,7 @@ class BackgroundMqttService {
           error: e,
           stackTrace: stackTrace,
         );
+        await sendResult(ok: false, error: e.toString());
       }
     });
 
