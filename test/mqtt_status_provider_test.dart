@@ -1,11 +1,29 @@
 import 'package:e_metrics_iot/src/providers/mqtt_settings_provider.dart';
 import 'package:e_metrics_iot/src/providers/mqtt_status_provider.dart';
+import 'package:e_metrics_iot/src/services/mqtt_credentials_store.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class _InMemoryCredentialsStore implements MqttCredentialsStore {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<String> readPassword() async => '';
+
+  @override
+  Future<String> readUsername() async => '';
+
+  @override
+  Future<void> writeCredentials({
+    required String username,
+    required String password,
+  }) async {}
+}
+
 class _FakeMqttSettingsNotifier extends MqttSettingsNotifier {
-  _FakeMqttSettingsNotifier() {
+  _FakeMqttSettingsNotifier() : super(_InMemoryCredentialsStore()) {
     state = const MqttSettings(
       broker: 'broker.local',
       port: 8883,
@@ -16,6 +34,11 @@ class _FakeMqttSettingsNotifier extends MqttSettingsNotifier {
       requestTopic: 'energia/casa/history/request',
       useTls: true,
     );
+  }
+
+  @override
+  Future<MqttSettings> load() async {
+    return state;
   }
 }
 
