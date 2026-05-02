@@ -1,7 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -13,6 +12,12 @@ import 'history_export_writer_stub.dart'
 
 Future<Uint8List> buildHistoryPdfBytes(List<Metric> metrics) async {
   final pdf = pw.Document();
+  final regularFont = pw.Font.ttf(
+    await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+  );
+  final boldFont = pw.Font.ttf(
+    await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'),
+  );
   final sortedMetrics = [...metrics]
     ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
@@ -26,7 +31,7 @@ Future<Uint8List> buildHistoryPdfBytes(List<Metric> metrics) async {
   }
 
   final rows = [
-    <String>['Data/Hora', 'Tensao', 'Corrente', 'Potencia', 'FP', 'Frequencia', 'Energia'],
+    <String>['Data/Hora', 'Tensão', 'Corrente', 'Potência', 'FP', 'Frequência', 'Energia'],
     ...sortedMetrics.map(
       (m) => [
         formatDate(m.timestamp),
@@ -52,9 +57,10 @@ Future<Uint8List> buildHistoryPdfBytes(List<Metric> metrics) async {
     pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(24),
+      theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
       build: (context) => [
         pw.Text(
-          'Relatorio de medicoes de energia',
+          'Relatório de medições de energia',
           style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 8),
@@ -69,7 +75,7 @@ Future<Uint8List> buildHistoryPdfBytes(List<Metric> metrics) async {
           runSpacing: 12,
           children: [
             _pdfSummaryCard('Consumo', '${totalConsumption.toStringAsFixed(3)} kWh'),
-            _pdfSummaryCard('Potencia media', '${averagePower.toStringAsFixed(1)} W'),
+            _pdfSummaryCard('Potência média', '${averagePower.toStringAsFixed(1)} W'),
           ],
         ),
         pw.SizedBox(height: 16),

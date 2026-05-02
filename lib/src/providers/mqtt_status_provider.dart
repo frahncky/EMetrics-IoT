@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/background_mqtt_service.dart';
 import 'mqtt_settings_provider.dart';
 
+typedef BackgroundRunningCheck = Future<bool> Function();
+
 enum MqttConnectionPhase { disconnected, connecting, connected, error }
 
 class MqttStatusState {
@@ -64,7 +66,10 @@ class MqttStatusState {
 }
 
 class MqttStatusNotifier extends StateNotifier<MqttStatusState> {
-  MqttStatusNotifier() : super(const MqttStatusState.initial());
+  final BackgroundRunningCheck _backgroundRunningCheck;
+
+  MqttStatusNotifier(this._backgroundRunningCheck)
+    : super(const MqttStatusState.initial());
 
   void configure(MqttSettings settings) {
     state = state.copyWith(
@@ -76,7 +81,7 @@ class MqttStatusNotifier extends StateNotifier<MqttStatusState> {
   }
 
   Future<void> syncBackgroundState() async {
-    final isRunning = await BackgroundMqttService.isRunning();
+    final isRunning = await _backgroundRunningCheck();
     setBackgroundActive(isRunning);
   }
 
@@ -111,9 +116,17 @@ class MqttStatusNotifier extends StateNotifier<MqttStatusState> {
   }
 }
 
+final mqttBackgroundRunningCheckProvider = Provider<BackgroundRunningCheck>((
+  ref,
+) {
+  return BackgroundMqttService.isRunning;
+});
+
 final mqttStatusProvider =
     StateNotifierProvider<MqttStatusNotifier, MqttStatusState>((ref) {
-      final notifier = MqttStatusNotifier();
+      final notifier = MqttStatusNotifier(
+        ref.read(mqttBackgroundRunningCheckProvider),
+      );
       notifier.configure(ref.read(mqttSettingsProvider));
       ref.listen<MqttSettings>(mqttSettingsProvider, (previous, next) {
         notifier.configure(next);

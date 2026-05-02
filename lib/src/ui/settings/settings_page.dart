@@ -18,7 +18,8 @@ class SettingsPage extends ConsumerStatefulWidget {
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends ConsumerState<SettingsPage> {
+class _SettingsPageState extends ConsumerState<SettingsPage>
+  with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _brokerController = TextEditingController();
   final _portController = TextEditingController(text: '1883');
@@ -39,15 +40,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSettings();
     _loadTheme();
   }
 
+  Future<void> _syncBackgroundState() async {
+    await ref.read(mqttStatusProvider.notifier).syncBackgroundState();
+  }
+
   Future<void> _loadTheme() async {
     final isDarkMode = ref.read(themeProvider);
-    await ref.read(mqttStatusProvider.notifier).syncBackgroundState();
+    await _syncBackgroundState();
     if (mounted) {
       setState(() => _darkMode = isDarkMode);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncBackgroundState();
     }
   }
 
@@ -607,6 +620,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _brokerController.dispose();
     _portController.dispose();
     _clientIdController.dispose();

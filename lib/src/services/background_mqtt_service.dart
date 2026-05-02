@@ -78,6 +78,7 @@ class BackgroundMqttService {
     StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>? mqttSub;
     Timer? reconnectTimer;
     MqttService? mqtt;
+    BackgroundMqttConfig? activeConfig;
 
     Future<void> connectAndListen() async {
       try {
@@ -87,6 +88,18 @@ class BackgroundMqttService {
           prefs,
           credentialsStore,
         );
+
+        final configChanged =
+            activeConfig != null && !activeConfig!.sameConnectionProfile(config);
+
+        if (configChanged) {
+          await mqttSub?.cancel();
+          mqttSub = null;
+          if (mqtt != null && mqtt!.isConnected) {
+            mqtt!.client.disconnect();
+          }
+          mqtt = null;
+        }
 
         mqtt ??= MqttService(
           broker: config.broker,
@@ -98,6 +111,7 @@ class BackgroundMqttService {
           topic: config.topic,
           requestTopic: config.requestTopic,
         );
+        activeConfig = config;
 
         if (!mqtt!.isConnected) {
           await mqtt!.connect();

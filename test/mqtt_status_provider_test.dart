@@ -91,5 +91,22 @@ void main() {
       expect(status.phase, MqttConnectionPhase.disconnected);
       expect(status.lastMessage, 'Broker MQTT desconectado.');
     });
+
+    test('sincroniza o estado de segundo plano pelo check injetado', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer(
+        overrides: [
+          mqttCredentialsStoreProvider.overrideWithValue(
+            _InMemoryCredentialsStore(),
+          ),
+          mqttBackgroundRunningCheckProvider.overrideWithValue(() async => true),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(mqttStatusProvider.notifier).syncBackgroundState();
+
+      expect(container.read(mqttStatusProvider).backgroundActive, isTrue);
+    });
   });
 }

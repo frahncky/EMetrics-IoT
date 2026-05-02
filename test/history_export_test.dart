@@ -3,6 +3,8 @@ import 'package:e_metrics_iot/src/ui/history/history_export.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('buildHistoryPdfBytes gera conteúdo PDF para métricas históricas', () async {
     final bytes = await buildHistoryPdfBytes([
       Metric(

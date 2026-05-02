@@ -100,5 +100,41 @@ void main() {
       expect(prefs.getString('mqtt_username'), isNull);
       expect(prefs.getString('mqtt_password'), isNull);
     });
+
+    test('identifica quando o perfil de conexao MQTT muda', () {
+      const base = BackgroundMqttConfig(
+        broker: 'broker.local',
+        port: 1883,
+        clientId: 'client_a',
+        username: 'user',
+        password: 'pass',
+        topic: 'energia/a',
+        requestTopic: 'energia/a/history/request',
+        useTls: false,
+      );
+      const same = BackgroundMqttConfig(
+        broker: 'broker.local',
+        port: 1883,
+        clientId: 'client_a',
+        username: 'user',
+        password: 'pass',
+        topic: 'energia/a',
+        requestTopic: 'energia/a/history/request',
+        useTls: false,
+      );
+      const changed = BackgroundMqttConfig(
+        broker: 'broker.local',
+        port: 8883,
+        clientId: 'client_a',
+        username: 'user',
+        password: 'pass',
+        topic: 'energia/a',
+        requestTopic: 'energia/a/history/request',
+        useTls: true,
+      );
+
+      expect(base.sameConnectionProfile(same), isTrue);
+      expect(base.sameConnectionProfile(changed), isFalse);
+    });
   });
 }

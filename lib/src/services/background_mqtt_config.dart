@@ -26,6 +26,17 @@ class BackgroundMqttConfig {
     required this.useTls,
   });
 
+  bool sameConnectionProfile(BackgroundMqttConfig other) {
+    return broker == other.broker &&
+        port == other.port &&
+        clientId == other.clientId &&
+        username == other.username &&
+        password == other.password &&
+        topic == other.topic &&
+        requestTopic == other.requestTopic &&
+        useTls == other.useTls;
+  }
+
   static Future<BackgroundMqttConfig> fromStorage(
     SharedPreferences prefs,
     MqttCredentialsStore credentialsStore,
