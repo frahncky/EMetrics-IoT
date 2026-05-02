@@ -31,6 +31,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _tariffController = TextEditingController();
   bool _darkMode = false;
   bool _useTls = false;
+  int _selectedTab = 0;
 
   @override
   void initState() {
@@ -144,6 +145,259 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final mqttStatus = ref.watch(mqttStatusProvider);
+    final tabContents = <Widget>[
+      Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 8),
+        child: _SettingsSection(
+          children: [
+            Semantics(
+              label: 'Campo Broker MQTT',
+              child: TextFormField(
+                controller: _brokerController,
+                validator: SettingsValidators.validateBroker,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.cloud),
+                  labelText: 'Broker MQTT',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Semantics(
+                    label: 'Campo porta MQTT',
+                    child: TextFormField(
+                      controller: _portController,
+                      keyboardType: TextInputType.number,
+                      validator: SettingsValidators.validatePort,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.settings_ethernet),
+                        labelText: 'Porta MQTT',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: Semantics(
+                    label: 'Campo Client ID MQTT',
+                    child: TextFormField(
+                      controller: _clientIdController,
+                      validator: SettingsValidators.validateClientId,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.badge),
+                        labelText: 'Client ID MQTT',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Campo usuário MQTT',
+              child: TextFormField(
+                controller: _usernameController,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.person_outline),
+                  labelText: 'Usuário MQTT',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Campo senha MQTT',
+              child: TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.lock_outline),
+                  labelText: 'Senha MQTT',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Campo Tópico MQTT',
+              child: TextFormField(
+                controller: _topicController,
+                validator: (value) =>
+                    SettingsValidators.validateTopic(value, fieldLabel: 'o tópico MQTT'),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.topic),
+                  labelText: 'Tópico MQTT',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Semantics(
+              label: 'Alternar TLS MQTT',
+              toggled: _useTls,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                title: const Text('Usar TLS/SSL'),
+                value: _useTls,
+                secondary: const Icon(Icons.security_outlined),
+                onChanged: (value) {
+                  setState(() => _useTls = value);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 8),
+        child: _SettingsSection(
+          children: [
+            Semantics(
+              label: 'Campo tópico de solicitação de histórico',
+              child: TextFormField(
+                controller: _requestTopicController,
+                validator: (value) => SettingsValidators.validateTopic(
+                  value,
+                  fieldLabel: 'o tópico de solicitação',
+                ),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.history_toggle_off),
+                  labelText: 'Tópico de solicitação de histórico',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Campo Intervalo de atualização',
+              child: TextFormField(
+                controller: _intervalController,
+                keyboardType: TextInputType.number,
+                validator: SettingsValidators.validateInterval,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.timer),
+                  labelText: 'Intervalo de atualização (s)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 8),
+        child: _SettingsSection(
+          children: [
+            _ResponsiveFieldPair(
+              first: Semantics(
+                label: 'Campo tensão mínima para alerta',
+                child: TextFormField(
+                  controller: _voltageMinController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  validator: (value) => SettingsValidators.validateDecimal(
+                    value,
+                    fieldLabel: 'a tensão mínima',
+                    min: 0,
+                    max: 1000,
+                    allowZero: false,
+                  ),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.electrical_services),
+                    labelText: 'Tensão mínima (V)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              second: Semantics(
+                label: 'Campo tensão máxima para alerta',
+                child: TextFormField(
+                  controller: _voltageMaxController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  validator: _validateVoltageMax,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.electrical_services),
+                    labelText: 'Tensão máxima (V)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Campo limite de consumo para alerta',
+              child: TextFormField(
+                controller: _energyLimitController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (value) => SettingsValidators.validateDecimal(
+                  value,
+                  fieldLabel: 'o limite de consumo',
+                  min: 0,
+                  max: 100000,
+                  allowZero: false,
+                ),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.battery_alert_outlined),
+                  labelText: 'Limite de consumo (kWh)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Campo tarifa por kWh',
+              child: TextFormField(
+                controller: _tariffController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (value) => SettingsValidators.validateDecimal(
+                  value,
+                  fieldLabel: 'a tarifa por kWh',
+                  min: 0,
+                  max: 1000,
+                ),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.attach_money),
+                  labelText: 'Tarifa (R\$/kWh)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 8),
+        child: _SettingsSection(
+          children: [
+            Semantics(
+              label: 'Alternar modo escuro',
+              toggled: _darkMode,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                title: Text(_darkMode ? 'Modo escuro' : 'Modo claro'),
+                value: _darkMode,
+                secondary: Icon(_darkMode ? Icons.dark_mode : Icons.light_mode),
+                onChanged: (v) async {
+                  setState(() => _darkMode = v);
+                  await ref.read(themeProvider.notifier).setDarkMode(v);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -168,21 +422,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         title: const Text('Configurações'),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            _MqttStatusCard(status: mqttStatus),
-            const SizedBox(height: 14),
-            Row(
+      body: DefaultTabController(
+        length: 4,
+        initialIndex: _selectedTab,
+        child: Form(
+          key: _formKey,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+            child: Column(
               children: [
+                _MqttStatusCard(status: mqttStatus),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
                     Expanded(
                       child: Semantics(
                         label: 'Botão Conectar MQTT',
                         button: true,
                         child: SizedBox(
-                          height: 48,
+                          height: 46,
                           child: ElevatedButton.icon(
                             icon: const Icon(Icons.cloud),
                             iconAlignment: IconAlignment.start,
@@ -236,7 +494,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         label: 'Botão Parar segundo plano',
                         button: true,
                         child: SizedBox(
-                          height: 48,
+                          height: 46,
                           child: OutlinedButton.icon(
                             icon: const Icon(Icons.pause_circle_outline, size: 18),
                             iconAlignment: IconAlignment.start,
@@ -266,276 +524,40 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                       ),
                     ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _SettingsSection(
-              title: 'MQTT',
-              icon: Icons.cloud_outlined,
-              children: [
-                Semantics(
-                  label: 'Campo Broker MQTT',
-                  child: TextFormField(
-                    controller: _brokerController,
-                    validator: SettingsValidators.validateBroker,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.cloud),
-                      labelText: 'Broker MQTT',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Semantics(
-                        label: 'Campo porta MQTT',
-                        child: TextFormField(
-                          controller: _portController,
-                          keyboardType: TextInputType.number,
-                          validator: SettingsValidators.validatePort,
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.settings_ethernet),
-                            labelText: 'Porta MQTT',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 3,
-                      child: Semantics(
-                        label: 'Campo Client ID MQTT',
-                        child: TextFormField(
-                          controller: _clientIdController,
-                          validator: SettingsValidators.validateClientId,
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.badge),
-                            labelText: 'Client ID MQTT',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo usuário MQTT',
-                  child: TextFormField(
-                    controller: _usernameController,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.person_outline),
-                      labelText: 'Usuário MQTT',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo senha MQTT',
-                  child: TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.lock_outline),
-                      labelText: 'Senha MQTT',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo Tópico MQTT',
-                  child: TextFormField(
-                    controller: _topicController,
-                    validator: (value) => SettingsValidators.validateTopic(
-                      value,
-                      fieldLabel: 'o tópico MQTT',
-                    ),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.topic),
-                      labelText: 'Tópico MQTT',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Semantics(
-                  label: 'Alternar TLS MQTT',
-                  toggled: _useTls,
-                  child: SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Usar TLS/SSL'),
-                    value: _useTls,
-                    secondary: const Icon(Icons.security_outlined),
-                    onChanged: (value) {
-                      setState(() => _useTls = value);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            _SettingsSection(
-              title: 'Histórico e atualização',
-              icon: Icons.history_toggle_off,
-              children: [
-                Semantics(
-                  label: 'Campo tópico de solicitação de histórico',
-                  child: TextFormField(
-                    controller: _requestTopicController,
-                    validator: (value) => SettingsValidators.validateTopic(
-                      value,
-                      fieldLabel: 'o tópico de solicitação',
-                    ),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.history_toggle_off),
-                      labelText: 'Tópico de solicitação de histórico',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo Intervalo de atualização',
-                  child: TextFormField(
-                    controller: _intervalController,
-                    keyboardType: TextInputType.number,
-                    validator: SettingsValidators.validateInterval,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.timer),
-                      labelText: 'Intervalo de atualização (s)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            _SettingsSection(
-              title: 'Medição e alertas',
-              icon: Icons.tune,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Semantics(
-                        label: 'Campo tensão mínima para alerta',
-                        child: TextFormField(
-                          controller: _voltageMinController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          validator: (value) => SettingsValidators.validateDecimal(
-                            value,
-                            fieldLabel: 'a tensão mínima',
-                            min: 0,
-                            max: 1000,
-                            allowZero: false,
-                          ),
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.electrical_services),
-                            labelText: 'Tensão mínima (V)',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Semantics(
-                        label: 'Campo tensão máxima para alerta',
-                        child: TextFormField(
-                          controller: _voltageMaxController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          validator: _validateVoltageMax,
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.electrical_services),
-                            labelText: 'Tensão máxima (V)',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ),
+                const SizedBox(height: 6),
+                TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  onTap: (index) {
+                    setState(() => _selectedTab = index);
+                  },
+                  tabs: const [
+                    Tab(icon: Icon(Icons.cloud_outlined), text: 'MQTT'),
+                    Tab(icon: Icon(Icons.history_toggle_off), text: 'Histórico'),
+                    Tab(icon: Icon(Icons.tune), text: 'Medição'),
+                    Tab(icon: Icon(Icons.palette_outlined), text: 'Aparência'),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo limite de consumo para alerta',
-                  child: TextFormField(
-                    controller: _energyLimitController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                const SizedBox(height: 6),
+                Expanded(
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
                     ),
-                    validator: (value) => SettingsValidators.validateDecimal(
-                      value,
-                      fieldLabel: 'o limite de consumo',
-                      min: 0,
-                      max: 100000,
-                      allowZero: false,
-                    ),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.battery_alert_outlined),
-                      labelText: 'Limite de consumo (kWh)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Semantics(
-                  label: 'Campo tarifa por kWh',
-                  child: TextFormField(
-                    controller: _tariffController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: (value) => SettingsValidators.validateDecimal(
-                      value,
-                      fieldLabel: 'a tarifa por kWh',
-                      min: 0,
-                      max: 1000,
-                    ),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.attach_money),
-                      labelText: 'Tarifa (R\$/kWh)',
-                      border: OutlineInputBorder(),
-                    ),
+                    child: tabContents[_selectedTab],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 28),
-            _SettingsSection(
-              title: 'Aparência',
-              icon: _darkMode ? Icons.dark_mode : Icons.light_mode,
-              children: [
-                Semantics(
-                  label: 'Alternar modo escuro',
-                  toggled: _darkMode,
-                  child: SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(_darkMode ? 'Modo escuro' : 'Modo claro'),
-                    value: _darkMode,
-                    secondary: Icon(
-                      _darkMode ? Icons.dark_mode : Icons.light_mode,
-                    ),
-                    onChanged: (v) async {
-                      setState(() => _darkMode = v);
-                      await ref.read(themeProvider.notifier).setDarkMode(v);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -632,33 +654,55 @@ class _MqttStatusCard extends StatelessWidget {
 }
 
 class _SettingsSection extends StatelessWidget {
-  final String title;
-  final IconData icon;
   final List<Widget> children;
 
   const _SettingsSection({
-    required this.title,
-    required this.icon,
     required this.children,
   });
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(icon, color: colorScheme.primary, size: 20),
-            const SizedBox(width: 8),
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-          ],
-        ),
-        const SizedBox(height: 16),
         ...children,
       ],
+    );
+  }
+}
+
+class _ResponsiveFieldPair extends StatelessWidget {
+  final Widget first;
+  final Widget second;
+
+  const _ResponsiveFieldPair({
+    required this.first,
+    required this.second,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 560) {
+          return Column(
+            children: [
+              first,
+              const SizedBox(height: 8),
+              second,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: first),
+            const SizedBox(width: 12),
+            Expanded(child: second),
+          ],
+        );
+      },
     );
   }
 }
