@@ -269,7 +269,7 @@ class _MainMenuState extends State<_MainMenu> {
         child: _pages[_selectedIndex],
       ),
       bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
           child: BottomNavigationBar(
@@ -313,8 +313,8 @@ class _MainMenuState extends State<_MainMenu> {
               ),
             ],
             type: BottomNavigationBarType.fixed,
-            selectedFontSize: 14,
-            unselectedFontSize: 13,
+            selectedFontSize: 13,
+            unselectedFontSize: 12,
             showUnselectedLabels: true,
             elevation: 8,
           ),
