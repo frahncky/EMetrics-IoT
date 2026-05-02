@@ -1,14 +1,45 @@
 import 'package:e_metrics_iot/src/services/background_mqtt_config.dart';
+import 'package:e_metrics_iot/src/services/mqtt_credentials_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _InMemoryCredentialsStore implements MqttCredentialsStore {
+  String username = '';
+  String password = '';
+
+  @override
+  Future<void> clear() async {
+    username = '';
+    password = '';
+  }
+
+  @override
+  Future<String> readPassword() async => password;
+
+  @override
+  Future<String> readUsername() async => username;
+
+  @override
+  Future<void> writeCredentials({
+    required String username,
+    required String password,
+  }) async {
+    this.username = username;
+    this.password = password;
+  }
+}
 
 void main() {
   group('BackgroundMqttConfig', () {
     test('usa valores padrão quando prefs estão vazias', () async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
+      final credentialsStore = _InMemoryCredentialsStore();
 
-      final config = BackgroundMqttConfig.fromPrefs(prefs);
+      final config = await BackgroundMqttConfig.fromStorage(
+        prefs,
+        credentialsStore,
+      );
 
       expect(config.broker, 'test.mosquitto.org');
       expect(config.port, 1883);
@@ -25,15 +56,19 @@ void main() {
         'mqtt_broker': 'broker.hivemq.com',
         'mqtt_port': 8883,
         'mqtt_client_id': 'client_123',
-        'mqtt_username': 'energia',
-        'mqtt_password': 'segredo',
         'mqtt_topic': 'energia/medidor',
         'mqtt_request_topic': 'energia/medidor/history/request',
         'mqtt_use_tls': true,
       });
       final prefs = await SharedPreferences.getInstance();
+      final credentialsStore = _InMemoryCredentialsStore()
+        ..username = 'energia'
+        ..password = 'segredo';
 
-      final config = BackgroundMqttConfig.fromPrefs(prefs);
+      final config = await BackgroundMqttConfig.fromStorage(
+        prefs,
+        credentialsStore,
+      );
 
       expect(config.broker, 'broker.hivemq.com');
       expect(config.port, 8883);
@@ -43,6 +78,27 @@ void main() {
       expect(config.topic, 'energia/medidor');
       expect(config.requestTopic, 'energia/medidor/history/request');
       expect(config.useTls, isTrue);
+    });
+
+    test('migra credenciais legadas do shared preferences', () async {
+      SharedPreferences.setMockInitialValues({
+        'mqtt_username': 'legacy_user',
+        'mqtt_password': 'legacy_pass',
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final credentialsStore = _InMemoryCredentialsStore();
+
+      final config = await BackgroundMqttConfig.fromStorage(
+        prefs,
+        credentialsStore,
+      );
+
+      expect(config.username, 'legacy_user');
+      expect(config.password, 'legacy_pass');
+      expect(credentialsStore.username, 'legacy_user');
+      expect(credentialsStore.password, 'legacy_pass');
+      expect(prefs.getString('mqtt_username'), isNull);
+      expect(prefs.getString('mqtt_password'), isNull);
     });
   });
 }

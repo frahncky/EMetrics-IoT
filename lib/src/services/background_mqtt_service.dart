@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/metric_repository.dart';
 import '../providers/mqtt_metric_parser.dart';
 import 'background_mqtt_config.dart';
+import 'mqtt_credentials_store.dart';
 import 'mqtt_service.dart';
 
 class BackgroundMqttService {
@@ -81,11 +82,19 @@ class BackgroundMqttService {
     Future<void> connectAndListen() async {
       try {
         final prefs = await SharedPreferences.getInstance();
-        final config = BackgroundMqttConfig.fromPrefs(prefs);
+        final credentialsStore = SecureMqttCredentialsStore();
+        final config = await BackgroundMqttConfig.fromStorage(
+          prefs,
+          credentialsStore,
+        );
 
         mqtt ??= MqttService(
           broker: config.broker,
+          port: config.port,
+          useTls: config.useTls,
           clientId: '${config.clientId}_bg',
+          username: config.username,
+          password: config.password,
           topic: config.topic,
           requestTopic: config.requestTopic,
         );

@@ -78,6 +78,7 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
   }
 
   Future<MqttSettings> load() async {
+    final currentState = state;
     final prefs = await SharedPreferences.getInstance();
 
     String username = await _credentialsStore.readUsername();
@@ -99,17 +100,21 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
       }
     }
 
-    state = state.copyWith(
-      broker: prefs.getString(_brokerKey) ?? state.broker,
-      port: prefs.getInt(_portKey) ?? state.port,
-      clientId: prefs.getString(_clientIdKey) ?? state.clientId,
+    final loadedState = currentState.copyWith(
+      broker: prefs.getString(_brokerKey) ?? currentState.broker,
+      port: prefs.getInt(_portKey) ?? currentState.port,
+      clientId: prefs.getString(_clientIdKey) ?? currentState.clientId,
       username: username,
       password: password,
-      topic: prefs.getString(_topicKey) ?? state.topic,
-      requestTopic: prefs.getString(_requestTopicKey) ?? state.requestTopic,
-      useTls: prefs.getBool(_useTlsKey) ?? state.useTls,
+      topic: prefs.getString(_topicKey) ?? currentState.topic,
+      requestTopic: prefs.getString(_requestTopicKey) ?? currentState.requestTopic,
+      useTls: prefs.getBool(_useTlsKey) ?? currentState.useTls,
     );
-    return state;
+
+    if (mounted) {
+      state = loadedState;
+    }
+    return loadedState;
   }
 
   Future<void> update({

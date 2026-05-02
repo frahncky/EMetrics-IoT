@@ -73,7 +73,13 @@ void main() {
 
     test('marca erro e desconexão com mensagem amigável', () async {
       SharedPreferences.setMockInitialValues({});
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [
+          mqttCredentialsStoreProvider.overrideWithValue(
+            _InMemoryCredentialsStore(),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(mqttStatusProvider.notifier);
