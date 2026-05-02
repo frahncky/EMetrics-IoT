@@ -162,44 +162,33 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Semantics(
-                    label: 'Campo porta MQTT',
-                    child: TextFormField(
-                      controller: _portController,
-                      keyboardType: TextInputType.number,
-                      validator: SettingsValidators.validatePort,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.settings_ethernet),
-                        labelText: 'Porta MQTT',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
+            Semantics(
+              label: 'Campo porta MQTT',
+              child: TextFormField(
+                controller: _portController,
+                keyboardType: TextInputType.number,
+                validator: SettingsValidators.validatePort,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.settings_ethernet),
+                  labelText: 'Porta MQTT',
+                  border: OutlineInputBorder(),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 3,
-                  child: Semantics(
-                    label: 'Campo Client ID MQTT',
-                    child: TextFormField(
-                      controller: _clientIdController,
-                      validator: SettingsValidators.validateClientId,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.badge),
-                        labelText: 'Client ID MQTT',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Campo Client ID MQTT',
+              child: TextFormField(
+                controller: _clientIdController,
+                validator: SettingsValidators.validateClientId,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.badge),
+                  labelText: 'Client ID MQTT',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             _ResponsiveFieldPair(
               first: Semantics(
                 label: 'Campo usuário MQTT',
@@ -239,7 +228,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Semantics(
               label: 'Alternar TLS MQTT',
               toggled: _useTls,
@@ -614,7 +603,7 @@ class _ResponsiveFieldPair extends StatelessWidget {
           return Column(
             children: [
               first,
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               second,
             ],
           );
