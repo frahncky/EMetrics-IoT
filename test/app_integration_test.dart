@@ -14,10 +14,16 @@ void main() {
     testWidgets('Configurações oferece escolha de acesso', (
       WidgetTester tester,
     ) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
       await tester.pumpWidget(const EmetricsApp());
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(Icons.settings));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Aparência'));
       await tester.pumpAndSettle();
 
       expect(find.text('Entrar com senha'), findsOneWidget);
@@ -62,6 +68,9 @@ void main() {
     });
 
     testWidgets('Configurações são acessíveis', (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
       await tester.pumpWidget(const EmetricsApp());
       await tester.pumpAndSettle();
 
