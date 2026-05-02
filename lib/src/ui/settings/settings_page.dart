@@ -10,6 +10,7 @@ import '../../services/alert_service.dart';
 import '../../services/background_mqtt_service.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_page.dart';
+import 'esp_provisioning_page.dart';
 import 'settings_validators.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -260,6 +261,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                 onChanged: (value) {
                   setState(() => _useTls = value);
                 },
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const EspProvisioningPage(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.wifi_tethering),
+                label: const Text('Provisionar ESP32 (Wi-Fi + MQTT)'),
               ),
             ),
           ],
