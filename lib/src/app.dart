@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'ui/alerts/alerts_page.dart';
 import 'ui/dashboard/dashboard_page.dart';
 import 'ui/history/history_page.dart';
 import 'ui/settings/settings_page.dart';
@@ -242,6 +243,7 @@ class _MainMenuState extends State<_MainMenu> {
   static final List<Widget> _pages = <Widget>[
     DashboardPage(),
     HistoryPage(),
+    AlertsPage(),
     SettingsPage(),
   ];
 
@@ -295,8 +297,16 @@ class _MainMenuState extends State<_MainMenu> {
               ),
               BottomNavigationBarItem(
                 icon: _NavBarIcon(
-                  icon: Icons.settings,
+                  icon: Icons.notifications_outlined,
                   selected: _selectedIndex == 2,
+                  primaryColor: primaryColor,
+                ),
+                label: 'Alertas',
+              ),
+              BottomNavigationBarItem(
+                icon: _NavBarIcon(
+                  icon: Icons.settings,
+                  selected: _selectedIndex == 3,
                   primaryColor: primaryColor,
                 ),
                 label: 'Configurações',

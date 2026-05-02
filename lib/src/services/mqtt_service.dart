@@ -22,6 +22,11 @@ class MqttService {
   final String topic;
   final String requestTopic;
   final int port;
+  final bool useTls;
+  final void Function()? onConnecting;
+  final void Function()? onConnected;
+  final void Function(String message)? onDisconnectedStatus;
+  final void Function(String message)? onError;
 
   late MqttServerClient client;
 
@@ -33,9 +38,15 @@ class MqttService {
     this.username = '',
     this.password = '',
     this.port = 1883,
+    this.useTls = false,
+    this.onConnecting,
+    this.onConnected,
+    this.onDisconnectedStatus,
+    this.onError,
   }) : requestTopic = requestTopic ?? '$topic/history/request' {
     client = MqttServerClient(broker, clientId);
     client.port = port;
+    client.secure = useTls;
     client.keepAlivePeriod = 20;
     client.onDisconnected = onDisconnected;
     client.logging(on: false);
@@ -43,6 +54,7 @@ class MqttService {
   }
 
   Future<void> connect() async {
+    onConnecting?.call();
     client.connectionMessage = MqttConnectMessage()
         .withClientIdentifier(clientId)
         .authenticateAs(username, password)
@@ -57,12 +69,19 @@ class MqttService {
       if (state != MqttConnectionState.connected) {
         final code = client.connectionStatus?.returnCode?.name ?? 'desconhecido';
         client.disconnect();
+        onDisconnectedStatus?.call(
+          'Não foi possível conectar ao broker MQTT (código: $code).',
+        );
         throw MqttServiceException(
           'Não foi possível conectar ao broker MQTT (código: $code).',
         );
       }
+      onConnected?.call();
     } on SocketException catch (e) {
       developer.log('Erro de conexão MQTT: ${e.message}', name: 'MqttService');
+      onError?.call(
+        'Não foi possível conectar ao broker MQTT. Verifique sua conexão de rede.',
+      );
       throw const MqttServiceException(
         'Não foi possível conectar ao broker MQTT. Verifique sua conexão de rede.',
       );
@@ -75,6 +94,7 @@ class MqttService {
         error: e,
         stackTrace: stackTrace,
       );
+      onError?.call('Erro inesperado ao conectar ao broker MQTT.');
       throw const MqttServiceException('Erro inesperado ao conectar ao broker MQTT.');
     }
   }
@@ -131,6 +151,7 @@ class MqttService {
 
   void onDisconnected() {
     developer.log('Cliente MQTT desconectado', name: 'MqttService');
+    onDisconnectedStatus?.call('Cliente MQTT desconectado.');
   }
 
   Stream<List<MqttReceivedMessage<MqttMessage>>> get updates =>

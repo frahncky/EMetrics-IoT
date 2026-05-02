@@ -16,42 +16,58 @@ class BackgroundMqttService {
   static const _notificationId = 101;
 
   static Future<bool> isRunning() async {
-    final service = FlutterBackgroundService();
-    return service.isRunning();
+    try {
+      final service = FlutterBackgroundService();
+      return service.isRunning();
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> initialize() async {
     final service = FlutterBackgroundService();
 
-    await service.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: _onStart,
-        autoStart: false,
-        isForegroundMode: true,
-        autoStartOnBoot: true,
-        notificationChannelId: _notificationChannelId,
-        initialNotificationTitle: 'E-Metrics IoT',
-        initialNotificationContent: 'Monitoramento MQTT em segundo plano ativo.',
-        foregroundServiceNotificationId: _notificationId,
-      ),
-      iosConfiguration: IosConfiguration(
-        autoStart: false,
-        onForeground: _onStart,
-      ),
-    );
+    try {
+      await service.configure(
+        androidConfiguration: AndroidConfiguration(
+          onStart: _onStart,
+          autoStart: false,
+          isForegroundMode: true,
+          autoStartOnBoot: true,
+          notificationChannelId: _notificationChannelId,
+          initialNotificationTitle: 'E-Metrics IoT',
+          initialNotificationContent: 'Monitoramento MQTT em segundo plano ativo.',
+          foregroundServiceNotificationId: _notificationId,
+        ),
+        iosConfiguration: IosConfiguration(
+          autoStart: false,
+          onForeground: _onStart,
+        ),
+      );
+    } catch (_) {
+      return;
+    }
   }
 
   static Future<void> start() async {
-    final service = FlutterBackgroundService();
-    final isRunning = await service.isRunning();
-    if (!isRunning) {
-      await service.startService();
+    try {
+      final service = FlutterBackgroundService();
+      final isRunning = await service.isRunning();
+      if (!isRunning) {
+        await service.startService();
+      }
+    } catch (_) {
+      return;
     }
   }
 
   static Future<void> stop() async {
-    final service = FlutterBackgroundService();
-    service.invoke('stopService');
+    try {
+      final service = FlutterBackgroundService();
+      service.invoke('stopService');
+    } catch (_) {
+      return;
+    }
   }
 
   @pragma('vm:entry-point')

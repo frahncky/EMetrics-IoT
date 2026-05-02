@@ -18,6 +18,7 @@ void main() {
       expect(find.byType(BottomNavigationBar), findsOneWidget);
       expect(find.text('Início'), findsOneWidget);
       expect(find.text('Histórico'), findsOneWidget);
+      expect(find.text('Alertas'), findsOneWidget);
       expect(find.text('Configurações'), findsOneWidget);
     });
 
@@ -48,8 +49,19 @@ void main() {
       await tester.tap(find.byIcon(Icons.settings));
       await tester.pumpAndSettle();
 
-      // Verifica se os campos de configuração existem
-      expect(find.byType(TextField), findsWidgets);
+      expect(find.text('Status operacional MQTT'), findsOneWidget);
+    });
+
+    testWidgets('Aba de alertas é acessível pela navegação principal', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(const EmetricsApp());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.notifications_outlined));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nenhum alerta registrado até agora.'), findsOneWidget);
     });
 
     testWidgets('Tema é aplicado corretamente', (WidgetTester tester) async {

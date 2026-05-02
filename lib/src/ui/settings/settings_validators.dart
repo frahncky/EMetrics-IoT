@@ -32,6 +32,21 @@ class SettingsValidators {
     return null;
   }
 
+  static String? validatePort(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return 'Informe a porta MQTT.';
+    }
+    final parsed = int.tryParse(text);
+    if (parsed == null) {
+      return 'Porta inválida. Use apenas números.';
+    }
+    if (parsed < 1 || parsed > 65535) {
+      return 'A porta deve estar entre 1 e 65535.';
+    }
+    return null;
+  }
+
   static String? validateTopic(String? value, {required String fieldLabel}) {
     final topic = value?.trim() ?? '';
     if (topic.isEmpty) {

@@ -17,6 +17,7 @@ void main() {
 
     expect(find.byType(MaterialApp), findsOneWidget);
     expect(find.text('Início'), findsOneWidget);
+    expect(find.text('Alertas'), findsOneWidget);
     expect(find.text('Configurações'), findsOneWidget);
   });
 }

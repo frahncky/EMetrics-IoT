@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/measurement_settings_provider.dart';
 import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_settings_provider.dart';
+import '../../providers/mqtt_status_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/background_mqtt_service.dart';
 import 'settings_validators.dart';
@@ -17,7 +18,10 @@ class SettingsPage extends ConsumerStatefulWidget {
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _formKey = GlobalKey<FormState>();
   final _brokerController = TextEditingController();
+  final _portController = TextEditingController(text: '1883');
   final _clientIdController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _topicController = TextEditingController();
   final _requestTopicController = TextEditingController();
   final _intervalController = TextEditingController(text: '5');
@@ -26,6 +30,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _energyLimitController = TextEditingController();
   final _tariffController = TextEditingController();
   bool _darkMode = false;
+  bool _useTls = false;
 
   @override
   void initState() {
@@ -36,6 +41,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _loadTheme() async {
     final isDarkMode = ref.read(themeProvider);
+    await ref.read(mqttStatusProvider.notifier).syncBackgroundState();
     if (mounted) {
       setState(() => _darkMode = isDarkMode);
     }
@@ -47,9 +53,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       return;
     }
     _brokerController.text = settings.broker;
+    _portController.text = settings.port.toString();
     _clientIdController.text = settings.clientId;
+    _usernameController.text = settings.username;
+    _passwordController.text = settings.password;
     _topicController.text = settings.topic;
     _requestTopicController.text = settings.requestTopic;
+    _useTls = settings.useTls;
 
     final measurementSettings = await ref
         .read(measurementSettingsProvider.notifier)
@@ -70,9 +80,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         .read(mqttSettingsProvider.notifier)
         .update(
           broker: _brokerController.text,
+          port: int.parse(_portController.text.trim()),
           clientId: _clientIdController.text,
+          username: _usernameController.text,
+          password: _passwordController.text,
           topic: _topicController.text,
           requestTopic: _requestTopicController.text,
+          useTls: _useTls,
         );
     await ref
         .read(measurementSettingsProvider.notifier)
@@ -129,6 +143,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final mqttStatus = ref.watch(mqttStatusProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -158,6 +173,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
+            _MqttStatusCard(status: mqttStatus),
+            const SizedBox(height: 28),
             _SettingsSection(
               title: 'MQTT',
               icon: Icons.cloud_outlined,
@@ -171,6 +188,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       prefixIcon: Icon(Icons.cloud),
                       labelText: 'Broker MQTT',
                       helperText: 'IP ou domínio do broker',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Semantics(
+                  label: 'Campo porta MQTT',
+                  child: TextFormField(
+                    controller: _portController,
+                    keyboardType: TextInputType.number,
+                    validator: SettingsValidators.validatePort,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.settings_ethernet),
+                      labelText: 'Porta MQTT',
+                      helperText: 'Ex.: 1883 sem TLS, 8883 com TLS',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -191,6 +223,33 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 const SizedBox(height: 20),
                 Semantics(
+                  label: 'Campo usuário MQTT',
+                  child: TextFormField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.person_outline),
+                      labelText: 'Usuário MQTT',
+                      helperText: 'Opcional para brokers autenticados',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Semantics(
+                  label: 'Campo senha MQTT',
+                  child: TextFormField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.lock_outline),
+                      labelText: 'Senha MQTT',
+                      helperText: 'Opcional para brokers autenticados',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Semantics(
                   label: 'Campo Tópico MQTT',
                   child: TextFormField(
                     controller: _topicController,
@@ -204,6 +263,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       helperText: 'Tópico para receber dados',
                       border: OutlineInputBorder(),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Semantics(
+                  label: 'Alternar TLS MQTT',
+                  toggled: _useTls,
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Usar TLS/SSL'),
+                    subtitle: const Text('Ative para conexões seguras, como a porta 8883.'),
+                    value: _useTls,
+                    secondary: const Icon(Icons.security_outlined),
+                    onChanged: (value) {
+                      setState(() => _useTls = value);
+                    },
                   ),
                 ),
               ],
@@ -414,6 +488,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           await mqttService.connect();
                           mqttService.subscribe();
                           await BackgroundMqttService.start();
+                          ref.read(mqttStatusProvider.notifier).setBackgroundActive(true);
                           if (!context.mounted) {
                             return;
                           }
@@ -452,6 +527,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       icon: const Icon(Icons.pause_circle_outline),
                       onPressed: () async {
                         await BackgroundMqttService.stop();
+                        ref.read(mqttStatusProvider.notifier).setBackgroundActive(false);
+                        ref.read(mqttStatusProvider.notifier).markDisconnected(
+                          'Monitoramento em segundo plano pausado.',
+                        );
                         if (!context.mounted) {
                           return;
                         }
@@ -479,7 +558,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   void dispose() {
     _brokerController.dispose();
+    _portController.dispose();
     _clientIdController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     _topicController.dispose();
     _requestTopicController.dispose();
     _intervalController.dispose();
@@ -488,6 +570,79 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _energyLimitController.dispose();
     _tariffController.dispose();
     super.dispose();
+  }
+}
+
+class _MqttStatusCard extends StatelessWidget {
+  final MqttStatusState status;
+
+  const _MqttStatusCard({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final phaseColor = switch (status.phase) {
+      MqttConnectionPhase.connected => const Color(0xFF15803D),
+      MqttConnectionPhase.connecting => const Color(0xFFD97706),
+      MqttConnectionPhase.error => const Color(0xFFDC2626),
+      MqttConnectionPhase.disconnected => colorScheme.outline,
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.podcasts, color: phaseColor),
+                const SizedBox(width: 8),
+                Text(
+                  'Status operacional MQTT',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text('Broker: ${status.broker}:${status.port}'),
+            Text('Tópico: ${status.topic}'),
+            Text('Segurança: ${status.useTls ? 'TLS/SSL' : 'Sem TLS'}'),
+            Text('Conexão: ${_phaseLabel(status.phase)}'),
+            Text(
+              'Segundo plano: ${status.backgroundActive ? 'ativo' : 'inativo'}',
+            ),
+            if (status.lastConnectedAt != null)
+              Text('Última conexão: ${_formatTimestamp(status.lastConnectedAt!)}'),
+            if (status.lastMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(status.lastMessage!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _phaseLabel(MqttConnectionPhase phase) {
+    switch (phase) {
+      case MqttConnectionPhase.connected:
+        return 'conectado';
+      case MqttConnectionPhase.connecting:
+        return 'conectando';
+      case MqttConnectionPhase.error:
+        return 'erro';
+      case MqttConnectionPhase.disconnected:
+        return 'desconectado';
+    }
+  }
+
+  static String _formatTimestamp(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$day/$month $hour:$minute';
   }
 }
 

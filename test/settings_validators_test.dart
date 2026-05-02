@@ -26,6 +26,14 @@ void main() {
       expect(SettingsValidators.validateClientId('emetrics_app'), isNull);
     });
 
+    test('validatePort exige faixa válida', () {
+      expect(SettingsValidators.validatePort(''), isNotNull);
+      expect(SettingsValidators.validatePort('abc'), isNotNull);
+      expect(SettingsValidators.validatePort('0'), isNotNull);
+      expect(SettingsValidators.validatePort('65536'), isNotNull);
+      expect(SettingsValidators.validatePort('1883'), isNull);
+    });
+
     test('validateTopic rejeita tópico vazio', () {
       expect(
         SettingsValidators.validateTopic('', fieldLabel: 'o tópico MQTT'),
