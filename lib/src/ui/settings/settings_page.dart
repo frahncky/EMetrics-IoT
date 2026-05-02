@@ -6,6 +6,7 @@ import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../services/alert_service.dart';
 import '../../services/background_mqtt_service.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_page.dart';
@@ -506,6 +507,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                               }
                               try {
                                 await _saveSettings();
+                                final notificationsGranted =
+                                    await AlertService.ensurePermissionGranted();
                                 final statusNotifier = ref.read(
                                   mqttStatusProvider.notifier,
                                 );
@@ -535,6 +538,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                                     ),
                                   ),
                                 );
+                                if (!notificationsGranted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Notificacoes desativadas. Alertas locais podem nao aparecer.',
+                                      ),
+                                    ),
+                                  );
+                                }
                               } catch (e) {
                                 if (!context.mounted) {
                                   return;
