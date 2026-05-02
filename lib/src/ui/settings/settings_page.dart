@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/measurement_settings_provider.dart';
 import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/background_mqtt_service.dart';
+import '../../services/auth_service.dart';
+import '../auth/login_page.dart';
 import 'settings_validators.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -144,6 +147,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final authState = ref.watch(authProvider);
     final tabContents = <Widget>[
       Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 8),
@@ -382,6 +386,57 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   await ref.read(themeProvider.notifier).setDarkMode(v);
                 },
               ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.lock_outline),
+              title: const Text('Tipo de acesso'),
+              subtitle: Text(
+                authState.mode == AuthMode.authenticated
+                    ? 'Acesso por senha ativo (${authState.userEmail ?? 'usuario conectado'})'
+                    : 'Acesso direto ativo',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const LoginPage(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.login),
+                    label: const Text('Entrar com senha'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await ref.read(authProvider.notifier).signOutToGuest();
+                      if (!context.mounted) {
+                        return;
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Acesso direto ativado.'),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.person_outline),
+                    label: const Text('Usar acesso direto'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

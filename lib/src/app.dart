@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'providers/auth_provider.dart';
-import 'services/auth_service.dart';
 import 'ui/alerts/alerts_page.dart';
-import 'ui/auth/entry_page.dart';
 import 'ui/dashboard/dashboard_page.dart';
 import 'ui/history/history_page.dart';
 import 'ui/settings/settings_page.dart';
@@ -33,7 +30,7 @@ class _AppInitializer extends ConsumerWidget {
       theme: _buildLightTheme(),
       darkTheme: _buildDarkTheme(),
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: const _AuthGate(),
+      home: const _MainMenu(),
     );
   }
 
@@ -231,27 +228,6 @@ class _AppInitializer extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-class _AuthGate extends ConsumerWidget {
-  const _AuthGate();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-
-    if (authState.isLoading) {
-      return const Scaffold(
-        body: Center(child: Text('Carregando...')),
-      );
-    }
-
-    if (authState.mode == AuthMode.undecided) {
-      return const EntryPage();
-    }
-
-    return const _MainMenu();
   }
 }
 

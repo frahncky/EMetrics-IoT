@@ -11,14 +11,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:e_metrics_iot/src/app.dart';
 
-Future<void> _enterAsGuestIfNeeded(WidgetTester tester) async {
-  final guestButton = find.text('Continuar sem login');
-  if (guestButton.evaluate().isNotEmpty) {
-    await tester.tap(guestButton);
-    await tester.pumpAndSettle();
-  }
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -29,7 +21,6 @@ void main() {
   testWidgets('App inicia e exibe navegacao principal', (WidgetTester tester) async {
     await tester.pumpWidget(const EmetricsApp());
     await tester.pumpAndSettle();
-    await _enterAsGuestIfNeeded(tester);
 
     expect(find.byType(MaterialApp), findsOneWidget);
     expect(find.text('Início'), findsOneWidget);
