@@ -52,7 +52,9 @@ class _HistoryChartSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const fields = [
-      {'label': 'Potência', 'value': 'power'},
+      {'label': 'Potência Ativa', 'value': 'power'},
+      {'label': 'Potência Aparente', 'value': 'power_apparent'},
+      {'label': 'Potência Reativa', 'value': 'power_reactive'},
       {'label': 'Corrente', 'value': 'current'},
       {'label': 'Tensão', 'value': 'voltage'},
       {'label': 'Energia', 'value': 'energy'},

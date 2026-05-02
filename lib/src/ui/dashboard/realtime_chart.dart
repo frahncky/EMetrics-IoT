@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:math' as math;
 
 import '../../data/metric_model.dart';
 import '../../providers/metric_provider.dart';
@@ -419,7 +420,12 @@ class RealtimeChart extends ConsumerWidget {
   _FieldMeta _fieldMeta(String selectedField) {
     switch (selectedField) {
       case 'power':
-        return const _FieldMeta('Potência', 'W', Color(0xFFF59E0B));
+      case 'power_active':
+        return const _FieldMeta('Potência Ativa', 'W', Color(0xFFF59E0B));
+      case 'power_apparent':
+        return const _FieldMeta('Potência Aparente', 'VA', Color(0xFF38BDF8));
+      case 'power_reactive':
+        return const _FieldMeta('Potência Reativa', 'VAr', Color(0xFFF97316));
       case 'current':
         return const _FieldMeta('Corrente', 'A', Color(0xFF7AAEFF));
       case 'voltage':
@@ -442,7 +448,17 @@ class RealtimeChart extends ConsumerWidget {
       case 'current':
         return metric.current;
       case 'power':
+      case 'power_active':
         return metric.power;
+      case 'power_apparent':
+        return metric.voltage * metric.current;
+      case 'power_reactive':
+        final apparent = metric.voltage * metric.current;
+        final reactiveSquared = math.max(
+          (apparent * apparent) - (metric.power * metric.power),
+          0.0,
+        );
+        return math.sqrt(reactiveSquared);
       case 'pf':
         return metric.pf;
       case 'frequency':
@@ -650,7 +666,9 @@ class _ExpandedRealtimeChartPageState
 const _metricFieldOptions = [
   _MetricFieldOption('voltage', 'Tensão'),
   _MetricFieldOption('current', 'Corrente'),
-  _MetricFieldOption('power', 'Potência'),
+  _MetricFieldOption('power', 'Potência Ativa'),
+  _MetricFieldOption('power_apparent', 'Potência Aparente'),
+  _MetricFieldOption('power_reactive', 'Potência Reativa'),
   _MetricFieldOption('pf', 'Fator Potência'),
   _MetricFieldOption('frequency', 'Frequência'),
   _MetricFieldOption('energy', 'Energia'),

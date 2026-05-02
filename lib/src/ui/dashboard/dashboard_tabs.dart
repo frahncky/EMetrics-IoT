@@ -60,7 +60,9 @@ class _RealtimeChartWithInternalSelector extends StatelessWidget {
     const fields = [
       {'label': 'Tensão', 'value': 'voltage'},
       {'label': 'Corrente', 'value': 'current'},
-      {'label': 'Potência', 'value': 'power'},
+      {'label': 'Potência Ativa', 'value': 'power'},
+      {'label': 'Potência Aparente', 'value': 'power_apparent'},
+      {'label': 'Potência Reativa', 'value': 'power_reactive'},
       {'label': 'Fator Potência', 'value': 'pf'},
       {'label': 'Frequência', 'value': 'frequency'},
       {'label': 'Energia', 'value': 'energy'},
