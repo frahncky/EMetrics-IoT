@@ -151,8 +151,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     });
 
     try {
-      final mqttService = ref.read(mqttServiceProvider);
-      await mqttService.requestHistory(from: range.$1, to: range.$2);
+      final requestHistory = ref.read(historyRequestHandlerProvider);
+      await requestHistory(from: range.$1, to: range.$2);
 
       var updated = false;
       for (var attempt = 0; attempt < 5; attempt++) {

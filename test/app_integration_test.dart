@@ -26,8 +26,8 @@ void main() {
       await tester.tap(find.text('Aparência'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Entrar com senha'), findsOneWidget);
-      expect(find.text('Usar acesso direto'), findsOneWidget);
+      expect(find.text('Usar perfil local'), findsOneWidget);
+      expect(find.text('Usar perfil visitante'), findsOneWidget);
     });
 
     testWidgets('App inicia com MaterialApp', (WidgetTester tester) async {
@@ -79,7 +79,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Conectar'), findsOneWidget);
-      expect(find.text('Segundo plano'), findsOneWidget);
+      expect(find.text('Desconectar'), findsOneWidget);
     });
 
     testWidgets('Aba de alertas é acessível pela navegação principal', (

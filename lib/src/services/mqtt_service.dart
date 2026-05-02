@@ -115,6 +115,12 @@ class MqttService {
   bool get isConnected =>
       client.connectionStatus?.state == MqttConnectionState.connected;
 
+  void disconnect() {
+    if (client.connectionStatus?.state != MqttConnectionState.disconnected) {
+      client.disconnect();
+    }
+  }
+
   Future<void> requestHistory({required DateTime from, required DateTime to}) async {
     if (!isConnected) {
       throw const MqttServiceException('Conecte ao broker MQTT antes de solicitar histórico.');

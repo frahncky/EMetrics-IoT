@@ -27,7 +27,7 @@ class EntryPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Escolha como deseja entrar no app.',
+                  'Escolha como deseja usar o app neste dispositivo.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
@@ -41,7 +41,7 @@ class EntryPage extends ConsumerWidget {
                     );
                   },
                   icon: const Icon(Icons.login),
-                  label: const Text('Entrar'),
+                  label: const Text('Usar perfil local'),
                 ),
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
@@ -49,7 +49,7 @@ class EntryPage extends ConsumerWidget {
                     await ref.read(authProvider.notifier).continueAsGuest();
                   },
                   icon: const Icon(Icons.person_outline),
-                  label: const Text('Continuar sem login'),
+                  label: const Text('Continuar como visitante'),
                 ),
               ],
             ),

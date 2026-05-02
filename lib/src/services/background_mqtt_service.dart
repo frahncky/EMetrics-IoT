@@ -50,15 +50,16 @@ class BackgroundMqttService {
     }
   }
 
-  static Future<void> start() async {
+  static Future<bool> start() async {
     try {
       final service = FlutterBackgroundService();
       final isRunning = await service.isRunning();
       if (!isRunning) {
         await service.startService();
       }
+      return await service.isRunning();
     } catch (_) {
-      return;
+      return false;
     }
   }
 
@@ -69,6 +70,24 @@ class BackgroundMqttService {
     } catch (_) {
       return;
     }
+  }
+
+  static Future<void> requestHistory({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (!isRunning) {
+      throw const MqttServiceException(
+        'O monitoramento em segundo plano nao esta ativo.',
+      );
+    }
+
+    service.invoke('requestHistory', {
+      'from': from.millisecondsSinceEpoch,
+      'to': to.millisecondsSinceEpoch,
+    });
   }
 
   @pragma('vm:entry-point')
@@ -96,7 +115,7 @@ class BackgroundMqttService {
           await mqttSub?.cancel();
           mqttSub = null;
           if (mqtt != null && mqtt!.isConnected) {
-            mqtt!.client.disconnect();
+            mqtt!.disconnect();
           }
           mqtt = null;
         }
@@ -153,9 +172,41 @@ class BackgroundMqttService {
       reconnectTimer?.cancel();
       await mqttSub?.cancel();
       if (mqtt != null && mqtt!.isConnected) {
-        mqtt!.client.disconnect();
+        mqtt!.disconnect();
       }
       await service.stopSelf();
+    });
+
+    service.on('requestHistory').listen((payload) async {
+      try {
+        final data = payload ?? const <Object?, Object?>{};
+        final fromMillis = data['from'];
+        final toMillis = data['to'];
+        if (fromMillis is! int || toMillis is! int) {
+          return;
+        }
+
+        if (mqtt == null || !mqtt!.isConnected) {
+          await connectAndListen();
+        }
+        if (mqtt == null || !mqtt!.isConnected) {
+          throw const MqttServiceException(
+            'Nao foi possivel conectar ao broker MQTT em segundo plano.',
+          );
+        }
+
+        await mqtt!.requestHistory(
+          from: DateTime.fromMillisecondsSinceEpoch(fromMillis),
+          to: DateTime.fromMillisecondsSinceEpoch(toMillis),
+        );
+      } catch (e, stackTrace) {
+        developer.log(
+          'Falha ao solicitar historico via servico MQTT em segundo plano',
+          name: 'BackgroundMqttService',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      }
     });
 
     reconnectTimer = Timer.periodic(const Duration(seconds: 20), (_) async {

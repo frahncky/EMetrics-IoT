@@ -57,7 +57,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Entrar')),
+      appBar: AppBar(title: const Text('Perfil local')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -103,7 +103,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _isSubmitting ? null : _submit,
-                      child: Text(_isSubmitting ? 'Entrando...' : 'Entrar'),
+                      child: Text(
+                        _isSubmitting
+                            ? 'Ativando perfil...'
+                            : 'Ativar perfil local',
+                      ),
                     ),
                   ),
                 ],

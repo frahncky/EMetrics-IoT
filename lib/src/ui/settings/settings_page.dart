@@ -407,8 +407,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               title: const Text('Tipo de acesso'),
               subtitle: Text(
                 authState.mode == AuthMode.authenticated
-                    ? 'Acesso por senha ativo (${authState.userEmail ?? 'usuario conectado'})'
-                    : 'Acesso direto ativo',
+                    ? 'Perfil local ativo (${authState.userEmail ?? 'usuario local'})'
+                    : 'Perfil visitante ativo',
               ),
             ),
             const SizedBox(height: 8),
@@ -424,7 +424,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                       );
                     },
                     icon: const Icon(Icons.login),
-                    label: const Text('Entrar com senha'),
+                    label: const Text('Usar perfil local'),
                   ),
                 ),
               ],
@@ -441,12 +441,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                       }
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Acesso direto ativado.'),
+                          content: Text('Perfil visitante ativado.'),
                         ),
                       );
                     },
                     icon: const Icon(Icons.person_outline),
-                    label: const Text('Usar acesso direto'),
+                    label: const Text('Usar perfil visitante'),
                   ),
                 ),
               ],
@@ -506,18 +506,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                               }
                               try {
                                 await _saveSettings();
+                                final statusNotifier = ref.read(
+                                  mqttStatusProvider.notifier,
+                                );
+                                statusNotifier.markConnecting();
                                 final mqttService = ref.read(mqttServiceProvider);
-                                await mqttService.connect();
-                                mqttService.subscribe();
-                                await BackgroundMqttService.start();
-                                ref.read(mqttStatusProvider.notifier).setBackgroundActive(true);
+                                final backgroundStarted =
+                                    await BackgroundMqttService.start();
+                                if (backgroundStarted) {
+                                  mqttService.disconnect();
+                                  ref.invalidate(mqttServiceProvider);
+                                  statusNotifier.markConnected();
+                                  statusNotifier.setBackgroundActive(true);
+                                } else {
+                                  await mqttService.connect();
+                                  mqttService.subscribe();
+                                  statusNotifier.setBackgroundActive(false);
+                                }
                                 if (!context.mounted) {
                                   return;
                                 }
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                      'Conectado ao broker MQTT e monitoramento em segundo plano ativado.',
+                                      backgroundStarted
+                                          ? 'Monitoramento MQTT iniciado em segundo plano.'
+                                          : 'Conectado ao broker MQTT no app.',
                                     ),
                                   ),
                                 );
@@ -555,9 +569,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                             iconAlignment: IconAlignment.start,
                             onPressed: () async {
                               await BackgroundMqttService.stop();
+                              final mqttService = ref.read(mqttServiceProvider);
+                              mqttService.disconnect();
+                              ref.invalidate(mqttServiceProvider);
                               ref.read(mqttStatusProvider.notifier).setBackgroundActive(false);
                               ref.read(mqttStatusProvider.notifier).markDisconnected(
-                                'Monitoramento em segundo plano pausado.',
+                                'Monitoramento MQTT pausado.',
                               );
                               if (!context.mounted) {
                                 return;
@@ -565,13 +582,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
-                                    'Monitoramento em segundo plano pausado.',
+                                    'Monitoramento MQTT pausado.',
                                   ),
                                 ),
                               );
                             },
                             label: const Text(
-                              'Segundo plano',
+                              'Desconectar',
                               maxLines: 1,
                               softWrap: false,
                             ),
