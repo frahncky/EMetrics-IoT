@@ -144,10 +144,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final mqttStatus = ref.watch(mqttStatusProvider);
     final tabContents = <Widget>[
       Padding(
-        padding: const EdgeInsets.only(top: 10, bottom: 8),
+        padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
           children: [
             Semantics(
@@ -200,28 +199,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Semantics(
-              label: 'Campo usuário MQTT',
-              child: TextFormField(
-                controller: _usernameController,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.person_outline),
-                  labelText: 'Usuário MQTT',
-                  border: OutlineInputBorder(),
+            const SizedBox(height: 8),
+            _ResponsiveFieldPair(
+              first: Semantics(
+                label: 'Campo usuário MQTT',
+                child: TextFormField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.person_outline),
+                    labelText: 'Usuário MQTT',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Semantics(
-              label: 'Campo senha MQTT',
-              child: TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.lock_outline),
-                  labelText: 'Senha MQTT',
-                  border: OutlineInputBorder(),
+              second: Semantics(
+                label: 'Campo senha MQTT',
+                child: TextFormField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.lock_outline),
+                    labelText: 'Senha MQTT',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ),
             ),
@@ -259,7 +259,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ),
       Padding(
-        padding: const EdgeInsets.only(top: 10, bottom: 8),
+        padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
           children: [
             Semantics(
@@ -295,7 +295,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ),
       Padding(
-        padding: const EdgeInsets.only(top: 10, bottom: 8),
+        padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
           children: [
             _ResponsiveFieldPair(
@@ -375,7 +375,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
       ),
       Padding(
-        padding: const EdgeInsets.only(top: 10, bottom: 8),
+        padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
           children: [
             Semantics(
@@ -428,11 +428,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         child: Form(
           key: _formKey,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
             child: Column(
               children: [
-                _MqttStatusCard(status: mqttStatus),
-                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
@@ -540,15 +538,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     Tab(icon: Icon(Icons.palette_outlined), text: 'Aparência'),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Expanded(
                   child: Theme(
                     data: Theme.of(context).copyWith(
                       inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
-                        isDense: true,
+                        isDense: false,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
-                          vertical: 10,
+                          vertical: 12,
                         ),
                       ),
                     ),
@@ -578,78 +576,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _energyLimitController.dispose();
     _tariffController.dispose();
     super.dispose();
-  }
-}
-
-class _MqttStatusCard extends StatelessWidget {
-  final MqttStatusState status;
-
-  const _MqttStatusCard({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final phaseColor = switch (status.phase) {
-      MqttConnectionPhase.connected => const Color(0xFF15803D),
-      MqttConnectionPhase.connecting => const Color(0xFFD97706),
-      MqttConnectionPhase.error => const Color(0xFFDC2626),
-      MqttConnectionPhase.disconnected => colorScheme.outline,
-    };
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.podcasts, color: phaseColor, size: 18),
-                const SizedBox(width: 6),
-                Text(
-                  'Status operacional MQTT',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontSize: 15,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('Broker: ${status.broker}:${status.port}'),
-            Text('Conexão: ${_phaseLabel(status.phase)}'),
-            Text('Segundo plano: ${status.backgroundActive ? 'ativo' : 'inativo'}'),
-            if (status.lastConnectedAt != null)
-              Text('Última conexão: ${_formatTimestamp(status.lastConnectedAt!)}'),
-            if (status.lastMessage != null) ...[
-              const SizedBox(height: 4),
-              Text(status.lastMessage!),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _phaseLabel(MqttConnectionPhase phase) {
-    switch (phase) {
-      case MqttConnectionPhase.connected:
-        return 'conectado';
-      case MqttConnectionPhase.connecting:
-        return 'conectando';
-      case MqttConnectionPhase.error:
-        return 'erro';
-      case MqttConnectionPhase.disconnected:
-        return 'desconectado';
-    }
-  }
-
-  static String _formatTimestamp(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '$day/$month $hour:$minute';
   }
 }
 

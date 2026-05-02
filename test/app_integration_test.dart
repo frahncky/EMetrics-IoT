@@ -49,7 +49,8 @@ void main() {
       await tester.tap(find.byIcon(Icons.settings));
       await tester.pumpAndSettle();
 
-      expect(find.text('Status operacional MQTT'), findsOneWidget);
+      expect(find.text('Conectar'), findsOneWidget);
+      expect(find.text('Segundo plano'), findsOneWidget);
     });
 
     testWidgets('Aba de alertas é acessível pela navegação principal', (
