@@ -5,7 +5,10 @@ import 'integration_sync_item.dart';
 import 'metric_model.dart';
 import 'package:sqflite/sqflite.dart';
 
+/// Repositório de acesso ao banco local SQLite para métricas e fila de
+/// sincronização com serviços de integração externos.
 class MetricRepository {
+  /// Insere uma métrica no banco. Ignora duplicatas (mesmo timestamp + valores).
   Future<void> insertMetric(Metric metric) async {
     final db = await LocalDatabase.database;
     await db.insert(
@@ -15,6 +18,9 @@ class MetricRepository {
     );
   }
 
+  /// Retorna métricas em ordem decrescente de timestamp (mais recente primeiro).
+  ///
+  /// Filtra pelo intervalo [from]..[to] em epoch milissegundos quando fornecidos.
   Future<List<Metric>> getMetrics({int? from, int? to}) async {
     final db = await LocalDatabase.database;
     final where = <String>[];
@@ -36,6 +42,9 @@ class MetricRepository {
     return result.map((e) => Metric.fromMap(e)).toList();
   }
 
+  /// Adiciona uma métrica à fila de sincronização de integração.
+  ///
+  /// Usa [profileId] para associar o item ao perfil MQTT ativo no momento da ingestão.
   Future<void> enqueueMetricSync(Metric metric, {String? profileId}) async {
     final db = await LocalDatabase.database;
     await db.insert('integration_sync_queue', {
@@ -46,6 +55,7 @@ class MetricRepository {
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
+  /// Retorna até [limit] itens pendentes da fila de sincronização, do mais antigo ao mais recente.
   Future<List<IntegrationSyncItem>> getPendingMetricSyncItems({
     int limit = 50,
   }) async {
@@ -58,6 +68,7 @@ class MetricRepository {
     return result.map(IntegrationSyncItem.fromMap).toList();
   }
 
+  /// Remove os itens da fila cujos [ids] foram sincronizados com sucesso.
   Future<void> markMetricSyncSucceeded(List<int> ids) async {
     if (ids.isEmpty) {
       return;
@@ -71,6 +82,7 @@ class MetricRepository {
     );
   }
 
+  /// Incrementa o contador de tentativas e registra o último [error] para o item [id].
   Future<void> markMetricSyncFailed(int id, String error) async {
     final db = await LocalDatabase.database;
     await db.rawUpdate(

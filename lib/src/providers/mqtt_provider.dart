@@ -43,6 +43,12 @@ final backgroundHistoryRequestProvider = Provider<BackgroundHistoryRequestHandle
   };
 });
 
+/// Provider do handler de solicitação de histórico MQTT.
+///
+/// Quando o serviço em segundo plano está ativo ([MqttStatusState.backgroundActive]),
+/// delega a requisição ao [BackgroundMqttService]; caso contrário, usa a
+/// instância foreground [MqttService]. Isso garante que a solicitação seja
+/// sempre roteada pelo canal MQTT correto independente do ciclo de vida do app.
 final historyRequestHandlerProvider = Provider<HistoryRequestHandler>((ref) {
   final status = ref.watch(mqttStatusProvider);
   final mqttService = ref.read(mqttServiceProvider);

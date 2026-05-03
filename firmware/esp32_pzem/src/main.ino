@@ -2,6 +2,9 @@
 #error Este firmware requer placa ESP32. No Arduino IDE, selecione uma placa ESP32 (ex.: ESP32 Dev Module).
 #endif
 
+// ═══════════════════════════════════════════════════════════════════════════
+// INCLUDES
+// ═══════════════════════════════════════════════════════════════════════════
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <PZEM004Tv30.h>
@@ -18,15 +21,20 @@
 #include <string.h>
 #include <time.h>
 
-// -------------------------
-// Provisionamento AP
-// -------------------------
+// ═══════════════════════════════════════════════════════════════════════════
+// PROVISIONAMENTO AP
+// Credenciais do ponto de acesso criado quando o dispositivo nao possui
+// configuracao salva. O usuario se conecta a esta rede e envia as credenciais
+// via POST /provision.
+// ═══════════════════════════════════════════════════════════════════════════
 const char* PROVISION_AP_SSID = "EMetrics-Setup";
 const char* PROVISION_AP_PASSWORD = "12345678";
 
-// -------------------------
-// Configuracao runtime
-// -------------------------
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACAO RUNTIME
+// Estrutura persistida em NVS (Preferences). Carregada em loadConfig() e
+// atualizada por provisionamento via AP ou pelo app Flutter via MQTT.
+// ═══════════════════════════════════════════════════════════════════════════
 struct DeviceConfig {
   char wifiSsid[33];
   char wifiPassword[65];
@@ -55,16 +63,19 @@ DeviceConfig config = {
   false,
 };
 
-constexpr unsigned long PUBLISH_INTERVAL_MS = 2000;
-constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 5000;
-constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;
-constexpr unsigned long HISTORY_PUBLISH_DELAY_MS = 10;
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTANTES E VARIAVEIS GLOBAIS
+// ═══════════════════════════════════════════════════════════════════════════
+constexpr unsigned long PUBLISH_INTERVAL_MS = 2000;       // intervalo entre leituras PZEM
+constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 5000;    // retentatida de reconexao WiFi
+constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;    // retentativa de reconexao MQTT
+constexpr unsigned long HISTORY_PUBLISH_DELAY_MS = 10;    // pausa entre publicacoes de replay
 constexpr bool MQTT_RETAINED = true;
-constexpr size_t TELEMETRY_PAYLOAD_SIZE = 220;
-constexpr size_t TELEMETRY_QUEUE_CAPACITY = 30;
-constexpr uint8_t FLUSH_BATCH_LIMIT = 5;
-constexpr uint16_t HISTORY_REPLAY_LIMIT = 300;
-constexpr size_t HISTORY_FILE_MAX_BYTES = 256 * 1024;
+constexpr size_t TELEMETRY_PAYLOAD_SIZE = 220;            // bytes por payload JSON
+constexpr size_t TELEMETRY_QUEUE_CAPACITY = 30;           // capacidade do buffer circular offline
+constexpr uint8_t FLUSH_BATCH_LIMIT = 5;                  // publicacoes por iteracao do loop
+constexpr uint16_t HISTORY_REPLAY_LIMIT = 300;            // linhas maximas por resposta de historico
+constexpr size_t HISTORY_FILE_MAX_BYTES = 256 * 1024;     // 256 KB: tamanho maximo do arquivo de historico
 constexpr const char* HISTORY_FILE_PATH = "/history.log";
 
 #ifndef EMETRICS_SD_CS_PIN
@@ -122,6 +133,10 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length);
 File openHistoryFile(const char* mode);
 bool removeHistoryFile();
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SINCRONIZACAO DE TEMPO (SNTP / NTP)
+// ═══════════════════════════════════════════════════════════════════════════
+
 uint64_t currentEpochMs() {
   if (!bootEpochOffsetValid) {
     return 0;
@@ -138,6 +153,10 @@ void configureTimeSync() {
   sntpConfigured = true;
 }
 
+/**
+ * Recalcula o offset epoch_ms - millis() se o NTP ainda nao sincronizou
+ * ou se o dispositivo reiniciou. Deve ser chamado periodicamente no loop.
+ */
 void refreshEpochOffsetIfNeeded() {
   configureTimeSync();
   const time_t now = time(nullptr);
@@ -150,6 +169,16 @@ void refreshEpochOffsetIfNeeded() {
   bootEpochOffsetValid = true;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// HISTORICO (SD / SPIFFS)
+// Tenta SD primeiro; cai para SPIFFS se SD nao estiver disponivel.
+// O arquivo de historico e rotacionado quando atinge HISTORY_FILE_MAX_BYTES.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Inicializa o storage de historico (SD ou SPIFFS).
+ * Retorna true se pelo menos um sistema de arquivos foi montado com sucesso.
+ */
 bool ensureHistoryStorageReady() {
   if (historyStorageReady) {
     return true;
@@ -185,6 +214,12 @@ bool removeHistoryFile() {
   return SPIFFS.remove(HISTORY_FILE_PATH);
 }
 
+/**
+ * Remove a metade mais antiga do arquivo de historico quando ele ultrapassa
+ * HISTORY_FILE_MAX_BYTES. Usa alocacao String para simplificar o manuseio
+ * do sistema de arquivos — aceitavel pois executa raramente e a RAM liberada
+ * e suficiente no ESP32 (512 KB SRAM).
+ */
 void compactHistoryIfNeeded() {
   File historyFile = openHistoryFile(FILE_READ);
   if (!historyFile) {
@@ -267,6 +302,15 @@ bool extractUInt64Field(const String& source, const char* key, uint64_t& outValu
   return outValue > 0;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MQTT — MENSAGENS RECEBIDAS E REPLAY DE HISTORICO
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Parseia o payload JSON de solicitacao de historico.
+ * Espera os campos "from" e "to" como epoch em milissegundos.
+ * Retorna um HistoryRequest invalido (valid=false) em caso de erro.
+ */
 HistoryRequest parseHistoryRequest(const char* payload, unsigned int length) {
   HistoryRequest request;
   String raw;
@@ -290,6 +334,11 @@ HistoryRequest parseHistoryRequest(const char* payload, unsigned int length) {
   return request;
 }
 
+/**
+ * Republica no topico principal as entradas do historico cujo timestamp
+ * esteja no intervalo [fromMs, toMs]. Respeita HISTORY_REPLAY_LIMIT para
+ * evitar saturar o broker e a rede.
+ */
 void replayHistoryRange(uint64_t fromMs, uint64_t toMs) {
   if (!mqttClient.connected() || !ensureHistoryStorageReady()) {
     return;
@@ -340,6 +389,10 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
   replayHistoryRange(request.from, request.to);
 }
 
+/**
+ * Configura o cliente MQTT para usar TLS (WiFiClientSecure, sem verificacao
+ * de certificado) ou TCP simples conforme config.useTls.
+ */
 void configureMqttTransport() {
   if (config.useTls) {
     secureClient.setInsecure();
@@ -404,6 +457,10 @@ void saveConfig() {
   preferences.putBool("cfg_valid", true);
   preferences.end();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROVISIONAMENTO AP — HANDLERS HTTP
+// ═══════════════════════════════════════════════════════════════════════════
 
 void scheduleRestart() {
   restartScheduled = true;
@@ -535,6 +592,12 @@ void ensureMqttConnected() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PZEM004T — LEITURA E TELEMETRIA
+// Buffer circular offline: quando MQTT esta indisponivel, as leituras sao
+// enfileiradas em RAM e publicadas em lotes de FLUSH_BATCH_LIMIT ao reconectar.
+// ═══════════════════════════════════════════════════════════════════════════
+
 bool readPzem(float& voltage, float& current, float& power, float& energy, float& frequency,
               float& pf) {
   voltage = pzem.voltage();
@@ -626,6 +689,10 @@ void flushQueuedMetrics() {
     publishedInThisLoop++;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETUP E LOOP PRINCIPAL
+// ═══════════════════════════════════════════════════════════════════════════
 
 void setup() {
   Serial.begin(115200);

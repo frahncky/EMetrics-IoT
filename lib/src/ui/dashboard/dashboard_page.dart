@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/dashboard_preferences_provider.dart';
 import '../../providers/forecast_provider.dart';
 import '../../providers/metric_provider.dart';
+import '../../theme/app_colors.dart';
 import 'dashboard_tabs.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
@@ -16,6 +17,7 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage>
     with WidgetsBindingObserver {
+  /// Sincroniza o estado do serviço MQTT em segundo plano com o provider de status.
   Future<void> _syncBackgroundState() async {
     await ref.read(mqttStatusProvider.notifier).syncBackgroundState();
   }
@@ -44,6 +46,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
 
   @override
   Widget build(BuildContext context) {
+    // Ativa o saver para que métricas MQTT sejam persistidas enquanto a tela estiver visível.
     ref.watch(mqttMetricSaverProvider);
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final metricsAsync = ref.watch(metricsProvider);
@@ -54,6 +57,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     final lastMetricTime = metricsAsync.asData?.value.isNotEmpty == true
         ? metricsAsync.asData!.value.first.timestamp
         : null;
+    // Determina ícone/cor/mensagem do indicador de estado MQTT no AppBar.
     final statusVisual = _buildMonitoringStatusVisual(mqttStatus, lastMetricTime);
 
     return Scaffold(
@@ -67,12 +71,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             gradient: LinearGradient(
               colors: isDarkMode
                   ? [
-                      const Color(0xFF1A202C),
-                      const Color(0xFF0F1419).withValues(alpha: 0.9),
+                      AppColors.darkSurface,
+                      AppColors.darkScaffold.withValues(alpha: 0.9),
                     ]
                   : [
-                      const Color(0xFFFFFFFF),
-                      const Color(0xFFF8FAFC).withValues(alpha: 0.9),
+                      AppColors.lightSurface,
+                      AppColors.lightScaffold.withValues(alpha: 0.9),
                     ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -175,7 +179,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               error: (e, _) => Center(
                 child: Text(
                   'Erro ao carregar dados: $e',
-                  style: TextStyle(color: Color(0xFFFFC300)),
+                  style: const TextStyle(color: AppColors.errorDataText),
                 ),
               ),
             ),
@@ -199,6 +203,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
   }
 }
 
+/// Computa ícone, cor e mensagem do indicador de estado MQTT exibido no AppBar.
+///
+/// Considera a fase de conexão e o tempo da última leitura recebida.
+/// Leituras com mais de 5 minutos são consideradas obsoletas (stale).
 _MonitoringStatusVisual _buildMonitoringStatusVisual(
   MqttStatusState status,
   DateTime? lastMetricTime,
@@ -208,7 +216,7 @@ _MonitoringStatusVisual _buildMonitoringStatusVisual(
   if (status.phase == MqttConnectionPhase.error) {
     return _MonitoringStatusVisual(
       icon: Icons.error_outline,
-      color: const Color(0xFFDC2626),
+      color: AppColors.statusError,
       message: status.lastMessage ?? 'Monitoramento com erro.',
     );
   }
@@ -216,7 +224,7 @@ _MonitoringStatusVisual _buildMonitoringStatusVisual(
   if (status.phase == MqttConnectionPhase.connecting) {
     return _MonitoringStatusVisual(
       icon: Icons.sync,
-      color: const Color(0xFFD97706),
+      color: AppColors.statusWarning,
       message: 'MQTT conectando.',
     );
   }
@@ -225,23 +233,24 @@ _MonitoringStatusVisual _buildMonitoringStatusVisual(
     if (lastMetricTime == null) {
       return _MonitoringStatusVisual(
         icon: Icons.sensors,
-        color: const Color(0xFFD97706),
+        color: AppColors.statusWarning,
         message: 'MQTT conectado, aguardando leituras.',
       );
     }
 
+    // Leitura é considerada obsoleta após 5 minutos sem atualização.
     final stale = DateTime.now().difference(lastMetricTime).inMinutes >= 5;
     if (stale) {
       return _MonitoringStatusVisual(
         icon: Icons.sensors,
-        color: const Color(0xFFD97706),
+        color: AppColors.statusWarning,
         message: 'Última leitura ${_relativeTime(lastMetricTime)}.',
       );
     }
 
     return _MonitoringStatusVisual(
       icon: status.backgroundActive ? Icons.sensors : Icons.sensors_outlined,
-      color: const Color(0xFF15803D),
+      color: AppColors.statusSuccess,
       message: status.backgroundActive
           ? 'Monitoramento ativo em segundo plano.'
           : 'MQTT conectado com leitura recente.',
@@ -250,11 +259,12 @@ _MonitoringStatusVisual _buildMonitoringStatusVisual(
 
   return _MonitoringStatusVisual(
     icon: Icons.cloud_off,
-    color: const Color(0xFF64748B),
+    color: AppColors.statusIdle,
     message: status.lastMessage ?? 'MQTT $phaseLabel.',
   );
 }
 
+/// Retorna rótulo legível para a fase de conexão MQTT.
 String _phaseLabel(MqttConnectionPhase phase) {
   switch (phase) {
     case MqttConnectionPhase.connected:
@@ -268,6 +278,7 @@ String _phaseLabel(MqttConnectionPhase phase) {
   }
 }
 
+/// Retorna string de tempo relativo para exibição no tooltip de status.
 String _relativeTime(DateTime value) {
   final difference = DateTime.now().difference(value);
   if (difference.inMinutes < 1) {
@@ -291,6 +302,10 @@ class _MonitoringStatusVisual {
   });
 }
 
+// ── Card de previsão ─────────────────────────────────────────────────────────
+
+/// Card exibido no dashboard com previsão de potência e energia baseada em regressão linear
+/// das últimas leituras. Só aparece quando habilitado nas preferências de dashboard.
 class _ForecastCard extends StatelessWidget {
   final ForecastSnapshot snapshot;
 
@@ -299,8 +314,8 @@ class _ForecastCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final titleColor = isDarkMode ? Colors.white : const Color(0xFF0F172A);
-    final subtitleColor = isDarkMode ? Colors.white70 : const Color(0xFF475569);
+    final titleColor = isDarkMode ? Colors.white : AppColors.lightTextTitle;
+    final subtitleColor = isDarkMode ? Colors.white70 : AppColors.lightTextSmall;
 
     return Container(
       width: double.infinity,
@@ -308,14 +323,16 @@ class _ForecastCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.45)),
+        border: Border.all(
+          color: AppColors.forecastBorder.withValues(alpha: 0.45),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_graph, color: Color(0xFF38BDF8)),
+              const Icon(Icons.auto_graph, color: AppColors.forecastBorder),
               const SizedBox(width: 8),
               Text(
                 'Previsao local',
@@ -369,7 +386,7 @@ class _ForecastMetricChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isDarkMode ? const Color(0xFF111827) : const Color(0xFFF8FAFC),
+        color: isDarkMode ? AppColors.forecastChipDark : AppColors.lightScaffold,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -418,6 +435,9 @@ String formatWithSIPrefix(num value, {int? fractionDigits}) {
   }
 }
 
+// ── Indicadores de métricas ──────────────────────────────────────────────────
+
+/// Grade de 8 cards com as grandezas elétricas calculadas e medidas pelo PZEM004T.
 class _MainIndicators extends StatelessWidget {
   final double voltage;
   final double current;
@@ -437,12 +457,13 @@ class _MainIndicators extends StatelessWidget {
     final double apparent = voltage * current;
     final double reativa = (voltage * current) * (1 - (pf.isNaN ? 0 : pf));
     const spacing = 8.0;
+    // Cada card representa uma grandeza elétrica medida pelo PZEM004T.
     final cards = [
       _IndicatorCard(
         label: 'Aparente',
         value: formatWithSIPrefix(apparent),
         icon: Icons.data_usage,
-        color: const Color(0xFF10B981),
+        color: AppColors.metricApparent,
         compact: true,
         unit: 'VA',
       ),
@@ -450,7 +471,7 @@ class _MainIndicators extends StatelessWidget {
         label: 'Ativa',
         value: formatWithSIPrefix(power),
         icon: Icons.flash_on_outlined,
-        color: const Color(0xFFF59E0B),
+        color: AppColors.metricActive,
         compact: true,
         unit: 'W',
       ),
@@ -458,7 +479,7 @@ class _MainIndicators extends StatelessWidget {
         label: 'Reativa',
         value: formatWithSIPrefix(reativa),
         icon: Icons.waves,
-        color: const Color(0xFF0EA5E9),
+        color: AppColors.metricReactive,
         compact: true,
         unit: 'VAr',
       ),
@@ -466,7 +487,7 @@ class _MainIndicators extends StatelessWidget {
         label: 'FP',
         value: pf.isNaN ? '--' : pf.toStringAsFixed(2),
         icon: Icons.speed_outlined,
-        color: const Color(0xFF6366F1),
+        color: AppColors.metricPf,
         compact: true,
         extraCompact: true,
       ),
@@ -474,7 +495,7 @@ class _MainIndicators extends StatelessWidget {
         label: 'Tensão',
         value: formatWithSIPrefix(voltage, fractionDigits: 1),
         icon: Icons.electrical_services,
-        color: const Color(0xFF3B82F6),
+        color: AppColors.metricVoltage,
         compact: true,
         unit: 'V',
       ),
@@ -482,7 +503,7 @@ class _MainIndicators extends StatelessWidget {
         label: 'Corrente',
         value: formatWithSIPrefix(current),
         icon: Icons.bolt_outlined,
-        color: const Color(0xFF06B6D4),
+        color: AppColors.metricCurrent,
         compact: true,
         unit: 'A',
       ),
@@ -490,7 +511,7 @@ class _MainIndicators extends StatelessWidget {
         label: 'Energia',
         value: formatWithSIPrefix(energy, fractionDigits: 3),
         icon: Icons.battery_charging_full_outlined,
-        color: const Color(0xFF8B5CF6),
+        color: AppColors.metricEnergy,
         compact: true,
         unit: 'kWh',
       ),
@@ -498,7 +519,7 @@ class _MainIndicators extends StatelessWidget {
         label: 'Frequência',
         value: '--',
         icon: Icons.ssid_chart,
-        color: const Color(0xFF22C55E),
+        color: AppColors.metricFrequency,
         compact: true,
         extraCompact: true,
         unit: 'Hz',
@@ -526,6 +547,12 @@ class _MainIndicators extends StatelessWidget {
   }
 }
 
+// ── Card individual de métrica ────────────────────────────────────────────────
+
+/// Card compacto exibindo uma grandeza elétrica com ícone, valor e unidade.
+///
+/// O parâmetro [compact] reduz o tamanho para caber em grades de 4 colunas.
+/// O parâmetro [extraCompact] reduz ainda mais para grandezas adimensionais (FP, Hz).
 class _IndicatorCard extends StatefulWidget {
   final String label;
   final String value;
@@ -578,7 +605,7 @@ class _IndicatorCardState extends State<_IndicatorCard>
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final cardBgColor = Theme.of(context).cardColor;
-    final textColor = isDarkMode ? Colors.white : const Color(0xFF1F2937);
+    final textColor = isDarkMode ? Colors.white : AppColors.lightTextBody;
     final isExtraCompact = widget.extraCompact && widget.compact;
 
     return FadeTransition(
@@ -667,7 +694,7 @@ class _IndicatorCardState extends State<_IndicatorCard>
                                   : (widget.compact ? 10 : 13),
                               color: isDarkMode
                                   ? Colors.white70
-                                  : const Color(0xFF6B7280),
+                                  : AppColors.lightUnselected,
                               fontWeight: FontWeight.w500,
                             ),
                           ),

@@ -1,6 +1,11 @@
 import 'dart:convert';
 import '../data/metric_model.dart';
 
+/// Converte um payload JSON recebido via MQTT em um objeto [Metric].
+///
+/// Espera um objeto JSON com os campos:
+/// `voltage`, `current`, `power`, `pf`, `frequency`, `energy`.
+/// Retorna `null` se o payload for inválido ou estiver incompleto.
 Metric? parseMetricFromMqtt(String payload) {
   try {
     // Exemplo de payload: '{"voltage":220.1,"current":0.51,"power":112,"pf":0.98,"frequency":60,"energy":1.23}'

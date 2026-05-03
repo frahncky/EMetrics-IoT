@@ -83,6 +83,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     }
   }
 
+  /// Carrega todas as configurações persistidas nos providers e preenche
+  /// os controllers de texto do formulário.
   Future<void> _loadSettings() async {
     final settings = await ref.read(mqttSettingsProvider.notifier).load();
     final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
@@ -138,6 +140,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     _tariffController.text = _formatDecimal(measurementSettings.tariffPerKwh);
   }
 
+  /// Persiste todas as configurações do formulário nos providers correspondentes.
+  ///
+  /// Salva: MQTT (perfil ativo), medição, integração REST e preferências de dashboard.
   Future<void> _saveSettings() async {
     await ref
         .read(mqttSettingsProvider.notifier)
@@ -293,10 +298,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     );
   }
 
+  /// Converte [value] de string (aceita vírgula ou ponto) para `double`.
   double _parseDecimal(String value) {
     return double.parse(value.trim().replaceAll(',', '.'));
   }
 
+  /// Formata [value] sem casas decimais se for inteiro; caso contrário 2 casas.
   String _formatDecimal(double value) {
     if (value == value.roundToDouble()) {
       return value.toStringAsFixed(0);
@@ -342,6 +349,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final integrationSettings = ref.watch(integrationSettingsProvider);
     final tabContents = <Widget>[
+      // ── Aba: MQTT ────────────────────────────────────────────────────────────
+      // Gerencia perfis de dispositivo, broker, porta, credenciais e TLS.
       Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
@@ -517,6 +526,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           ],
         ),
       ),
+      // ── Aba: Histórico ───────────────────────────────────────────────────────
+      // Configura tópico de solicitação de histórico ao firmware ESP32.
       Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
@@ -553,6 +564,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           ],
         ),
       ),
+      // ── Aba: Medição ─────────────────────────────────────────────────────────
+      // Define limites de tensão, energia e tarifa para alertas e previsões.
       Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
@@ -633,6 +646,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           ],
         ),
       ),
+      // ── Aba: Aparência ───────────────────────────────────────────────────────
+      // Controla preferências visuais do dashboard (tema, cards, previsão).
       Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
@@ -717,6 +732,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           ],
         ),
       ),
+      // ── Aba: Integração ─────────────────────────────────────────────────────
+      // Configura envio de métricas para API REST externa com autenticacao OAuth.
       Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(

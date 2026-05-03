@@ -71,6 +71,11 @@ class MqttSettings {
   }
 }
 
+/// Gerenciador de configurações MQTT com suporte a múltiplos perfis.
+///
+/// Persiste perfis em [SharedPreferences] e credenciais no
+/// [MqttCredentialsStore] (keychain/keystore). Inclui migração automática
+/// de configurações legacy (chaves antigas `mqtt_username`/`mqtt_password`).
 class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
   static const _profilesKey = 'mqtt_profiles_v2';
   static const _activeProfileIdKey = 'mqtt_active_profile_id';
@@ -131,6 +136,9 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
     String password = await _credentialsStore.readPasswordForProfile(baseState.profileId);
 
     if (baseState.profileId == 'default' && username.isEmpty && password.isEmpty) {
+      // Migração legacy: move credenciais das SharedPreferences antigas
+      // (chaves 'mqtt_username'/'mqtt_password') para o MqttCredentialsStore
+      // seguro e remove as chaves legadas para não serem lidas novamente.
       final legacyUsername = prefs.getString(_legacyUsernameKey) ?? '';
       final legacyPassword = prefs.getString(_legacyPasswordKey) ?? '';
       if (legacyUsername.isNotEmpty || legacyPassword.isNotEmpty) {

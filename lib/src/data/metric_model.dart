@@ -1,3 +1,12 @@
+/// Representa uma leitura elétrica instantânea capturada pelo sensor PZEM004T.
+///
+/// Unidades de cada campo:
+/// - [voltage]: Volts (V)
+/// - [current]: Ampères (A)
+/// - [power]: Watts (W) — potência ativa
+/// - [pf]: adimensional — fator de potência (0..1)
+/// - [frequency]: Hertz (Hz)
+/// - [energy]: Quilowatt-hora (kWh)
 class Metric {
   final int? id;
   final DateTime timestamp;

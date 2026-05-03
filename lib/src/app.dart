@@ -7,6 +7,7 @@ import 'ui/settings/settings_page.dart';
 import '../src/providers/alert_provider.dart';
 import '../src/providers/theme_provider.dart';
 import '../src/providers/mqtt_metric_saver.dart';
+import 'theme/app_colors.dart';
 
 class EmetricsApp extends StatelessWidget {
   const EmetricsApp({super.key});
@@ -22,11 +23,13 @@ class _AppInitializer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Initialize alert listener on first build without side effects in render cycle
+    // Ativa os providers de efeito colateral (alertas e sincronização automática)
+    // via ref.listen sem bloquear o ciclo de renderização.
     ref.listen(alertProvider, (previous, next) {});
     ref.listen(integrationAutoSyncProvider, (previous, next) {});
     final isDarkMode = ref.watch(themeProvider);
 
+    // Escolhe tema com base na preferência salva pelo usuário.
     return MaterialApp(
       title: 'E-Metrics IoT',
       debugShowCheckedModeBanner: false,
@@ -37,41 +40,42 @@ class _AppInitializer extends ConsumerWidget {
     );
   }
 
+  // ── Tema Escuro ────────────────────────────────────────────────────────
   static ThemeData _buildDarkTheme() {
     return ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: const Color(0xFF0F1419),
-      primaryColor: const Color(0xFF00D8FF),
-      colorScheme: ColorScheme.dark(
-        primary: const Color(0xFF00D8FF),
-        secondary: const Color(0xFFFFB300),
-        surface: const Color(0xFF1A202C),
-        tertiary: const Color(0xFF00FF88),
-        outline: const Color(0xFF2D3748),
+      scaffoldBackgroundColor: AppColors.darkScaffold,
+      primaryColor: AppColors.darkPrimary,
+      colorScheme: const ColorScheme.dark(
+        primary: AppColors.darkPrimary,
+        secondary: AppColors.darkSecondary,
+        surface: AppColors.darkSurface,
+        tertiary: AppColors.darkTertiary,
+        outline: AppColors.darkOutline,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF1A202C),
+        backgroundColor: AppColors.darkSurface,
         centerTitle: true,
         elevation: 4,
-        shadowColor: Color(0x4D000000),
+        shadowColor: AppColors.shadowDark,
         titleTextStyle: TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
-          color: Color(0xFFE2E8F0),
+          color: AppColors.darkTextPrimary,
         ),
       ),
       cardTheme: CardThemeData(
-        color: const Color(0xFF1A202C),
-        shape: RoundedRectangleBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(16)),
-          side: const BorderSide(color: Color(0xFF2D3748), width: 1),
+        color: AppColors.darkSurface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          side: BorderSide(color: AppColors.darkOutline, width: 1),
         ),
         elevation: 4,
-        shadowColor: const Color(0x4D000000),
+        shadowColor: AppColors.shadowDark,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF00D8FF),
+          backgroundColor: AppColors.darkPrimary,
           foregroundColor: Colors.black87,
           textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           shape: RoundedRectangleBorder(
@@ -82,8 +86,8 @@ class _AppInitializer extends ConsumerWidget {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF00D8FF),
-          side: const BorderSide(color: Color(0xFF00D8FF), width: 2),
+          foregroundColor: AppColors.darkPrimary,
+          side: const BorderSide(color: AppColors.darkPrimary, width: 2),
           textStyle: const TextStyle(fontWeight: FontWeight.bold),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -92,84 +96,85 @@ class _AppInitializer extends ConsumerWidget {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF00D8FF),
+          foregroundColor: AppColors.darkPrimary,
           textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       inputDecorationTheme: const InputDecorationTheme(
         filled: true,
-        fillColor: Color(0xFF0F1419),
+        fillColor: AppColors.darkScaffold,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: Color(0xFF2D3748), width: 1.5),
+          borderSide: BorderSide(color: AppColors.darkOutline, width: 1.5),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: Color(0xFF2D3748), width: 1),
+          borderSide: BorderSide(color: AppColors.darkOutline, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: Color(0xFF00D8FF), width: 2),
+          borderSide: BorderSide(color: AppColors.darkPrimary, width: 2),
         ),
         labelStyle: TextStyle(
-          color: Color(0xFFCBD5E0),
+          color: AppColors.darkTextSecondary,
           fontWeight: FontWeight.w500,
         ),
-        hintStyle: TextStyle(color: Color(0xFF718096)),
+        hintStyle: TextStyle(color: AppColors.darkHint),
       ),
       visualDensity: VisualDensity.adaptivePlatformDensity,
       textTheme: const TextTheme(
-        bodyMedium: TextStyle(fontSize: 16, color: Color(0xFFCBD5E0)),
-        bodySmall: TextStyle(fontSize: 14, color: Color(0xFFA0AEC0)),
+        bodyMedium: TextStyle(fontSize: 16, color: AppColors.darkTextSecondary),
+        bodySmall: TextStyle(fontSize: 14, color: AppColors.darkTextTertiary),
         titleLarge: TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
-          color: Color(0xFFE2E8F0),
+          color: AppColors.darkTextPrimary,
         ),
         titleMedium: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          color: Color(0xFFF7FAFC),
+          color: AppColors.darkTextTitle,
         ),
       ),
     );
   }
 
+  // ── Tema Claro ─────────────────────────────────────────────────────────
   static ThemeData _buildLightTheme() {
     return ThemeData(
       brightness: Brightness.light,
-      scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-      primaryColor: const Color(0xFF1E40AF),
-      colorScheme: ColorScheme.light(
-        primary: const Color(0xFF1E40AF),
-        secondary: const Color(0xFF3B82F6),
-        surface: const Color(0xFFFFFFFF),
-        tertiary: const Color(0xFF059669),
-        outline: const Color(0xFFCBD5E1),
+      scaffoldBackgroundColor: AppColors.lightScaffold,
+      primaryColor: AppColors.lightPrimary,
+      colorScheme: const ColorScheme.light(
+        primary: AppColors.lightPrimary,
+        secondary: AppColors.lightSecondary,
+        surface: AppColors.lightSurface,
+        tertiary: AppColors.lightTertiary,
+        outline: AppColors.lightOutline,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFFFFFFFF),
+        backgroundColor: AppColors.lightSurface,
         centerTitle: true,
         elevation: 1,
-        shadowColor: Color(0x0A000000),
+        shadowColor: AppColors.shadowLight,
         titleTextStyle: TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
-          color: Color(0xFF0F172A),
+          color: AppColors.lightTextTitle,
         ),
       ),
       cardTheme: CardThemeData(
-        color: const Color(0xFFF9FAFB),
-        shape: RoundedRectangleBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(16)),
-          side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        color: AppColors.lightCard,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          side: BorderSide(color: AppColors.lightInputBorder, width: 1),
         ),
         elevation: 0,
-        shadowColor: const Color(0x05000000),
+        shadowColor: AppColors.shadowLight,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1E40AF),
+          backgroundColor: AppColors.lightPrimary,
           foregroundColor: Colors.white,
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           shape: RoundedRectangleBorder(
@@ -180,8 +185,8 @@ class _AppInitializer extends ConsumerWidget {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF1E40AF),
-          side: const BorderSide(color: Color(0xFF1E40AF), width: 1.5),
+          foregroundColor: AppColors.lightPrimary,
+          side: const BorderSide(color: AppColors.lightPrimary, width: 1.5),
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -190,44 +195,44 @@ class _AppInitializer extends ConsumerWidget {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF1E40AF),
+          foregroundColor: AppColors.lightPrimary,
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
-      inputDecorationTheme: InputDecorationTheme(
+      inputDecorationTheme: const InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFFF1F5F9),
+        fillColor: AppColors.lightInputFill,
         border: OutlineInputBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(12)),
-          borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: AppColors.lightOutline, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(12)),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: AppColors.lightInputBorder, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(12)),
-          borderSide: const BorderSide(color: Color(0xFF1E40AF), width: 2),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: AppColors.lightPrimary, width: 2),
         ),
-        labelStyle: const TextStyle(
-          color: Color(0xFF334155),
+        labelStyle: TextStyle(
+          color: AppColors.lightLabel,
           fontWeight: FontWeight.w500,
         ),
-        hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+        hintStyle: TextStyle(color: AppColors.lightHint),
       ),
       visualDensity: VisualDensity.adaptivePlatformDensity,
       textTheme: const TextTheme(
-        bodyMedium: TextStyle(fontSize: 16, color: Color(0xFF1E293B)),
-        bodySmall: TextStyle(fontSize: 14, color: Color(0xFF475569)),
+        bodyMedium: TextStyle(fontSize: 16, color: AppColors.lightTextBody),
+        bodySmall: TextStyle(fontSize: 14, color: AppColors.lightTextSmall),
         titleLarge: TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
-          color: Color(0xFF0F172A),
+          color: AppColors.lightTextTitle,
         ),
         titleMedium: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF1E293B),
+          color: AppColors.lightTextBody,
         ),
       ),
     );
@@ -255,9 +260,10 @@ class _MainMenuState extends State<_MainMenu> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
     final cardColor = Theme.of(context).cardColor;
+    // Cor de itens não selecionados difere entre temas para manter contraste.
     final unselectedColor = isDarkMode
         ? Colors.white60
-        : const Color(0xFF9CA3AF);
+        : AppColors.lightUnselected;
 
     return Scaffold(
       body: AnimatedSwitcher(
@@ -342,7 +348,7 @@ class _NavBarIcon extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final unselectedColor = isDarkMode
         ? Colors.white60
-        : const Color(0xFF9CA3AF);
+        : AppColors.lightUnselected;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),

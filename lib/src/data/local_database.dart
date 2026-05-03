@@ -1,6 +1,11 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
+/// Singleton de acesso ao banco SQLite local (`emetrics.db`).
+///
+/// Histórico de migrações:
+/// - v1 → v2: criou índice único em `metrics` para evitar leituras duplicadas.
+/// - v2 → v3: adicionou tabela `integration_sync_queue` para fila de exportação.
 class LocalDatabase {
   static Database? _db;
 

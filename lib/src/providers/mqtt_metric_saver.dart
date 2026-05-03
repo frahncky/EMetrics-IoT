@@ -36,20 +36,31 @@ final integrationAutoSyncProvider = Provider<void>((ref) {
   ref.onDispose(() => timer?.cancel());
 });
 
-/// Serializes MQTT metric writes and debounces invalidations to prevent
-/// race conditions and excessive provider recomputes during high-frequency
-/// message ingestion.
+/// Provider que persiste métricas MQTT no banco local e dispara sincronização
+/// com serviços de integração externos.
+///
+/// Garante duas propriedades críticas:
+/// - **Serialização**: encadeia escritas em sequência para evitar condições de
+///   corrida no SQLite durante alta frequência de mensagens.
+/// - **Debounce**: agrupa invalidações de providers em janelas de 100 ms para
+///   evitar reconstruções excessivas de widgets.
+///
+/// Deve ser observado (via `ref.watch`) na tela que precisa persistir dados;
+/// quando não está sendo observado, nenhuma escrita é realizada.
 final mqttMetricSaverProvider = Provider<void>((ref) {
   Future<void> lastOperation = Future.value();
   Timer? debounceTimer;
   
   ref.watch(mqttStreamProvider).whenData((messages) async {
+    // Ignora se o serviço MQTT em segundo plano já está persistindo as métricas.
     final isBackgroundActive = await ref.read(backgroundRunningCheckProvider)();
     if (isBackgroundActive || messages.isEmpty) {
       return;
     }
 
-    // Serialize writes: chain operations to prevent concurrent DB writes
+    // Encadeia a nova operação após a anterior para garantir ordem de escrita.
+    // ref.read() é seguro aqui pois o callback só executa quando o provider
+    // ainda está ativo (preso pela cadeia lastOperation).
     lastOperation = lastOperation.then((_) async {
       final last = messages.last;
       final payload = (last.payload as MqttPublishMessage).payload.message;
@@ -63,7 +74,8 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
             .read(integrationServiceProvider)
             .submitMetric(metric, profileId: activeProfile.profileId);
         
-        // Debounce invalidations: batch provider updates during high message rate
+        // Debounce: cancela e reagenda para que um burst de mensagens
+        // dispare apenas uma invalidação ao final da ráfaga.
         debounceTimer?.cancel();
         debounceTimer = Timer(const Duration(milliseconds: 100), () {
           ref.invalidate(metricsProvider);

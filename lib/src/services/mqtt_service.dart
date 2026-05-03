@@ -14,6 +14,12 @@ class MqttServiceException implements Exception {
   String toString() => message;
 }
 
+/// Cliente MQTT do app para conexão com broker IoT.
+///
+/// Encapsula o [MqttServerClient] com autenticação, TLS opcional,
+/// subscrição de tópicos e publicação de solicitações de histórico.
+/// Todos os callbacks de ciclo de vida são opcionais e acionados nos
+/// estados `connecting`, `connected`, `disconnected` e `error`.
 class MqttService {
   final String broker;
   final String clientId;
@@ -49,10 +55,15 @@ class MqttService {
     client.secure = useTls;
     client.keepAlivePeriod = 20;
     client.onDisconnected = onDisconnected;
+    // Desativa logs verbosos internos do mqtt_client em produção.
     client.logging(on: false);
     client.autoReconnect = true;
   }
 
+  /// Inicia a conexão com o broker MQTT configurado.
+  ///
+  /// Requer que [WidgetsBinding.ensureInitialized()] tenha sido chamado antes.
+  /// Lança [MqttServiceException] em caso de falha na autenticação ou rede.
   Future<void> connect() async {
     onConnecting?.call();
     client.connectionMessage = MqttConnectMessage()
@@ -99,6 +110,10 @@ class MqttService {
     }
   }
 
+  /// Assina o [topic] configurado com QoS `atLeastOnce`.
+  ///
+  /// Deve ser chamado após [connect()] retornar sem erros.
+  /// Lança [MqttServiceException] se o cliente não estiver conectado.
   void subscribe() {
     if (!isConnected) {
       throw const MqttServiceException('Conecte ao broker MQTT antes de se inscrever em tópicos.');
@@ -112,15 +127,25 @@ class MqttService {
     developer.log('Inscrito no tópico MQTT: $topic', name: 'MqttService');
   }
 
+  /// Retorna `true` quando o cliente está conectado ao broker.
   bool get isConnected =>
       client.connectionStatus?.state == MqttConnectionState.connected;
 
+  /// Encerra a conexão com o broker de forma segura (idempotente).
   void disconnect() {
     if (client.connectionStatus?.state != MqttConnectionState.disconnected) {
       client.disconnect();
     }
   }
 
+  /// Publica uma solicitação de histórico no tópico [requestTopic].
+  ///
+  /// O payload é um JSON com os campos:
+  /// - `from`: epoch em milissegundos do início do período
+  /// - `to`: epoch em milissegundos do fim do período
+  /// - `requestedAt`: epoch em milissegundos da solicitação
+  ///
+  /// Lança [MqttServiceException] se [from] for posterior a [to].
   Future<void> requestHistory({required DateTime from, required DateTime to}) async {
     if (!isConnected) {
       throw const MqttServiceException('Conecte ao broker MQTT antes de solicitar histórico.');
@@ -155,11 +180,13 @@ class MqttService {
     }
   }
 
+  /// Callback interno invocado pelo [MqttServerClient] ao detectar desconexão.
   void onDisconnected() {
     developer.log('Cliente MQTT desconectado', name: 'MqttService');
     onDisconnectedStatus?.call('Cliente MQTT desconectado.');
   }
 
+  /// Stream de mensagens recebidas nos tópicos assinados.
   Stream<List<MqttReceivedMessage<MqttMessage>>> get updates =>
       client.updates ?? Stream<List<MqttReceivedMessage<MqttMessage>>>.empty();
 }
