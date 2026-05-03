@@ -347,6 +347,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         child: _SettingsSection(
           children: [
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _profiles.any((profile) => profile.id == mqttSettings.profileId)
                   ? mqttSettings.profileId
                   : null,
@@ -354,12 +355,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                 prefixIcon: Icon(Icons.memory_outlined),
                 labelText: 'Perfil do dispositivo',
                 border: OutlineInputBorder(),
+                floatingLabelBehavior: FloatingLabelBehavior.always,
               ),
               items: _profiles
                   .map(
                     (profile) => DropdownMenuItem<String>(
                       value: profile.id,
-                      child: Text('${profile.name} (${profile.broker})'),
+                      child: Text(
+                        '${profile.name} (${profile.broker})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   )
                   .toList(),
@@ -1054,11 +1059,12 @@ class _SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ...children,
-      ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
     );
   }
 }
