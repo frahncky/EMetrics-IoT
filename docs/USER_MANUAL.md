@@ -12,12 +12,13 @@
 3. [Dashboard](#3-dashboard)
 4. [Histórico](#4-histórico)
 5. [Configurações MQTT](#5-configurações-mqtt)
-6. [Perfis de Dispositivo](#6-perfis-de-dispositivo)
-7. [Alertas e Medição](#7-alertas-e-medição)
-8. [Integração REST](#8-integração-rest)
-9. [Aparência e Conta](#9-aparência-e-conta)
-10. [Provisionar ESP32](#10-provisionar-esp32)
-11. [Solução de Problemas](#11-solução-de-problemas)
+6. [Configurações de Histórico](#6-configurações-de-histórico)
+7. [Perfis de Dispositivo](#7-perfis-de-dispositivo)
+8. [Alertas e Medição](#8-alertas-e-medição)
+9. [Integração REST](#9-integração-rest)
+10. [Aparência e Conta](#10-aparência-e-conta)
+11. [Provisionar ESP32](#11-provisionar-esp32)
+12. [Solução de Problemas](#12-solução-de-problemas)
 
 ---
 
@@ -105,9 +106,65 @@ Após preencher, toque em **Conectar**. O app tenta iniciar o monitoramento em s
 
 Para parar, toque em **Desconectar**.
 
+### Formato do payload MQTT
+
+O app espera que o dispositivo IoT publique mensagens JSON no seguinte formato:
+
+```json
+{
+  "voltage": 220.1,
+  "current": 0.51,
+  "power": 112.0,
+  "pf": 0.98,
+  "frequency": 60.0,
+  "energy": 1.23
+}
+```
+
+| Campo | Tipo | Unidade | Obrigatório |
+|---|---|---|---|
+| `voltage` | number | V | ✅ |
+| `current` | number | A | ✅ |
+| `power` | number | W | ✅ |
+| `pf` | number | — (0–1) | ✅ |
+| `frequency` | number | Hz | ✅ |
+| `energy` | number | kWh | ✅ |
+
+> **Nota:** Potência reativa e aparente são calculadas internamente pelo app a partir de `voltage`, `current` e `power`.
+
 ---
 
-## 6. Perfis de Dispositivo
+## 6. Configurações de Histórico
+
+Acesse **Configurações → aba Histórico**.
+
+| Campo | Descrição |
+|---|---|
+| Tópico de solicitação de histórico | Tópico MQTT onde o app publica o pedido de dados históricos ao dispositivo |
+| Intervalo de atualização (s) | Frequência de atualização dos dados em tempo real no dashboard |
+
+### Como funciona a solicitação de histórico
+
+Ao tocar em **Solicitar histórico** na tela de Histórico, o app publica a seguinte mensagem JSON no tópico de solicitação configurado:
+
+```json
+{
+  "from": 1746230400000,
+  "to": 1746316800000,
+  "requestedAt": 1746316850000
+}
+```
+
+Os campos `from`, `to` e `requestedAt` são timestamps em **milissegundos (Unix epoch)**. O firmware do ESP32 deve interpretar essa mensagem e reenviar as leituras armazenadas no intervalo solicitado.
+
+O tópico padrão segue o padrão `<tópico>/history/request`  
+(ex.: `emetrics/pzem/history/request`).
+
+---
+
+## 7. Perfis de Dispositivo
+
+Permite salvar configurações separadas para cada dispositivo/broker.
 
 Permite salvar configurações separadas para cada dispositivo/broker.
 
@@ -124,7 +181,7 @@ Permite salvar configurações separadas para cada dispositivo/broker.
 
 ---
 
-## 7. Alertas e Medição
+## 8. Alertas e Medição
 
 Acesse **Configurações → aba Medição**.
 
@@ -143,7 +200,7 @@ Os alertas são exibidos como notificações do sistema. O histórico de alertas
 
 ---
 
-## 8. Integração REST
+## 9. Integração REST
 
 Permite enviar as métricas para uma API externa com suporte a fila offline.
 
@@ -175,7 +232,7 @@ O repositório inclui um servidor Node.js pronto em `backend_example/`. Consulte
 
 ---
 
-## 9. Aparência e Conta
+## 10. Aparência e Conta
 
 Acesse **Configurações → aba Aparência**.
 
@@ -185,7 +242,7 @@ Acesse **Configurações → aba Aparência**.
 
 ---
 
-## 10. Provisionar ESP32
+## 11. Provisionar ESP32
 
 Disponível em **Configurações → aba MQTT → botão "Provisionar ESP32 (Wi-Fi + MQTT)"**.
 
@@ -198,7 +255,7 @@ Permite configurar as credenciais Wi-Fi e MQTT diretamente no ESP32 via rede AP 
 
 ---
 
-## 11. Solução de Problemas
+## 12. Solução de Problemas
 
 ### App não conecta ao broker
 - Verifique se o IP/hostname do broker está correto e acessível na rede.
@@ -208,7 +265,7 @@ Permite configurar as credenciais Wi-Fi e MQTT diretamente no ESP32 via rede AP 
 
 ### Nenhum dado aparece no dashboard
 - Confirme que o dispositivo IoT está publicando no mesmo tópico configurado.
-- Verifique o formato do payload MQTT (JSON com campos `voltage`, `current`, `power`, etc.).
+- Verifique o formato do payload MQTT — todos os 6 campos (`voltage`, `current`, `power`, `pf`, `frequency`, `energy`) devem estar presentes e ser numéricos.
 - Cheque se o Client ID não está duplicado (dois clientes com o mesmo ID se desconectam mutuamente).
 
 ### Alertas não chegam
