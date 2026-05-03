@@ -1,4 +1,5 @@
 import '../../providers/mqtt_metric_saver.dart';
+import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +45,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
   @override
   Widget build(BuildContext context) {
     ref.watch(mqttMetricSaverProvider);
+    final mqttSettings = ref.watch(mqttSettingsProvider);
     final metricsAsync = ref.watch(metricsProvider);
     final mqttStatus = ref.watch(mqttStatusProvider);
     final dashboardPreferences = ref.watch(dashboardPreferencesProvider);
@@ -85,13 +87,29 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               size: 26,
             ),
             const SizedBox(width: 8),
-            Text(
-              'E-Metrics IoT',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: isDarkMode ? Colors.white : Colors.black87,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'E-Metrics IoT',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                  ),
+                ),
+                Text(
+                  mqttSettings.profileName,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDarkMode
+                        ? Colors.white54
+                        : Colors.black45,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ],
         ),
