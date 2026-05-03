@@ -104,7 +104,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                   ),
                 ),
                 Text(
-                  mqttSettings.profileName,
+                  'Dispositivo: ${mqttSettings.profileName}',
                   style: TextStyle(
                     fontSize: 11,
                     color: isDarkMode
