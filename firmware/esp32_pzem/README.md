@@ -47,9 +47,28 @@ Campos esperados em /provision (form-urlencoded):
 - Reconexao nao bloqueante de Wi-Fi e MQTT
 - Fila circular em RAM para segurar amostras durante queda do broker
 - Envio em lote apos reconexao
-- Historico persistente em SPIFFS para replay sob demanda
+- Historico persistente em cartao microSD (Adafruit) para replay sob demanda
+- Fallback automatico para SPIFFS quando o cartao SD nao estiver disponivel
 - Assinatura no topico de solicitacao de historico e reenvio por intervalo
 - Suporte a MQTT com TLS (WiFiClientSecure)
+
+## Armazenamento local (microSD Adafruit)
+
+Por padrao, o firmware tenta iniciar o cartao SD no barramento SPI com os pinos:
+
+- CS: `5`
+- SCK: `18`
+- MISO: `19`
+- MOSI: `23`
+
+Se sua placa usar outro mapeamento, altere no topo do arquivo `main.ino` via defines:
+
+- `EMETRICS_SD_CS_PIN`
+- `EMETRICS_SD_SCK_PIN`
+- `EMETRICS_SD_MISO_PIN`
+- `EMETRICS_SD_MOSI_PIN`
+
+O arquivo de historico fica em `/history.log` e e usado para responder requisicoes de historico por intervalo.
 
 ## Parametros de buffer (main.ino)
 

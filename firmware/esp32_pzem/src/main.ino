@@ -5,7 +5,10 @@
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <PZEM004Tv30.h>
+#include <FS.h>
+#include <SD.h>
 #include <SPIFFS.h>
+#include <SPI.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -64,6 +67,22 @@ constexpr uint16_t HISTORY_REPLAY_LIMIT = 300;
 constexpr size_t HISTORY_FILE_MAX_BYTES = 256 * 1024;
 constexpr const char* HISTORY_FILE_PATH = "/history.log";
 
+#ifndef EMETRICS_SD_CS_PIN
+#define EMETRICS_SD_CS_PIN 5
+#endif
+
+#ifndef EMETRICS_SD_SCK_PIN
+#define EMETRICS_SD_SCK_PIN 18
+#endif
+
+#ifndef EMETRICS_SD_MISO_PIN
+#define EMETRICS_SD_MISO_PIN 19
+#endif
+
+#ifndef EMETRICS_SD_MOSI_PIN
+#define EMETRICS_SD_MOSI_PIN 23
+#endif
+
 WiFiClient wifiClient;
 WiFiClientSecure secureClient;
 PubSubClient mqttClient(wifiClient);
@@ -86,6 +105,8 @@ unsigned long restartScheduledAtMs = 0;
 bool sntpConfigured = false;
 uint64_t bootEpochOffsetMs = 0;
 bool bootEpochOffsetValid = false;
+bool historyStorageReady = false;
+bool historyStorageUsesSd = false;
 
 struct HistoryRequest {
   uint64_t from = 0;
@@ -98,6 +119,8 @@ void appendHistoryRecord(const char* payload, uint64_t timestampMs);
 void replayHistoryRange(uint64_t fromMs, uint64_t toMs);
 HistoryRequest parseHistoryRequest(const char* payload, unsigned int length);
 void onMqttMessage(char* topic, byte* payload, unsigned int length);
+File openHistoryFile(const char* mode);
+bool removeHistoryFile();
 
 uint64_t currentEpochMs() {
   if (!bootEpochOffsetValid) {
@@ -128,11 +151,42 @@ void refreshEpochOffsetIfNeeded() {
 }
 
 bool ensureHistoryStorageReady() {
-  return SPIFFS.begin(true);
+  if (historyStorageReady) {
+    return true;
+  }
+
+  SPI.begin(EMETRICS_SD_SCK_PIN, EMETRICS_SD_MISO_PIN, EMETRICS_SD_MOSI_PIN, EMETRICS_SD_CS_PIN);
+  if (SD.begin(EMETRICS_SD_CS_PIN) && SD.cardType() != CARD_NONE) {
+    historyStorageReady = true;
+    historyStorageUsesSd = true;
+    return true;
+  }
+
+  if (SPIFFS.begin(true)) {
+    historyStorageReady = true;
+    historyStorageUsesSd = false;
+    return true;
+  }
+
+  return false;
+}
+
+File openHistoryFile(const char* mode) {
+  if (historyStorageUsesSd) {
+    return SD.open(HISTORY_FILE_PATH, mode);
+  }
+  return SPIFFS.open(HISTORY_FILE_PATH, mode);
+}
+
+bool removeHistoryFile() {
+  if (historyStorageUsesSd) {
+    return SD.remove(HISTORY_FILE_PATH);
+  }
+  return SPIFFS.remove(HISTORY_FILE_PATH);
 }
 
 void compactHistoryIfNeeded() {
-  File historyFile = SPIFFS.open(HISTORY_FILE_PATH, FILE_READ);
+  File historyFile = openHistoryFile(FILE_READ);
   if (!historyFile) {
     return;
   }
@@ -145,9 +199,9 @@ void compactHistoryIfNeeded() {
 
   const size_t keepSize = HISTORY_FILE_MAX_BYTES / 2;
   const size_t skipBytes = historySize > keepSize ? historySize - keepSize : 0;
-  if (!historyFile.seek(skipBytes, SeekSet)) {
+  if (!historyFile.seek(skipBytes)) {
     historyFile.close();
-    SPIFFS.remove(HISTORY_FILE_PATH);
+    removeHistoryFile();
     return;
   }
 
@@ -160,7 +214,7 @@ void compactHistoryIfNeeded() {
   }
   historyFile.close();
 
-  File rewrite = SPIFFS.open(HISTORY_FILE_PATH, FILE_WRITE);
+  File rewrite = openHistoryFile(FILE_WRITE);
   if (!rewrite) {
     return;
   }
@@ -173,7 +227,7 @@ void appendHistoryRecord(const char* payload, uint64_t timestampMs) {
     return;
   }
 
-  File historyFile = SPIFFS.open(HISTORY_FILE_PATH, FILE_APPEND);
+  File historyFile = openHistoryFile(FILE_APPEND);
   if (!historyFile) {
     return;
   }
@@ -241,7 +295,7 @@ void replayHistoryRange(uint64_t fromMs, uint64_t toMs) {
     return;
   }
 
-  File historyFile = SPIFFS.open(HISTORY_FILE_PATH, FILE_READ);
+  File historyFile = openHistoryFile(FILE_READ);
   if (!historyFile) {
     return;
   }
