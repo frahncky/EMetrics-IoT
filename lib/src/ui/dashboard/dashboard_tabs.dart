@@ -1,34 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../providers/dashboard_preferences_provider.dart';
 import 'realtime_chart.dart';
 
-
-class DashboardTabs extends StatefulWidget {
+class DashboardTabs extends ConsumerWidget {
   const DashboardTabs({super.key});
 
   @override
-  State<DashboardTabs> createState() => _DashboardTabsState();
-}
-
-class _DashboardTabsState extends State<DashboardTabs> {
-  String _selectedField1 = 'power';
-  String _selectedField2 = 'energy';
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final preferences = ref.watch(dashboardPreferencesProvider);
     return Column(
       children: [
         const SizedBox(height: 16),
         Expanded(
           child: _ChartWithSelector(
-            selectedField: _selectedField1,
-            onChanged: (f) => setState(() => _selectedField1 = f),
+            selectedField: preferences.topField,
+            onChanged: (field) async {
+              await ref
+                  .read(dashboardPreferencesProvider.notifier)
+                  .updateTopField(field);
+            },
           ),
         ),
         const SizedBox(height: 12),
         Expanded(
           child: _ChartWithSelector(
-            selectedField: _selectedField2,
-            onChanged: (f) => setState(() => _selectedField2 = f),
+            selectedField: preferences.bottomField,
+            onChanged: (field) async {
+              await ref
+                  .read(dashboardPreferencesProvider.notifier)
+                  .updateBottomField(field);
+            },
           ),
         ),
       ],

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/dashboard_preferences_provider.dart';
+import '../../providers/integration_settings_provider.dart';
 import '../../providers/measurement_settings_provider.dart';
 import '../../providers/mqtt_provider.dart';
+import '../../providers/mqtt_metric_saver.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/alert_service.dart';
+import '../../services/oauth_device_service.dart';
 import '../../services/background_mqtt_service.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_page.dart';
@@ -30,14 +34,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   final _passwordController = TextEditingController();
   final _topicController = TextEditingController();
   final _requestTopicController = TextEditingController();
+  final _profileNameController = TextEditingController();
   final _intervalController = TextEditingController(text: '5');
   final _voltageMinController = TextEditingController();
   final _voltageMaxController = TextEditingController();
   final _energyLimitController = TextEditingController();
   final _tariffController = TextEditingController();
+  final _integrationBaseUrlController = TextEditingController();
+  final _integrationPathController = TextEditingController(text: '/api/metrics');
+  final _integrationApiKeyController = TextEditingController();
+  final _oauthClientIdController = TextEditingController();
+  final _oauthScopeController = TextEditingController();
+  final _oauthDeviceEndpointController = TextEditingController();
+  final _oauthTokenEndpointController = TextEditingController();
   bool _darkMode = false;
   bool _useTls = false;
+  bool _integrationEnabled = false;
+  bool _oauthEnabled = false;
   int _selectedTab = 0;
+  bool _showForecastCard = true;
+  List<MqttProfileSummary> _profiles = const [];
+  final OAuthDeviceService _oauthDeviceService = OAuthDeviceService();
 
   @override
   void initState() {
@@ -68,9 +85,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
 
   Future<void> _loadSettings() async {
     final settings = await ref.read(mqttSettingsProvider.notifier).load();
+    final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
     if (!mounted) {
       return;
     }
+    _profiles = profiles;
+    _profileNameController.text = settings.profileName;
     _brokerController.text = settings.broker;
     _portController.text = settings.port.toString();
     _clientIdController.text = settings.clientId;
@@ -79,6 +99,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     _topicController.text = settings.topic;
     _requestTopicController.text = settings.requestTopic;
     _useTls = settings.useTls;
+
+    final integrationSettings = await ref
+        .read(integrationSettingsProvider.notifier)
+        .load();
+    if (!mounted) {
+      return;
+    }
+    _integrationEnabled = integrationSettings.enabled;
+    _integrationBaseUrlController.text = integrationSettings.baseUrl;
+    _integrationPathController.text = integrationSettings.metricsPath;
+    _integrationApiKeyController.text = integrationSettings.apiKey;
+    _oauthEnabled = integrationSettings.oauthEnabled;
+    _oauthClientIdController.text = integrationSettings.oauthClientId;
+    _oauthScopeController.text = integrationSettings.oauthScope;
+    _oauthDeviceEndpointController.text = integrationSettings.oauthDeviceEndpoint;
+    _oauthTokenEndpointController.text = integrationSettings.oauthTokenEndpoint;
+
+    final dashboardPreferences = await ref
+        .read(dashboardPreferencesProvider.notifier)
+        .load();
+    if (!mounted) {
+      return;
+    }
+    _showForecastCard = dashboardPreferences.showForecastCard;
 
     final measurementSettings = await ref
         .read(measurementSettingsProvider.notifier)
@@ -115,6 +159,138 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           energyLimitKwh: _parseDecimal(_energyLimitController.text),
           tariffPerKwh: _parseDecimal(_tariffController.text),
         );
+    await ref
+        .read(mqttSettingsProvider.notifier)
+        .renameActiveProfile(_profileNameController.text);
+    await ref
+        .read(integrationSettingsProvider.notifier)
+        .update(
+          enabled: _integrationEnabled,
+          baseUrl: _integrationBaseUrlController.text,
+          metricsPath: _integrationPathController.text,
+          apiKey: _integrationApiKeyController.text,
+          oauthEnabled: _oauthEnabled,
+          oauthClientId: _oauthClientIdController.text,
+          oauthScope: _oauthScopeController.text,
+          oauthDeviceEndpoint: _oauthDeviceEndpointController.text,
+          oauthTokenEndpoint: _oauthTokenEndpointController.text,
+        );
+    await ref
+        .read(dashboardPreferencesProvider.notifier)
+        .setShowForecastCard(_showForecastCard);
+    if (mounted) {
+      final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+      setState(() => _profiles = profiles);
+    }
+  }
+
+  Future<void> _createProfile() async {
+    final profile = await ref
+        .read(mqttSettingsProvider.notifier)
+        .createProfile(name: 'Dispositivo ${_profiles.length + 1}');
+    final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _profiles = profiles);
+    _profileNameController.text = profile.profileName;
+    _brokerController.text = profile.broker;
+    _portController.text = profile.port.toString();
+    _clientIdController.text = profile.clientId;
+    _usernameController.text = profile.username;
+    _passwordController.text = profile.password;
+    _topicController.text = profile.topic;
+    _requestTopicController.text = profile.requestTopic;
+    _useTls = profile.useTls;
+  }
+
+  Future<void> _selectProfile(String profileId) async {
+    final profile = await ref.read(mqttSettingsProvider.notifier).selectProfile(profileId);
+    final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _profiles = profiles);
+    _profileNameController.text = profile.profileName;
+    _brokerController.text = profile.broker;
+    _portController.text = profile.port.toString();
+    _clientIdController.text = profile.clientId;
+    _usernameController.text = profile.username;
+    _passwordController.text = profile.password;
+    _topicController.text = profile.topic;
+    _requestTopicController.text = profile.requestTopic;
+    _useTls = profile.useTls;
+  }
+
+  Future<void> _deleteActiveProfile() async {
+    final profileId = ref.read(mqttSettingsProvider).profileId;
+    final profile = await ref.read(mqttSettingsProvider.notifier).deleteProfile(profileId);
+    final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _profiles = profiles);
+    _profileNameController.text = profile.profileName;
+    _brokerController.text = profile.broker;
+    _portController.text = profile.port.toString();
+    _clientIdController.text = profile.clientId;
+    _usernameController.text = profile.username;
+    _passwordController.text = profile.password;
+    _topicController.text = profile.topic;
+    _requestTopicController.text = profile.requestTopic;
+    _useTls = profile.useTls;
+  }
+
+  Future<void> _syncIntegrationNow() async {
+    final result = await ref.read(integrationServiceProvider).flushPendingQueue();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Sincronizacao REST: ${result.deliveredCount} enviados, ${result.failedCount} falharam.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _startOAuthFlow() async {
+    final integrationSettings = await ref
+        .read(integrationSettingsProvider.notifier)
+        .load();
+    final session = await _oauthDeviceService.startDeviceAuthorization(
+      deviceEndpoint: Uri.parse(integrationSettings.oauthDeviceEndpoint),
+      clientId: integrationSettings.oauthClientId,
+      scope: integrationSettings.oauthScope,
+    );
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Abra ${session.verificationUri} e informe o codigo ${session.userCode}.',
+        ),
+        duration: const Duration(seconds: 8),
+      ),
+    );
+    final token = await _oauthDeviceService.pollForToken(
+      tokenEndpoint: Uri.parse(integrationSettings.oauthTokenEndpoint),
+      clientId: integrationSettings.oauthClientId,
+      session: session,
+    );
+    await ref.read(integrationSettingsProvider.notifier).saveOAuthToken(
+      accessToken: token.accessToken,
+      tokenType: token.tokenType,
+      expiresAt: token.expiresAt,
+    );
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('OAuth conectado com sucesso.')),
+    );
   }
 
   double _parseDecimal(String value) {
@@ -163,11 +339,66 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final authState = ref.watch(authProvider);
+    final mqttSettings = ref.watch(mqttSettingsProvider);
+    final integrationSettings = ref.watch(integrationSettingsProvider);
     final tabContents = <Widget>[
       Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
           children: [
+            DropdownButtonFormField<String>(
+              initialValue: _profiles.any((profile) => profile.id == mqttSettings.profileId)
+                  ? mqttSettings.profileId
+                  : null,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.memory_outlined),
+                labelText: 'Perfil do dispositivo',
+                border: OutlineInputBorder(),
+              ),
+              items: _profiles
+                  .map(
+                    (profile) => DropdownMenuItem<String>(
+                      value: profile.id,
+                      child: Text('${profile.name} (${profile.broker})'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  _selectProfile(value);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _profileNameController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.drive_file_rename_outline),
+                labelText: 'Nome do perfil',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _createProfile,
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('Novo perfil'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: _profiles.length > 1 ? _deleteActiveProfile : null,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Excluir perfil'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Semantics(
               label: 'Campo Broker MQTT',
               child: TextFormField(
@@ -401,6 +632,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
           children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Exibir previsao no dashboard'),
+              subtitle: const Text('Ativa o card de tendencia e projecao local.'),
+              value: _showForecastCard,
+              onChanged: (value) {
+                setState(() => _showForecastCard = value);
+              },
+            ),
+            const SizedBox(height: 12),
             Semantics(
               label: 'Alternar modo escuro',
               toggled: _darkMode,
@@ -471,6 +712,119 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           ],
         ),
       ),
+      Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 8),
+        child: _SettingsSection(
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Ativar integracao REST'),
+              subtitle: const Text('Envia leituras para API de terceiros com fila offline.'),
+              value: _integrationEnabled,
+              onChanged: (value) {
+                setState(() => _integrationEnabled = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _integrationBaseUrlController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.cloud_sync_outlined),
+                labelText: 'Base URL da API',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _integrationPathController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.route_outlined),
+                labelText: 'Path de envio de metricas',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _integrationApiKeyController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.vpn_key_outlined),
+                labelText: 'API Key (opcional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Usar OAuth Device Flow'),
+              subtitle: Text(
+                integrationSettings.oauthAccessToken.isNotEmpty
+                    ? 'Token OAuth configurado.'
+                    : 'Token OAuth ainda nao conectado.',
+              ),
+              value: _oauthEnabled,
+              onChanged: (value) {
+                setState(() => _oauthEnabled = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _oauthClientIdController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.key_outlined),
+                labelText: 'OAuth Client ID',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _oauthScopeController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.tune_outlined),
+                labelText: 'Scopes OAuth',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _oauthDeviceEndpointController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.verified_user_outlined),
+                labelText: 'Endpoint device authorization',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _oauthTokenEndpointController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.token_outlined),
+                labelText: 'Endpoint token',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _syncIntegrationNow,
+                    icon: const Icon(Icons.sync),
+                    label: const Text('Sincronizar agora'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _oauthEnabled ? _startOAuthFlow : null,
+                    icon: const Icon(Icons.login),
+                    label: const Text('Conectar OAuth'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     ];
 
     return Scaffold(
@@ -497,7 +851,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         title: const Text('Configurações'),
       ),
       body: DefaultTabController(
-        length: 4,
+        length: 5,
         initialIndex: _selectedTab,
         child: Form(
           key: _formKey,
@@ -638,6 +992,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                     Tab(icon: Icon(Icons.history_toggle_off), text: 'Histórico'),
                     Tab(icon: Icon(Icons.tune), text: 'Medição'),
                     Tab(icon: Icon(Icons.palette_outlined), text: 'Aparência'),
+                    Tab(icon: Icon(Icons.hub_outlined), text: 'Integração'),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -673,11 +1028,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     _passwordController.dispose();
     _topicController.dispose();
     _requestTopicController.dispose();
+    _profileNameController.dispose();
     _intervalController.dispose();
     _voltageMinController.dispose();
     _voltageMaxController.dispose();
     _energyLimitController.dispose();
     _tariffController.dispose();
+    _integrationBaseUrlController.dispose();
+    _integrationPathController.dispose();
+    _integrationApiKeyController.dispose();
+    _oauthClientIdController.dispose();
+    _oauthScopeController.dispose();
+    _oauthDeviceEndpointController.dispose();
+    _oauthTokenEndpointController.dispose();
     super.dispose();
   }
 }

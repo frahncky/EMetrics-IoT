@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _InMemoryCredentialsStore implements MqttCredentialsStore {
   String username = '';
   String password = '';
+  final Map<String, String> profileUsernames = {};
+  final Map<String, String> profilePasswords = {};
 
   @override
   Future<void> clear() async {
@@ -14,10 +16,24 @@ class _InMemoryCredentialsStore implements MqttCredentialsStore {
   }
 
   @override
+  Future<void> clearProfile(String profileId) async {
+    profileUsernames.remove(profileId);
+    profilePasswords.remove(profileId);
+  }
+
+  @override
   Future<String> readPassword() async => password;
+
+    @override
+    Future<String> readPasswordForProfile(String profileId) async =>
+      profilePasswords[profileId] ?? '';
 
   @override
   Future<String> readUsername() async => username;
+
+    @override
+    Future<String> readUsernameForProfile(String profileId) async =>
+      profileUsernames[profileId] ?? '';
 
   @override
   Future<void> writeCredentials({
@@ -26,6 +42,16 @@ class _InMemoryCredentialsStore implements MqttCredentialsStore {
   }) async {
     this.username = username;
     this.password = password;
+  }
+
+  @override
+  Future<void> writeCredentialsForProfile({
+    required String profileId,
+    required String username,
+    required String password,
+  }) async {
+    profileUsernames[profileId] = username;
+    profilePasswords[profileId] = password;
   }
 }
 

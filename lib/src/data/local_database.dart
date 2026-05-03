@@ -15,7 +15,7 @@ class LocalDatabase {
     final path = join(dbPath, 'emetrics.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE IF NOT EXISTS metrics (
@@ -30,10 +30,14 @@ class LocalDatabase {
           )
         ''');
         await _createUniqueMetricIndex(db);
+        await _createIntegrationSyncQueueTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createUniqueMetricIndex(db);
+        }
+        if (oldVersion < 3) {
+          await _createIntegrationSyncQueueTable(db);
         }
       },
     );
@@ -43,6 +47,24 @@ class LocalDatabase {
     await db.execute('''
       CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_unique
       ON metrics(timestamp, voltage, current, power, pf, frequency, energy)
+    ''');
+  }
+
+  static Future<void> _createIntegrationSyncQueueTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS integration_sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at INTEGER NOT NULL,
+        metric_timestamp INTEGER NOT NULL,
+        payload TEXT NOT NULL,
+        profile_id TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_integration_sync_metric
+      ON integration_sync_queue(metric_timestamp, payload)
     ''');
   }
 }

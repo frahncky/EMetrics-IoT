@@ -10,13 +10,29 @@ class _InMemoryCredentialsStore implements MqttCredentialsStore {
   Future<void> clear() async {}
 
   @override
+  Future<void> clearProfile(String profileId) async {}
+
+  @override
   Future<String> readPassword() async => '';
+
+  @override
+  Future<String> readPasswordForProfile(String profileId) async => '';
 
   @override
   Future<String> readUsername() async => '';
 
   @override
+  Future<String> readUsernameForProfile(String profileId) async => '';
+
+  @override
   Future<void> writeCredentials({
+    required String username,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> writeCredentialsForProfile({
+    required String profileId,
     required String username,
     required String password,
   }) async {}
@@ -25,6 +41,8 @@ class _InMemoryCredentialsStore implements MqttCredentialsStore {
 class _FakeMqttSettingsNotifier extends MqttSettingsNotifier {
   _FakeMqttSettingsNotifier() : super(_InMemoryCredentialsStore()) {
     state = const MqttSettings(
+      profileId: 'default',
+      profileName: 'Dispositivo principal',
       broker: 'broker.local',
       port: 8883,
       clientId: 'cliente_01',

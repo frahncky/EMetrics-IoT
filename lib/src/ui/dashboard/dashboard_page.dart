@@ -2,6 +2,8 @@ import '../../providers/mqtt_metric_saver.dart';
 import '../../providers/mqtt_status_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/dashboard_preferences_provider.dart';
+import '../../providers/forecast_provider.dart';
 import '../../providers/metric_provider.dart';
 import 'dashboard_tabs.dart';
 
@@ -44,6 +46,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     ref.watch(mqttMetricSaverProvider);
     final metricsAsync = ref.watch(metricsProvider);
     final mqttStatus = ref.watch(mqttStatusProvider);
+    final dashboardPreferences = ref.watch(dashboardPreferencesProvider);
+    final forecastAsync = ref.watch(forecastProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final lastMetricTime = metricsAsync.asData?.value.isNotEmpty == true
         ? metricsAsync.asData!.value.first.timestamp
@@ -115,20 +119,38 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             metricsAsync.when(
               data: (metrics) {
                 final last = metrics.isNotEmpty ? metrics.first : null;
-                return Padding(
-                  padding: const EdgeInsets.only(
-                    top: 8,
-                    left: 8,
-                    right: 8,
-                    bottom: 0,
-                  ),
-                  child: _MainIndicators(
-                    voltage: last?.voltage ?? 0,
-                    current: last?.current ?? 0,
-                    power: last?.power ?? 0,
-                    energy: last?.energy ?? 0,
-                    pf: last?.pf ?? 0,
-                  ),
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        top: 8,
+                        left: 8,
+                        right: 8,
+                        bottom: 0,
+                      ),
+                      child: _MainIndicators(
+                        voltage: last?.voltage ?? 0,
+                        current: last?.current ?? 0,
+                        power: last?.power ?? 0,
+                        energy: last?.energy ?? 0,
+                        pf: last?.pf ?? 0,
+                      ),
+                    ),
+                    if (dashboardPreferences.showForecastCard)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                        child: forecastAsync.when(
+                          data: (forecast) {
+                            if (forecast == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return _ForecastCard(snapshot: forecast);
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, _) => const SizedBox.shrink(),
+                        ),
+                      ),
+                  ],
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -249,6 +271,103 @@ class _MonitoringStatusVisual {
     required this.color,
     required this.message,
   });
+}
+
+class _ForecastCard extends StatelessWidget {
+  final ForecastSnapshot snapshot;
+
+  const _ForecastCard({required this.snapshot});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDarkMode ? Colors.white : const Color(0xFF0F172A);
+    final subtitleColor = isDarkMode ? Colors.white70 : const Color(0xFF475569);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_graph, color: Color(0xFF38BDF8)),
+              const SizedBox(width: 8),
+              Text(
+                'Previsao local',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: titleColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${snapshot.trendLabel} com base em ${snapshot.sampleCount} leituras recentes.',
+            style: TextStyle(color: subtitleColor),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _ForecastMetricChip(
+                label: 'Potencia em 30 min',
+                value: '${formatWithSIPrefix(snapshot.projectedPowerWatts)} W',
+              ),
+              _ForecastMetricChip(
+                label: 'Energia em 1 h',
+                value: '${snapshot.projectedEnergyKwh.toStringAsFixed(3)} kWh',
+              ),
+              _ForecastMetricChip(
+                label: 'Inclinacao',
+                value: '${snapshot.powerSlopePerMinute.toStringAsFixed(2)} W/min',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ForecastMetricChip extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ForecastMetricChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF111827) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 String formatWithSIPrefix(num value, {int? fractionDigits}) {

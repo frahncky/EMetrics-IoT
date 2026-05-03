@@ -5,6 +5,14 @@ abstract class MqttCredentialsStore {
   Future<String> readPassword();
   Future<void> writeCredentials({required String username, required String password});
   Future<void> clear();
+  Future<String> readUsernameForProfile(String profileId);
+  Future<String> readPasswordForProfile(String profileId);
+  Future<void> writeCredentialsForProfile({
+    required String profileId,
+    required String username,
+    required String password,
+  });
+  Future<void> clearProfile(String profileId);
 }
 
 class SecureMqttCredentialsStore implements MqttCredentialsStore {
@@ -15,6 +23,10 @@ class SecureMqttCredentialsStore implements MqttCredentialsStore {
 
   SecureMqttCredentialsStore({FlutterSecureStorage? storage})
       : _storage = storage ?? const FlutterSecureStorage();
+
+  String _usernameKeyForProfile(String profileId) => '${_usernameKey}_$profileId';
+
+  String _passwordKeyForProfile(String profileId) => '${_passwordKey}_$profileId';
 
   @override
   Future<String> readUsername() async {
@@ -39,5 +51,31 @@ class SecureMqttCredentialsStore implements MqttCredentialsStore {
   Future<void> clear() async {
     await _storage.delete(key: _usernameKey);
     await _storage.delete(key: _passwordKey);
+  }
+
+  @override
+  Future<String> readUsernameForProfile(String profileId) async {
+    return await _storage.read(key: _usernameKeyForProfile(profileId)) ?? '';
+  }
+
+  @override
+  Future<String> readPasswordForProfile(String profileId) async {
+    return await _storage.read(key: _passwordKeyForProfile(profileId)) ?? '';
+  }
+
+  @override
+  Future<void> writeCredentialsForProfile({
+    required String profileId,
+    required String username,
+    required String password,
+  }) async {
+    await _storage.write(key: _usernameKeyForProfile(profileId), value: username);
+    await _storage.write(key: _passwordKeyForProfile(profileId), value: password);
+  }
+
+  @override
+  Future<void> clearProfile(String profileId) async {
+    await _storage.delete(key: _usernameKeyForProfile(profileId));
+    await _storage.delete(key: _passwordKeyForProfile(profileId));
   }
 }

@@ -6,6 +6,7 @@ import 'ui/history/history_page.dart';
 import 'ui/settings/settings_page.dart';
 import '../src/providers/alert_provider.dart';
 import '../src/providers/theme_provider.dart';
+import '../src/providers/mqtt_metric_saver.dart';
 
 class EmetricsApp extends StatelessWidget {
   const EmetricsApp({super.key});
@@ -23,6 +24,7 @@ class _AppInitializer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Initialize alert listener on first build without side effects in render cycle
     ref.listen(alertProvider, (previous, next) {});
+    ref.listen(integrationAutoSyncProvider, (previous, next) {});
     final isDarkMode = ref.watch(themeProvider);
 
     return MaterialApp(
