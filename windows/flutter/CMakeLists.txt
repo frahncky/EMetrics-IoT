@@ -7,7 +7,7 @@ set(EPHEMERAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ephemeral")
 if(EXISTS "${EPHEMERAL_DIR}/generated_config.cmake")
   include(${EPHEMERAL_DIR}/generated_config.cmake)
 else()
-  message(WARNING "Arquivo gerado não encontrado: ${EPHEMERAL_DIR}/generated_config.cmake")
+  message(STATUS "Arquivo gerado não encontrado: ${EPHEMERAL_DIR}/generated_config.cmake")
 endif()
 
 # TODO: Move the rest of this into files in ephemeral. See
