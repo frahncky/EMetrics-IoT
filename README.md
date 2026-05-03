@@ -204,12 +204,12 @@ Para bugs, sugestões ou dúvidas:
 
 ## 🚀 Roadmap
 
-- [ ] Modo offline melhorado com sincronização automática
-- [ ] Previsões com machine learning
-- [ ] Dashboard personalizável
-- [ ] API REST para integração com terceiros
-- [ ] Autenticação com OAuth
-- [ ] Suporte a múltiplos brokers/dispositivos
+- [x] Modo offline melhorado com sincronização automática (fila SQLite + flush REST)
+- [x] Previsões locais por regressão linear (forecast card no dashboard)
+- [x] Dashboard personalizável com persistência de preferências
+- [x] API REST para integração com terceiros (IntegrationService + backend de exemplo)
+- [x] Autenticação com OAuth Device Flow
+- [x] Suporte a múltiplos brokers/dispositivos (perfis MQTT)
 
 ---
 
