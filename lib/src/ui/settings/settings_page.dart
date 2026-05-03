@@ -379,7 +379,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               controller: _profileNameController,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.drive_file_rename_outline),
-                labelText: 'Nome do perfil',
+                labelText: 'Nome do dispositivo',
                 border: OutlineInputBorder(),
               ),
             ),

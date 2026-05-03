@@ -13,7 +13,7 @@
 4. [Histórico](#4-histórico)
 5. [Configurações MQTT](#5-configurações-mqtt)
 6. [Configurações de Histórico](#6-configurações-de-histórico)
-7. [Perfis de Dispositivo](#7-perfis-de-dispositivo)
+7. [Dispositivos MQTT](#7-dispositivos-mqtt)
 8. [Alertas e Medição](#8-alertas-e-medição)
 9. [Integração REST](#9-integração-rest)
 10. [Aparência e Conta](#10-aparência-e-conta)
@@ -162,22 +162,20 @@ O tópico padrão segue o padrão `<tópico>/history/request`
 
 ---
 
-## 7. Perfis de Dispositivo
+## 7. Dispositivos MQTT
 
 Permite salvar configurações separadas para cada dispositivo/broker.
 
-Permite salvar configurações separadas para cada dispositivo/broker.
-
-**Como criar um perfil:**
+**Como criar um dispositivo:**
 1. Na aba MQTT, toque em **Novo perfil**.
 2. Preencha os dados do novo dispositivo.
-3. O perfil é salvo automaticamente ao tocar em **Conectar**.
+3. O dispositivo é salvo automaticamente ao tocar em **Conectar**.
 
-**Como trocar de perfil:**
-- Use o dropdown **"Perfil do dispositivo"** no topo da aba MQTT para selecionar um perfil salvo.
+**Como trocar de dispositivo:**
+- Use o dropdown **"Perfil do dispositivo"** no topo da aba MQTT para selecionar um dispositivo salvo.
 
 **Como excluir:**
-- Selecione o perfil e toque em **Excluir perfil** (disponível somente quando há mais de um perfil).
+- Selecione o dispositivo e toque em **Excluir perfil** (disponível somente quando há mais de um dispositivo).
 
 ---
 
