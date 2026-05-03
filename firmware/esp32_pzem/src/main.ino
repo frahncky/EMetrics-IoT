@@ -5,11 +5,15 @@
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <PZEM004Tv30.h>
+#include <SPIFFS.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 // -------------------------
 // Provisionamento AP
@@ -51,12 +55,17 @@ DeviceConfig config = {
 constexpr unsigned long PUBLISH_INTERVAL_MS = 2000;
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 5000;
 constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;
+constexpr unsigned long HISTORY_PUBLISH_DELAY_MS = 10;
 constexpr bool MQTT_RETAINED = true;
 constexpr size_t TELEMETRY_PAYLOAD_SIZE = 220;
 constexpr size_t TELEMETRY_QUEUE_CAPACITY = 30;
 constexpr uint8_t FLUSH_BATCH_LIMIT = 5;
+constexpr uint16_t HISTORY_REPLAY_LIMIT = 300;
+constexpr size_t HISTORY_FILE_MAX_BYTES = 256 * 1024;
+constexpr const char* HISTORY_FILE_PATH = "/history.log";
 
 WiFiClient wifiClient;
+WiFiClientSecure secureClient;
 PubSubClient mqttClient(wifiClient);
 WebServer provisionServer(80);
 Preferences preferences;
@@ -74,6 +83,217 @@ size_t queueCount = 0;
 bool provisioningMode = false;
 bool restartScheduled = false;
 unsigned long restartScheduledAtMs = 0;
+bool sntpConfigured = false;
+uint64_t bootEpochOffsetMs = 0;
+bool bootEpochOffsetValid = false;
+
+struct HistoryRequest {
+  uint64_t from = 0;
+  uint64_t to = 0;
+  bool valid = false;
+};
+
+uint64_t currentEpochMs();
+void appendHistoryRecord(const char* payload, uint64_t timestampMs);
+void replayHistoryRange(uint64_t fromMs, uint64_t toMs);
+HistoryRequest parseHistoryRequest(const char* payload, unsigned int length);
+void onMqttMessage(char* topic, byte* payload, unsigned int length);
+
+uint64_t currentEpochMs() {
+  if (!bootEpochOffsetValid) {
+    return 0;
+  }
+  return bootEpochOffsetMs + millis();
+}
+
+void configureTimeSync() {
+  if (sntpConfigured) {
+    return;
+  }
+
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
+  sntpConfigured = true;
+}
+
+void refreshEpochOffsetIfNeeded() {
+  configureTimeSync();
+  const time_t now = time(nullptr);
+  if (now < 1700000000) {
+    return;
+  }
+
+  const uint64_t nowMs = static_cast<uint64_t>(now) * 1000ULL;
+  bootEpochOffsetMs = nowMs - millis();
+  bootEpochOffsetValid = true;
+}
+
+bool ensureHistoryStorageReady() {
+  return SPIFFS.begin(true);
+}
+
+void compactHistoryIfNeeded() {
+  File historyFile = SPIFFS.open(HISTORY_FILE_PATH, FILE_READ);
+  if (!historyFile) {
+    return;
+  }
+
+  const size_t historySize = historyFile.size();
+  if (historySize <= HISTORY_FILE_MAX_BYTES) {
+    historyFile.close();
+    return;
+  }
+
+  const size_t keepSize = HISTORY_FILE_MAX_BYTES / 2;
+  const size_t skipBytes = historySize > keepSize ? historySize - keepSize : 0;
+  if (!historyFile.seek(skipBytes, SeekSet)) {
+    historyFile.close();
+    SPIFFS.remove(HISTORY_FILE_PATH);
+    return;
+  }
+
+  String compacted;
+  compacted.reserve(keepSize + 64);
+
+  while (historyFile.available()) {
+    compacted += historyFile.readStringUntil('\n');
+    compacted += '\n';
+  }
+  historyFile.close();
+
+  File rewrite = SPIFFS.open(HISTORY_FILE_PATH, FILE_WRITE);
+  if (!rewrite) {
+    return;
+  }
+  rewrite.print(compacted);
+  rewrite.close();
+}
+
+void appendHistoryRecord(const char* payload, uint64_t timestampMs) {
+  if (timestampMs == 0 || !ensureHistoryStorageReady()) {
+    return;
+  }
+
+  File historyFile = SPIFFS.open(HISTORY_FILE_PATH, FILE_APPEND);
+  if (!historyFile) {
+    return;
+  }
+
+  historyFile.printf("%llu;%s\n", timestampMs, payload);
+  historyFile.close();
+  compactHistoryIfNeeded();
+}
+
+bool extractUInt64Field(const String& source, const char* key, uint64_t& outValue) {
+  const String quotedKey = String("\"") + key + "\"";
+  const int keyIndex = source.indexOf(quotedKey);
+  if (keyIndex < 0) {
+    return false;
+  }
+
+  const int colonIndex = source.indexOf(':', keyIndex + quotedKey.length());
+  if (colonIndex < 0) {
+    return false;
+  }
+
+  int valueStart = colonIndex + 1;
+  while (valueStart < source.length() && isspace(source[valueStart])) {
+    valueStart++;
+  }
+
+  int valueEnd = valueStart;
+  while (valueEnd < source.length() && isdigit(source[valueEnd])) {
+    valueEnd++;
+  }
+
+  if (valueEnd <= valueStart) {
+    return false;
+  }
+
+  outValue = strtoull(source.substring(valueStart, valueEnd).c_str(), nullptr, 10);
+  return outValue > 0;
+}
+
+HistoryRequest parseHistoryRequest(const char* payload, unsigned int length) {
+  HistoryRequest request;
+  String raw;
+  raw.reserve(length + 1);
+  for (unsigned int i = 0; i < length; i++) {
+    raw += static_cast<char>(payload[i]);
+  }
+
+  uint64_t from = 0;
+  uint64_t to = 0;
+  const bool hasFrom = extractUInt64Field(raw, "from", from);
+  const bool hasTo = extractUInt64Field(raw, "to", to);
+
+  if (!hasFrom || !hasTo || from > to) {
+    return request;
+  }
+
+  request.from = from;
+  request.to = to;
+  request.valid = true;
+  return request;
+}
+
+void replayHistoryRange(uint64_t fromMs, uint64_t toMs) {
+  if (!mqttClient.connected() || !ensureHistoryStorageReady()) {
+    return;
+  }
+
+  File historyFile = SPIFFS.open(HISTORY_FILE_PATH, FILE_READ);
+  if (!historyFile) {
+    return;
+  }
+
+  uint16_t published = 0;
+  while (historyFile.available() && published < HISTORY_REPLAY_LIMIT) {
+    const String line = historyFile.readStringUntil('\n');
+    if (line.length() < 5) {
+      continue;
+    }
+
+    const int sep = line.indexOf(';');
+    if (sep <= 0 || sep >= line.length() - 1) {
+      continue;
+    }
+
+    const uint64_t timestampMs = strtoull(line.substring(0, sep).c_str(), nullptr, 10);
+    if (timestampMs < fromMs || timestampMs > toMs) {
+      continue;
+    }
+
+    const String payload = line.substring(sep + 1);
+    if (mqttClient.publish(config.mqttTopic, payload.c_str(), MQTT_RETAINED)) {
+      published++;
+      delay(HISTORY_PUBLISH_DELAY_MS);
+    }
+  }
+
+  historyFile.close();
+}
+
+void onMqttMessage(char* topic, byte* payload, unsigned int length) {
+  if (strcmp(topic, config.mqttRequestTopic) != 0) {
+    return;
+  }
+
+  const HistoryRequest request = parseHistoryRequest(reinterpret_cast<char*>(payload), length);
+  if (!request.valid) {
+    return;
+  }
+
+  replayHistoryRange(request.from, request.to);
+}
+
+void configureMqttTransport() {
+  if (config.useTls) {
+    secureClient.setInsecure();
+    mqttClient.setClient(secureClient);
+  } else {
+    mqttClient.setClient(wifiClient);
+  }
+}
 
 void safeCopy(String value, char* destination, size_t destinationSize) {
   value.trim();
@@ -241,7 +461,9 @@ void ensureMqttConnected() {
   }
 
   lastMqttAttemptMs = now;
+  configureMqttTransport();
   mqttClient.setServer(config.mqttHost, config.mqttPort);
+  mqttClient.setCallback(onMqttMessage);
 
   const bool useAuth = strlen(config.mqttUser) > 0;
   bool connected = false;
@@ -255,6 +477,7 @@ void ensureMqttConnected() {
   if (connected) {
     const String statusTopic = String(config.mqttTopic) + "/status";
     mqttClient.publish(statusTopic.c_str(), "online", true);
+    mqttClient.subscribe(config.mqttRequestTopic);
   }
 }
 
@@ -319,6 +542,7 @@ void queueLatestMetrics() {
   }
 
   enqueuePayload(payload);
+  appendHistoryRecord(payload, currentEpochMs());
 }
 
 bool publishFrontPayload() {
@@ -353,13 +577,17 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, 16, 17);
 
+  ensureHistoryStorageReady();
   loadConfig();
   if (!config.valid) {
     startProvisioningMode();
     return;
   }
 
+  configureMqttTransport();
+  refreshEpochOffsetIfNeeded();
   mqttClient.setServer(config.mqttHost, config.mqttPort);
+  mqttClient.setCallback(onMqttMessage);
   connectWiFi();
 }
 
@@ -373,6 +601,9 @@ void loop() {
   }
 
   ensureWiFiConnected();
+  if (WiFi.status() == WL_CONNECTED) {
+    refreshEpochOffsetIfNeeded();
+  }
   ensureMqttConnected();
 
   if (mqttClient.connected()) {

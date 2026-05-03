@@ -47,6 +47,9 @@ Campos esperados em /provision (form-urlencoded):
 - Reconexao nao bloqueante de Wi-Fi e MQTT
 - Fila circular em RAM para segurar amostras durante queda do broker
 - Envio em lote apos reconexao
+- Historico persistente em SPIFFS para replay sob demanda
+- Assinatura no topico de solicitacao de historico e reenvio por intervalo
+- Suporte a MQTT com TLS (WiFiClientSecure)
 
 ## Parametros de buffer (main.ino)
 
@@ -76,3 +79,24 @@ Quando a fila lota, a amostra mais antiga e descartada para abrir espaco.
 
 Nesta implementacao (PubSubClient), a publicacao de payload usa QoS 0.
 O app Flutter permanece compativel, pois consome o JSON publicado no topico configurado.
+
+## Solicitar historico via MQTT
+
+O firmware assina o topico configurado em `mqttRequestTopic` e espera o payload JSON:
+
+```json
+{
+  "from": 1746230400000,
+  "to": 1746316800000,
+  "requestedAt": 1746316850000
+}
+```
+
+Ao receber essa solicitacao, o ESP32 filtra os registros persistidos no intervalo `from`/`to`
+e republica os payloads no topico principal de telemetria (`mqttTopic`).
+
+## Observacao sobre TLS
+
+Com `useTls=1`, o firmware usa `WiFiClientSecure` com `setInsecure()`.
+Isso ativa criptografia de transporte, mas sem validacao de certificado do broker.
+Para ambiente produtivo com validacao estrita, substitua por CA/certificado apropriado.
