@@ -64,7 +64,7 @@ class HistoryChart extends StatelessWidget {
     final lastValue = hasData ? _getFieldValue(data.last, field) : null;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         gradient: cardGradient,
         borderRadius: BorderRadius.circular(22),

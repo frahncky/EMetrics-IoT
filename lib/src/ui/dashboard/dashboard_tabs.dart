@@ -12,7 +12,7 @@ class DashboardTabs extends ConsumerWidget {
     final preferences = ref.watch(dashboardPreferencesProvider);
     return Column(
       children: [
-        const SizedBox(height: 16),
+          const SizedBox(height: 6),
         Expanded(
           child: _ChartWithSelector(
             selectedField: preferences.topField,
@@ -23,7 +23,7 @@ class DashboardTabs extends ConsumerWidget {
             },
           ),
         ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 6),
         Expanded(
           child: _ChartWithSelector(
             selectedField: preferences.bottomField,

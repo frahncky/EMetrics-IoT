@@ -190,7 +190,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                   8,
                   0,
                   8,
-                  16,
+                    8,
                 ), // Espaço inferior para afastar do menu
                 child: DashboardTabs(),
               ),
