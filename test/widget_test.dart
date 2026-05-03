@@ -18,11 +18,13 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('App inicia e exibe navegacao principal', (WidgetTester tester) async {
+  testWidgets('App inicia sem faixa debug e exibe navegacao principal', (WidgetTester tester) async {
     await tester.pumpWidget(const EmetricsApp());
     await tester.pumpAndSettle();
 
-    expect(find.byType(MaterialApp), findsOneWidget);
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+
+    expect(app.debugShowCheckedModeBanner, isFalse);
     expect(find.text('Início'), findsOneWidget);
     expect(find.text('Alertas'), findsOneWidget);
     expect(find.text('Configurações'), findsOneWidget);

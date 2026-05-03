@@ -29,6 +29,7 @@ class _AppInitializer extends ConsumerWidget {
 
     return MaterialApp(
       title: 'E-Metrics IoT',
+      debugShowCheckedModeBanner: false,
       theme: _buildLightTheme(),
       darkTheme: _buildDarkTheme(),
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
