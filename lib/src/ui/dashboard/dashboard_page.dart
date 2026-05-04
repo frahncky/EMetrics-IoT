@@ -8,6 +8,7 @@ import '../../providers/forecast_provider.dart';
 import '../../providers/metric_provider.dart';
 import '../../theme/app_colors.dart';
 import 'dashboard_tabs.dart';
+import '../shared/mqtt_connection_status_icon.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -50,20 +51,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     ref.watch(mqttMetricSaverProvider);
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final metricsAsync = ref.watch(metricsProvider);
-    final mqttStatus = ref.watch(mqttStatusProvider);
     final dashboardPreferences = ref.watch(dashboardPreferencesProvider);
     final forecastAsync = ref.watch(forecastProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final lastMetricTime = metricsAsync.asData?.value.isNotEmpty == true
-        ? metricsAsync.asData!.value.first.timestamp
-        : null;
-    // Determina ícone/cor/mensagem do indicador de estado MQTT no AppBar.
-    final statusVisual = _buildMonitoringStatusVisual(mqttStatus, lastMetricTime);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        toolbarHeight: 52,
+        toolbarHeight: 64,
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
@@ -91,29 +86,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               size: 26,
             ),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'E-Metrics IoT',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: isDarkMode ? Colors.white : Colors.black87,
-                  ),
-                ),
-                Text(
-                  'Dispositivo: ${mqttSettings.profileName}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDarkMode
-                        ? Colors.white54
-                        : Colors.black45,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            Text(
+              'E-Metrics IoT',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
             ),
           ],
         ),
@@ -122,13 +101,26 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 14),
-            child: Tooltip(
-              message: statusVisual.message,
-              child: Icon(
-                statusVisual.icon,
-                color: statusVisual.color,
-                size: 24,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const MqttConnectionStatusIcon(rightPadding: 0),
+                SizedBox(
+                  width: 210,
+                  child: Text(
+                    'Dispositivo: ${mqttSettings.profileName}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isDarkMode ? Colors.white54 : Colors.black45,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -201,105 +193,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
       ),
     );
   }
-}
-
-/// Computa ícone, cor e mensagem do indicador de estado MQTT exibido no AppBar.
-///
-/// Considera a fase de conexão e o tempo da última leitura recebida.
-/// Leituras com mais de 5 minutos são consideradas obsoletas (stale).
-_MonitoringStatusVisual _buildMonitoringStatusVisual(
-  MqttStatusState status,
-  DateTime? lastMetricTime,
-) {
-  final phaseLabel = _phaseLabel(status.phase);
-
-  if (status.phase == MqttConnectionPhase.error) {
-    return _MonitoringStatusVisual(
-      icon: Icons.error_outline,
-      color: AppColors.statusError,
-      message: status.lastMessage ?? 'Monitoramento com erro.',
-    );
-  }
-
-  if (status.phase == MqttConnectionPhase.connecting) {
-    return _MonitoringStatusVisual(
-      icon: Icons.sync,
-      color: AppColors.statusWarning,
-      message: 'MQTT conectando.',
-    );
-  }
-
-  if (status.phase == MqttConnectionPhase.connected) {
-    if (lastMetricTime == null) {
-      return _MonitoringStatusVisual(
-        icon: Icons.sensors,
-        color: AppColors.statusWarning,
-        message: 'MQTT conectado, aguardando leituras.',
-      );
-    }
-
-    // Leitura é considerada obsoleta após 5 minutos sem atualização.
-    final stale = DateTime.now().difference(lastMetricTime).inMinutes >= 5;
-    if (stale) {
-      return _MonitoringStatusVisual(
-        icon: Icons.sensors,
-        color: AppColors.statusWarning,
-        message: 'Última leitura ${_relativeTime(lastMetricTime)}.',
-      );
-    }
-
-    return _MonitoringStatusVisual(
-      icon: status.backgroundActive ? Icons.sensors : Icons.sensors_outlined,
-      color: AppColors.statusSuccess,
-      message: status.backgroundActive
-          ? 'Monitoramento ativo em segundo plano.'
-          : 'MQTT conectado com leitura recente.',
-    );
-  }
-
-  return _MonitoringStatusVisual(
-    icon: Icons.cloud_off,
-    color: AppColors.statusIdle,
-    message: status.lastMessage ?? 'MQTT $phaseLabel.',
-  );
-}
-
-/// Retorna rótulo legível para a fase de conexão MQTT.
-String _phaseLabel(MqttConnectionPhase phase) {
-  switch (phase) {
-    case MqttConnectionPhase.connected:
-      return 'conectado';
-    case MqttConnectionPhase.connecting:
-      return 'conectando';
-    case MqttConnectionPhase.error:
-      return 'erro';
-    case MqttConnectionPhase.disconnected:
-      return 'desconectado';
-  }
-}
-
-/// Retorna string de tempo relativo para exibição no tooltip de status.
-String _relativeTime(DateTime value) {
-  final difference = DateTime.now().difference(value);
-  if (difference.inMinutes < 1) {
-    return 'há instantes';
-  }
-  if (difference.inHours < 1) {
-    return 'há ${difference.inMinutes} min';
-  }
-  return 'há ${difference.inHours} h';
-}
-
-class _MonitoringStatusVisual {
-  final IconData icon;
-  final Color color;
-  final String message;
-
-  const _MonitoringStatusVisual({
-    required this.icon,
-    required this.color,
-    required this.message,
-  });
 }
 
 // ── Card de previsão ─────────────────────────────────────────────────────────
