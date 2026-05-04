@@ -80,17 +80,27 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
         ),
         title: Row(
           children: [
-            Icon(
-              Icons.bolt,
-              color: Theme.of(context).colorScheme.secondary,
-              size: 26,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondary.withValues(
+                  alpha: isDarkMode ? 0.2 : 0.14,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.bolt,
+                color: Theme.of(context).colorScheme.secondary,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 8),
             Text(
               'E-Metrics IoT',
               style: TextStyle(
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w800,
                 fontSize: 16,
+                letterSpacing: 0.2,
                 color: isDarkMode ? Colors.white : Colors.black87,
               ),
             ),
@@ -216,11 +226,30 @@ class _ForecastCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDarkMode
+              ? [
+                  Theme.of(context).cardColor,
+                  AppColors.darkSurface.withValues(alpha: 0.9),
+                ]
+              : [
+                  AppColors.lightCard,
+                  AppColors.lightScaffold,
+                ],
+        ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: AppColors.forecastBorder.withValues(alpha: 0.45),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDarkMode ? 0.2 : 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -522,16 +551,16 @@ class _IndicatorCardState extends State<_IndicatorCard>
             ),
             decoration: BoxDecoration(
               color: cardBgColor,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: widget.color.withValues(alpha: 0.6),
                 width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: widget.color.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  color: widget.color.withValues(alpha: isDarkMode ? 0.14 : 0.16),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
