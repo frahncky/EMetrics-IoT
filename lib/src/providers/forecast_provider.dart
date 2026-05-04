@@ -20,12 +20,12 @@ class ForecastSnapshot {
 
   String get trendLabel {
     if (powerSlopePerMinute > 0.15) {
-      return 'Tendencia de alta';
+      return 'Tendência de alta';
     }
     if (powerSlopePerMinute < -0.15) {
-      return 'Tendencia de queda';
+      return 'Tendência de queda';
     }
-    return 'Tendencia estavel';
+    return 'Tendência estável';
   }
 }
 

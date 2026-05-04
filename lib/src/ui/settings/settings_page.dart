@@ -654,8 +654,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Exibir previsao no dashboard'),
-              subtitle: const Text('Ativa o card de tendencia e projecao local.'),
+              title: const Text('Exibir previsão no dashboard'),
+              subtitle: const Text('Ativa o card de tendência e projeção local.'),
               value: _showForecastCard,
               onChanged: (value) {
                 setState(() => _showForecastCard = value);
@@ -685,7 +685,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               title: const Text('Tipo de acesso'),
               subtitle: Text(
                 authState.mode == AuthMode.authenticated
-                    ? 'Perfil local ativo (${authState.userEmail ?? 'usuario local'})'
+                    ? 'Perfil local ativo (${authState.userEmail ?? 'usuário local'})'
                     : 'Perfil visitante ativo',
               ),
             ),
@@ -733,14 +733,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         ),
       ),
       // ── Aba: Integração ─────────────────────────────────────────────────────
-      // Configura envio de métricas para API REST externa com autenticacao OAuth.
+      // Configura envio de métricas para API REST externa com autenticação OAuth.
       Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
           children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Ativar integracao REST'),
+              title: const Text('Ativar integração REST'),
               subtitle: const Text('Envia leituras para API de terceiros com fila offline.'),
               value: _integrationEnabled,
               onChanged: (value) {
@@ -761,7 +761,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               controller: _integrationPathController,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.route_outlined),
-                labelText: 'Path de envio de metricas',
+                labelText: 'Path de envio de métricas',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -781,7 +781,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               subtitle: Text(
                 integrationSettings.oauthAccessToken.isNotEmpty
                     ? 'Token OAuth configurado.'
-                    : 'Token OAuth ainda nao conectado.',
+                    : 'Token OAuth ainda não conectado.',
               ),
               value: _oauthEnabled,
               onChanged: (value) {
@@ -934,7 +934,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text(
-                                        'Notificacoes desativadas. Alertas locais podem nao aparecer.',
+                                        'Notificações desativadas. Alertas locais podem não aparecer.',
                                       ),
                                     ),
                                   );

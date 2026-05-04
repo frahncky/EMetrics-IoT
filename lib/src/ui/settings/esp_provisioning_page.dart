@@ -102,7 +102,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
             padding: const EdgeInsets.all(16),
             children: [
               const Text(
-                'Conecte o celular na rede AP do ESP32 e envie as configuracoes.',
+                'Conecte o celular na rede AP do ESP32 e envie as configurações.',
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -164,7 +164,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
               TextFormField(
                 controller: _mqttUserController,
                 decoration: const InputDecoration(
-                  labelText: 'Usuario MQTT',
+                  labelText: 'Usuário MQTT',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -181,9 +181,9 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
               TextFormField(
                 controller: _mqttTopicController,
                 validator: (value) =>
-                    SettingsValidators.validateTopic(value, fieldLabel: 'o topico MQTT'),
+                    SettingsValidators.validateTopic(value, fieldLabel: 'o tópico MQTT'),
                 decoration: const InputDecoration(
-                  labelText: 'Topico MQTT',
+                  labelText: 'Tópico MQTT',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -192,10 +192,10 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                 controller: _mqttRequestTopicController,
                 validator: (value) => SettingsValidators.validateTopic(
                   value,
-                  fieldLabel: 'o topico de solicitacao',
+                  fieldLabel: 'o tópico de solicitação',
                 ),
                 decoration: const InputDecoration(
-                  labelText: 'Topico de solicitacao de historico',
+                  labelText: 'Tópico de solicitação de histórico',
                   border: OutlineInputBorder(),
                 ),
               ),

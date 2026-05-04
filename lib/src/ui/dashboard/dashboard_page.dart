@@ -335,7 +335,7 @@ class _ForecastCard extends StatelessWidget {
               const Icon(Icons.auto_graph, color: AppColors.forecastBorder),
               const SizedBox(width: 8),
               Text(
-                'Previsao local',
+                'Previsão local',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,

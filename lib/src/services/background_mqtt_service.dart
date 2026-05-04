@@ -82,7 +82,7 @@ class BackgroundMqttService {
     final isRunning = await service.isRunning();
     if (!isRunning) {
       throw const MqttServiceException(
-        'O monitoramento em segundo plano nao esta ativo.',
+        'O monitoramento em segundo plano não está ativo.',
       );
     }
 
@@ -101,7 +101,7 @@ class BackgroundMqttService {
         .timeout(
           const Duration(seconds: 8),
           onTimeout: () => throw TimeoutException(
-            'Tempo limite ao solicitar historico em segundo plano.',
+            'Tempo limite ao solicitar histórico em segundo plano.',
           ),
         );
 
@@ -111,7 +111,7 @@ class BackgroundMqttService {
       final message =
           rawError is String && rawError.trim().isNotEmpty
           ? rawError
-          : 'Falha ao solicitar historico no monitoramento em segundo plano.';
+          : 'Falha ao solicitar histórico no monitoramento em segundo plano.';
       throw MqttServiceException(message);
     }
   }
@@ -224,7 +224,7 @@ class BackgroundMqttService {
         if (fromMillis is! int || toMillis is! int) {
           await sendResult(
             ok: false,
-            error: 'Payload invalido para solicitacao de historico.',
+            error: 'Payload inválido para solicitação de histórico.',
           );
           return;
         }
@@ -235,7 +235,7 @@ class BackgroundMqttService {
         if (mqtt == null || !mqtt!.isConnected) {
           await sendResult(
             ok: false,
-            error: 'Nao foi possivel conectar ao broker MQTT em segundo plano.',
+            error: 'Não foi possível conectar ao broker MQTT em segundo plano.',
           );
           return;
         }
@@ -247,7 +247,7 @@ class BackgroundMqttService {
         await sendResult(ok: true);
       } catch (e, stackTrace) {
         developer.log(
-          'Falha ao solicitar historico via servico MQTT em segundo plano',
+          'Falha ao solicitar histórico via serviço MQTT em segundo plano',
           name: 'BackgroundMqttService',
           error: e,
           stackTrace: stackTrace,

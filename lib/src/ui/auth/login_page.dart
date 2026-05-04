@@ -78,7 +78,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     validator: (value) {
                       final text = (value ?? '').trim();
                       if (text.isEmpty || !text.contains('@')) {
-                        return 'Informe um e-mail valido.';
+                        return 'Informe um e-mail válido.';
                       }
                       return null;
                     },

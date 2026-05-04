@@ -59,7 +59,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> signIn({required String email, required String password}) async {
     final trimmedEmail = email.trim();
     if (trimmedEmail.isEmpty || !trimmedEmail.contains('@')) {
-      throw Exception('Informe um e-mail valido.');
+      throw Exception('Informe um e-mail válido.');
     }
     if (password.trim().isEmpty) {
       throw Exception('Informe a senha.');

@@ -21,7 +21,7 @@ class EspProvisioningService {
     final candidate = raw.contains('://') ? raw : 'http://$raw';
     final parsed = Uri.tryParse(candidate);
     if (parsed == null || parsed.host.isEmpty) {
-      throw const FormatException('IP ou URL do ESP32 invalido.');
+      throw const FormatException('IP ou URL do ESP32 inválido.');
     }
 
     return Uri(
@@ -90,7 +90,7 @@ class EspProvisioningService {
       final response = await http.post(uri, body: body).timeout(timeout);
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final message = _extractMessage(response.body) ??
-            'Configuracao enviada com sucesso. O ESP32 vai reiniciar.';
+            'Configuração enviada com sucesso. O ESP32 vai reiniciar.';
         return EspProvisioningResult(ok: true, message: message);
       }
 
@@ -103,7 +103,7 @@ class EspProvisioningService {
       return const EspProvisioningResult(
         ok: false,
         message:
-            'Nao foi possivel conectar ao ESP32. Verifique se o celular esta na rede/AP do dispositivo.',
+            'Não foi possível conectar ao ESP32. Verifique se o celular está na rede/AP do dispositivo.',
       );
     }
   }
