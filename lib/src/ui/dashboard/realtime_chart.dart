@@ -36,12 +36,12 @@ class RealtimeChart extends ConsumerWidget {
     );
 
     final titleColor = isDarkMode ? Colors.white : const Color(0xFF1F2937);
-    final axisTextColor = meta.color.withValues(alpha: isDarkMode ? 0.74 : 0.8);
+    final axisTextColor = meta.color.withValues(alpha: isDarkMode ? 0.9 : 0.96);
     final horizontalGridColor = meta.color.withValues(
-      alpha: isDarkMode ? 0.14 : 0.09,
+      alpha: isDarkMode ? 0.22 : 0.18,
     );
     final verticalGridColor = meta.color.withValues(
-      alpha: isDarkMode ? 0.08 : 0.05,
+      alpha: isDarkMode ? 0.14 : 0.11,
     );
 
     return metricsAsync.when(
@@ -213,18 +213,18 @@ class RealtimeChart extends ConsumerWidget {
                               verticalInterval: verticalInterval,
                               getDrawingHorizontalLine: (value) => FlLine(
                                 color: horizontalGridColor,
-                                strokeWidth: 0.6,
+                                strokeWidth: 0.9,
                               ),
                               getDrawingVerticalLine: (value) => FlLine(
                                 color: verticalGridColor,
-                                strokeWidth: 0.6,
+                                strokeWidth: 0.8,
                               ),
                             ),
                             titlesData: FlTitlesData(
                               leftTitles: AxisTitles(
                                 sideTitles: SideTitles(
                                   showTitles: true,
-                                  reservedSize: 32,
+                                  reservedSize: 44,
                                   interval: scale.horizontalInterval,
                                   getTitlesWidget: (value, metaData) => Text(
                                     _formatScaledValue(
@@ -234,7 +234,8 @@ class RealtimeChart extends ConsumerWidget {
                                     ),
                                     style: TextStyle(
                                       color: axisTextColor,
-                                      fontSize: 11,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
@@ -256,7 +257,7 @@ class RealtimeChart extends ConsumerWidget {
                                 axisNameSize: 16,
                                 sideTitles: SideTitles(
                                   showTitles: true,
-                                  reservedSize: 22,
+                                  reservedSize: 26,
                                   interval: verticalInterval,
                                   getTitlesWidget: (value, metaData) {
                                     if (!hasData) {
@@ -266,7 +267,8 @@ class RealtimeChart extends ConsumerWidget {
                                           value.toInt().toString(),
                                           style: TextStyle(
                                             color: axisTextColor,
-                                            fontSize: 11,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       );
@@ -281,7 +283,8 @@ class RealtimeChart extends ConsumerWidget {
                                         ),
                                         style: TextStyle(
                                           color: axisTextColor,
-                                          fontSize: 11,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     );
@@ -378,12 +381,12 @@ class RealtimeChart extends ConsumerWidget {
                                 color: hasData
                                     ? meta.color
                                     : Colors.transparent,
-                                barWidth: hasData ? 2.8 : 0,
+                                barWidth: hasData ? 3.6 : 0,
                                 isStrokeCapRound: true,
                                 dotData: FlDotData(show: false),
                                 belowBarData: BarAreaData(
                                   show: hasData,
-                                  color: meta.color.withValues(alpha: 0.11),
+                                  color: meta.color.withValues(alpha: 0.16),
                                 ),
                               ),
                             ],
@@ -394,7 +397,7 @@ class RealtimeChart extends ConsumerWidget {
                             'Sem dados',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.75),
-                              fontSize: 16,
+                              fontSize: 17,
                               fontWeight: FontWeight.w500,
                             ),
                           ),

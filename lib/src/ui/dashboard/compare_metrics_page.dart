@@ -32,14 +32,14 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
     );
 
     final axisTextColor = isDarkMode
-      ? Colors.white.withValues(alpha: 0.5)
-      : Colors.black.withValues(alpha: 0.4);
+      ? Colors.white.withValues(alpha: 0.86)
+      : Colors.black.withValues(alpha: 0.78);
     final horizontalGridColor = isDarkMode
-      ? Colors.white.withValues(alpha: 0.08)
-      : Colors.black.withValues(alpha: 0.04);
+      ? Colors.white.withValues(alpha: 0.18)
+      : Colors.black.withValues(alpha: 0.12);
     final verticalGridColor = isDarkMode
-      ? Colors.white.withValues(alpha: 0.05)
-      : Colors.black.withValues(alpha: 0.025);
+      ? Colors.white.withValues(alpha: 0.12)
+      : Colors.black.withValues(alpha: 0.08);
     return Scaffold(
       appBar: AppBar(title: const Text('Comparativo de Métricas')),
       body: Padding(
@@ -193,9 +193,9 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
               horizontalInterval: scale.horizontalInterval,
               verticalInterval: verticalInterval,
               getDrawingHorizontalLine: (value) =>
-                  FlLine(color: horizontalGridColor, strokeWidth: 0.6),
+                  FlLine(color: horizontalGridColor, strokeWidth: 0.9),
               getDrawingVerticalLine: (value) =>
-                  FlLine(color: verticalGridColor, strokeWidth: 0.6),
+                  FlLine(color: verticalGridColor, strokeWidth: 0.8),
             ),
             titlesData: FlTitlesData(
               leftTitles: AxisTitles(
@@ -205,7 +205,11 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                   interval: scale.horizontalInterval,
                   getTitlesWidget: (value, metaData) => Text(
                     _formatAxisValue(value, allPf),
-                    style: TextStyle(color: axisTextColor, fontSize: 11),
+                    style: TextStyle(
+                      color: axisTextColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -216,7 +220,11 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                   interval: verticalInterval,
                   getTitlesWidget: (value, metaData) => Text(
                     _buildBottomLabel(value, data, labelStep),
-                    style: TextStyle(color: axisTextColor, fontSize: 11),
+                    style: TextStyle(
+                      color: axisTextColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -286,12 +294,12 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                 preventCurveOverShooting: true,
                 curveSmoothness: 0.24,
                 color: meta1.color,
-                barWidth: 2.8,
+                barWidth: 3.6,
                 isStrokeCapRound: true,
                 dotData: FlDotData(show: false),
                 belowBarData: BarAreaData(
                   show: true,
-                  color: meta1.color.withValues(alpha: 0.11),
+                  color: meta1.color.withValues(alpha: 0.16),
                 ),
               ),
               LineChartBarData(
@@ -300,12 +308,12 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                 preventCurveOverShooting: true,
                 curveSmoothness: 0.24,
                 color: meta2.color,
-                barWidth: 2.8,
+                barWidth: 3.6,
                 isStrokeCapRound: true,
                 dotData: FlDotData(show: false),
                 belowBarData: BarAreaData(
                   show: true,
-                  color: meta2.color.withValues(alpha: 0.11),
+                  color: meta2.color.withValues(alpha: 0.16),
                 ),
               ),
             ],

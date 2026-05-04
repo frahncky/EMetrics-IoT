@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'ui/alerts/alerts_page.dart';
 import 'ui/dashboard/dashboard_page.dart';
 import 'ui/history/history_page.dart';
@@ -58,6 +59,11 @@ class _AppInitializer extends ConsumerWidget {
         centerTitle: true,
         elevation: 4,
         shadowColor: AppColors.shadowDark,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+        ),
         titleTextStyle: TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
@@ -151,17 +157,27 @@ class _AppInitializer extends ConsumerWidget {
         surface: AppColors.lightSurface,
         tertiary: AppColors.lightTertiary,
         outline: AppColors.lightOutline,
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onSurface: AppColors.lightTextBody,
+        onTertiary: Colors.white,
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.lightSurface,
         centerTitle: true,
-        elevation: 1,
+        elevation: 2,
         shadowColor: AppColors.shadowLight,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
         titleTextStyle: TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
           color: AppColors.lightTextTitle,
         ),
+        iconTheme: IconThemeData(color: AppColors.lightTextBody),
       ),
       cardTheme: CardThemeData(
         color: AppColors.lightCard,
@@ -169,7 +185,7 @@ class _AppInitializer extends ConsumerWidget {
           borderRadius: BorderRadius.all(Radius.circular(16)),
           side: BorderSide(color: AppColors.lightInputBorder, width: 1),
         ),
-        elevation: 0,
+        elevation: 1,
         shadowColor: AppColors.shadowLight,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -202,6 +218,10 @@ class _AppInitializer extends ConsumerWidget {
       inputDecorationTheme: const InputDecorationTheme(
         filled: true,
         fillColor: AppColors.lightInputFill,
+        floatingLabelStyle: TextStyle(
+          color: AppColors.lightTextBody,
+          fontWeight: FontWeight.w600,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide(color: AppColors.lightOutline, width: 1),
@@ -219,6 +239,11 @@ class _AppInitializer extends ConsumerWidget {
           fontWeight: FontWeight.w500,
         ),
         hintStyle: TextStyle(color: AppColors.lightHint),
+      ),
+      dividerColor: AppColors.lightInputBorder,
+      listTileTheme: const ListTileThemeData(
+        textColor: AppColors.lightTextBody,
+        iconColor: AppColors.lightTextBody,
       ),
       visualDensity: VisualDensity.adaptivePlatformDensity,
       textTheme: const TextTheme(

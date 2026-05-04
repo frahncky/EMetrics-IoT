@@ -4,6 +4,7 @@ import '../../data/metric_model.dart';
 import '../../providers/measurement_settings_provider.dart';
 import '../../providers/metric_provider.dart';
 import '../../providers/mqtt_provider.dart';
+import '../../theme/app_colors.dart';
 import '../shared/mqtt_connection_status_icon.dart';
 import 'history_filter.dart';
 import 'history_chart.dart';
@@ -211,7 +212,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final mutedTextColor = isDarkMode
         ? Colors.white70
-        : colorScheme.onSurface.withValues(alpha: 0.68);
+      : colorScheme.onSurface.withValues(alpha: 0.82);
     final successTextColor = isDarkMode
         ? const Color(0xFF22C55E)
         : const Color(0xFF15803D);
@@ -238,8 +239,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                       const Color(0xFF0F1419).withValues(alpha: 0.9),
                     ]
                   : [
-                      const Color(0xFFFFFFFF),
-                      const Color(0xFFF8FAFC).withValues(alpha: 0.9),
+                      AppColors.lightCard,
+                      AppColors.lightScaffold,
                     ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,

@@ -70,8 +70,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                       AppColors.darkScaffold.withValues(alpha: 0.9),
                     ]
                   : [
-                      AppColors.lightSurface,
-                      AppColors.lightScaffold.withValues(alpha: 0.9),
+                      AppColors.lightCard,
+                      AppColors.lightScaffold,
                     ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -113,7 +113,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: isDarkMode ? Colors.white54 : Colors.black45,
+                      color: isDarkMode
+                          ? Colors.white54
+                          : AppColors.lightTextSmall,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -182,7 +184,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                   8,
                   0,
                   8,
-                    8,
+                  8,
                 ), // Espaço inferior para afastar do menu
                 child: DashboardTabs(),
               ),

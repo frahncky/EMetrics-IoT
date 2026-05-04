@@ -41,22 +41,22 @@ abstract final class AppColors {
 
   // ── Tema Claro ───────────────────────────────────────────────────────────
   /// Fundo principal das telas no tema claro.
-  static const Color lightScaffold = Color(0xFFF8FAFC);
+  static const Color lightScaffold = Color(0xFFF4F7FB);
 
   /// Cor de superfície de cards no tema claro.
   static const Color lightSurface = Color(0xFFFFFFFF);
 
   /// Cor de fundo de cards no tema claro.
-  static const Color lightCard = Color(0xFFF9FAFB);
+  static const Color lightCard = Color(0xFFFFFFFF);
 
   /// Cor de preenchimento de campos de texto no tema claro.
-  static const Color lightInputFill = Color(0xFFF1F5F9);
+  static const Color lightInputFill = Color(0xFFFFFFFF);
 
   /// Cor de bordas no tema claro.
-  static const Color lightOutline = Color(0xFFCBD5E1);
+  static const Color lightOutline = Color(0xFF94A3B8);
 
   /// Cor de borda de campos de texto no tema claro.
-  static const Color lightInputBorder = Color(0xFFE2E8F0);
+  static const Color lightInputBorder = Color(0xFFB6C2D2);
 
   /// Cor primária (azul escuro) no tema claro.
   static const Color lightPrimary = Color(0xFF1E40AF);
@@ -74,16 +74,16 @@ abstract final class AppColors {
   static const Color lightTextBody = Color(0xFF1E293B);
 
   /// Cor de texto pequeno no tema claro.
-  static const Color lightTextSmall = Color(0xFF475569);
+  static const Color lightTextSmall = Color(0xFF334155);
 
   /// Cor de rótulos de campo no tema claro.
   static const Color lightLabel = Color(0xFF334155);
 
   /// Cor de hints/placeholders no tema claro.
-  static const Color lightHint = Color(0xFF94A3B8);
+  static const Color lightHint = Color(0xFF64748B);
 
   /// Cor de ícones/texto não selecionados na nav bar (tema claro).
-  static const Color lightUnselected = Color(0xFF9CA3AF);
+  static const Color lightUnselected = Color(0xFF475569);
 
   // ── Estados de conexão MQTT ──────────────────────────────────────────────
   /// Indica erro ou falha de conexão.
