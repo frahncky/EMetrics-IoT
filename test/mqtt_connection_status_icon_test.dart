@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('abre painel rapido de conexao ao segurar icone MQTT', (
+  testWidgets('abre dialogo central de conexao ao segurar icone MQTT', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -30,6 +30,7 @@ void main() {
     await tester.longPress(find.byIcon(Icons.cloud_off));
     await tester.pumpAndSettle();
 
+    expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.text('Conexão MQTT'), findsOneWidget);
     expect(find.text('Conectar'), findsOneWidget);
     expect(find.text('Desconectar'), findsOneWidget);

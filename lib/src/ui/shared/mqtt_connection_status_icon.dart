@@ -33,23 +33,22 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
 
     return Padding(
       padding: EdgeInsets.only(right: rightPadding),
-      child: GestureDetector(
-        key: const Key('mqtt-status-quick-actions'),
-        onLongPress: () => _showQuickConnectionSheet(context, ref),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Tooltip(
-              triggerMode: TooltipTriggerMode.tap,
-              message: deviceVisual.message,
-              child: Icon(
-                deviceVisual.icon,
-                color: deviceVisual.color,
-                size: 24,
-              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Tooltip(
+            message: deviceVisual.message,
+            child: Icon(
+              deviceVisual.icon,
+              color: deviceVisual.color,
+              size: 24,
             ),
-            const SizedBox(width: 8),
-            Tooltip(
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            key: const Key('mqtt-status-quick-actions'),
+            onLongPress: () => _showQuickConnectionDialog(context, ref),
+            child: Tooltip(
               triggerMode: TooltipTriggerMode.tap,
               message: mqttVisual.message,
               child: Icon(
@@ -58,65 +57,43 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
                 size: 24,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _showQuickConnectionSheet(
+  Future<void> _showQuickConnectionDialog(
     BuildContext context,
     WidgetRef ref,
   ) async {
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Conexão MQTT',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Segure os ícones para abrir este atalho de conexão.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          Navigator.of(sheetContext).pop();
-                          await _connectFromQuickActions(context, ref);
-                        },
-                        icon: const Icon(Icons.cloud_done_outlined),
-                        label: const Text('Conectar'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          Navigator.of(sheetContext).pop();
-                          await _disconnectFromQuickActions(context, ref);
-                        },
-                        icon: const Icon(Icons.cloud_off_outlined),
-                        label: const Text('Desconectar'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Conexão MQTT'),
+          content: Text(
+            'Segure o ícone MQTT para abrir este atalho rápido.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
+          actions: [
+            TextButton.icon(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _disconnectFromQuickActions(context, ref);
+              },
+              icon: const Icon(Icons.cloud_off_outlined),
+              label: const Text('Desconectar'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _connectFromQuickActions(context, ref);
+              },
+              icon: const Icon(Icons.cloud_done_outlined),
+              label: const Text('Conectar'),
+            ),
+          ],
         );
       },
     );
@@ -227,7 +204,7 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
 
     if (status.phase == MqttConnectionPhase.connecting) {
       return const _StatusVisual(
-        icon: Icons.sync,
+        icon: Icons.sensors_off,
         color: AppColors.statusWarning,
         message: 'Aguardando comunicação do dispositivo.',
       );
