@@ -1,27 +1,27 @@
 # E-Metrics IoT 📊⚡
 
-Aplicativo Flutter para monitoramento eletrico com MQTT, historico local e visualizacao em graficos.
+Aplicativo Flutter para monitoramento elétrico com MQTT, histórico local e visualização em gráficos.
 
-Projeto pensado para cenarios de IoT de energia, com foco em uso pratico: conectar, acompanhar leituras e analisar comportamento ao longo do tempo.
+Projeto pensado para cenários de IoT de energia, com foco em uso prático: conectar, acompanhar leituras e analisar comportamento ao longo do tempo.
 
-## 🎯 Visao Geral
+## 🎯 Visão Geral
 
-- Dashboard em tempo real com tensao, corrente, potencia, energia e fator de potencia
-- Historico com filtros por periodo e graficos legiveis
+- Dashboard em tempo real com tensão, corrente, potência, energia e fator de potência
+- Histórico com filtros por período e gráficos legíveis
 - Perfis MQTT por dispositivo
 - Indicadores de status no AppBar
-- Persistencia local com SQLite
-- Exportacao em CSV e PDF
+- Persistência local com SQLite
+- Exportação em CSV e PDF
 - Alertas locais
-- Integracao REST opcional com fila offline
+- Integração REST opcional com fila offline
 
-## 🧰 Stack Tecnologica
+## 🧰 Stack Tecnológica
 
 - Flutter + Dart
-- Riverpod para estado e orquestracao
-- mqtt_client para comunicacao MQTT
+- Riverpod para estado e orquestração
+- mqtt_client para comunicação MQTT
 - sqflite para armazenamento local
-- fl_chart para graficos
+- fl_chart para gráficos
 
 ## 🏗️ Estrutura do Projeto
 
@@ -42,14 +42,14 @@ lib/
 
 ## 🚀 Como Rodar
 
-1. Clonar repositorio
+1. Clonar repositório
 
 ```bash
 git clone https://github.com/frahncky/EMetrics-IoT.git
 cd e_metrics_iot
 ```
 
-2. Instalar dependencias
+2. Instalar dependências
 
 ```bash
 flutter pub get
@@ -61,23 +61,23 @@ flutter pub get
 flutter run
 ```
 
-## ✅ Qualidade e Validacao
+## ✅ Qualidade e Validação
 
 ```bash
 flutter analyze
 flutter test
 ```
 
-## 🔌 Configuracao MQTT
+## 🔌 Configuração MQTT
 
-No menu de configuracoes, informe:
+No menu de configurações, informe:
 
 - Broker
 - Porta
 - Client ID
-- Topico de leitura
-- Topico de requisicao de historico
-- Usuario/senha (quando exigido)
+- Tópico de leitura
+- Tópico de requisição de histórico
+- Usuário/senha (quando exigido)
 - TLS (quando exigido)
 
 Exemplo de payload esperado:
@@ -98,19 +98,19 @@ Exemplo de payload esperado:
 ### 📈 Dashboard
 
 - Indicadores principais em destaque
-- Card de previsao local (quando habilitado)
-- Graficos com melhor contraste em tema claro e escuro
+- Card de previsão local (quando habilitado)
+- Gráficos com melhor contraste em tema claro e escuro
 
-### 🕓 Historico
+### 🕓 Histórico
 
 - Consulta por faixa temporal
-- Comparacao visual de metricas
-- Exportacao para auditoria e analise externa
+- Comparação visual de métricas
+- Exportação para auditoria e análise externa
 
 ### 📡 Conectividade
 
-- Conexao MQTT manual e controlada
-- Status de conexao do app separado do status do medidor
+- Conexão MQTT manual e controlada
+- Status de conexão do app separado do status do medidor
 - Suporte a monitoramento em segundo plano
 
 ## 📦 Build
@@ -121,38 +121,38 @@ flutter build ios
 flutter build windows
 ```
 
-## 🛠️ Troubleshooting Rapido
+## 🛠️ Troubleshooting Rápido
 
-### ❌ Nao conecta no MQTT
+### ❌ Não conecta no MQTT
 
 - Confirmar broker/porta
-- Verificar se TLS esta consistente com a porta
-- Validar usuario e senha (ambos preenchidos ou ambos vazios)
+- Verificar se TLS está consistente com a porta
+- Validar usuário e senha (ambos preenchidos ou ambos vazios)
 
-### ⚠️ Conecta mas nao recebe leitura
+### ⚠️ Conecta mas não recebe leitura
 
-- Confirmar topico correto
+- Confirmar tópico correto
 - Confirmar formato do payload
-- Verificar se o dispositivo esta publicando no broker certo
+- Verificar se o dispositivo está publicando no broker certo
 
 ## 🗺️ Roadmap
 
 - [x] Perfis MQTT por dispositivo
-- [x] Dashboard com previsao local
-- [x] Integracao REST com fila offline
+- [x] Dashboard com previsão local
+- [x] Integração REST com fila offline
 - [x] OAuth Device Flow
 - [ ] Capturas de tela oficiais no README
 - [ ] Guia de deploy para ambiente produtivo
 
-## 🤝 Contribuicao
+## 🤝 Contribuição
 
-Contribuicoes sao bem-vindas via pull request.
+Contribuições são bem-vindas via pull request.
 
 1. Criar branch de feature
-2. Implementar alteracoes
+2. Implementar alterações
 3. Rodar analyze e testes
 4. Abrir PR com contexto objetivo
 
-## 🔒 Licenca
+## 🔒 Licença
 
 Projeto privado.
