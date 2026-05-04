@@ -240,6 +240,6 @@ void main() {
     expect(snapshot, isNotNull);
     expect(snapshot!.projectedPowerWatts, greaterThan(0));
     expect(snapshot.sampleCount, 6);
-    expect(snapshot.trendLabel, 'Tendencia de alta');
+    expect(snapshot.trendLabel, 'Tendência de alta');
   });
 }

@@ -66,10 +66,15 @@ class MqttService {
   /// Lança [MqttServiceException] em caso de falha na autenticação ou rede.
   Future<void> connect() async {
     onConnecting?.call();
-    client.connectionMessage = MqttConnectMessage()
+    final connectMessage = MqttConnectMessage()
         .withClientIdentifier(clientId)
-        .authenticateAs(username, password)
         .startClean();
+    final hasCredentials =
+        username.trim().isNotEmpty || password.trim().isNotEmpty;
+    if (hasCredentials) {
+      connectMessage.authenticateAs(username, password);
+    }
+    client.connectionMessage = connectMessage;
 
     developer.log('Iniciando conexão MQTT em $broker:$port', name: 'MqttService');
 
