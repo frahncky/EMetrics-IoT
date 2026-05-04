@@ -83,7 +83,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
             Icon(
               Icons.bolt,
               color: Theme.of(context).colorScheme.secondary,
-              size: 22,
+              size: 28,
             ),
             const SizedBox(width: 8),
             Text(
