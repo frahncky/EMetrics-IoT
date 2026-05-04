@@ -66,13 +66,23 @@ class MqttService {
   /// Lança [MqttServiceException] em caso de falha na autenticação ou rede.
   Future<void> connect() async {
     onConnecting?.call();
+    final usernameTrimmed = username.trim();
+    final passwordTrimmed = password.trim();
+    final hasUsername = usernameTrimmed.isNotEmpty;
+    final hasPassword = passwordTrimmed.isNotEmpty;
+
+    if (hasUsername != hasPassword) {
+      throw const MqttServiceException(
+        'Preencha usuário e senha MQTT, ou deixe ambos vazios.',
+      );
+    }
+
     final connectMessage = MqttConnectMessage()
         .withClientIdentifier(clientId)
         .startClean();
-    final hasCredentials =
-        username.trim().isNotEmpty || password.trim().isNotEmpty;
+    final hasCredentials = hasUsername && hasPassword;
     if (hasCredentials) {
-      connectMessage.authenticateAs(username, password);
+      connectMessage.authenticateAs(usernameTrimmed, passwordTrimmed);
     }
     client.connectionMessage = connectMessage;
 
