@@ -4,6 +4,7 @@ import '../../data/metric_model.dart';
 import '../../providers/measurement_settings_provider.dart';
 import '../../providers/metric_provider.dart';
 import '../../providers/mqtt_provider.dart';
+import '../shared/mqtt_connection_status_icon.dart';
 import 'history_filter.dart';
 import 'history_chart.dart';
 import 'history_export.dart';
@@ -246,6 +247,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           ),
         ),
         title: const Text('Histórico de Consumo'),
+        actions: const [MqttConnectionStatusIcon()],
       ),
       body: Column(
         children: [

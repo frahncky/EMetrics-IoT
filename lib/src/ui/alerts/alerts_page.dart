@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/alert_history_provider.dart';
+import '../shared/mqtt_connection_status_icon.dart';
 
 class AlertsPage extends ConsumerWidget {
   const AlertsPage({super.key});
@@ -14,6 +15,7 @@ class AlertsPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Alertas'),
         actions: [
+          const MqttConnectionStatusIcon(),
           if (alerts.isNotEmpty)
             IconButton(
               tooltip: 'Limpar alertas',

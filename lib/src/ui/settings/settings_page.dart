@@ -14,6 +14,7 @@ import '../../services/oauth_device_service.dart';
 import '../../services/background_mqtt_service.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_page.dart';
+import '../shared/mqtt_connection_status_icon.dart';
 import 'esp_provisioning_page.dart';
 import 'settings_validators.dart';
 
@@ -871,6 +872,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           ),
         ),
         title: const Text('Configurações'),
+        actions: const [MqttConnectionStatusIcon()],
       ),
       body: DefaultTabController(
         length: 5,
@@ -905,29 +907,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                                   mqttStatusProvider.notifier,
                                 );
                                 statusNotifier.markConnecting();
+                                await BackgroundMqttService.stop();
+                                ref.invalidate(mqttServiceProvider);
                                 final mqttService = ref.read(mqttServiceProvider);
-                                final backgroundStarted =
-                                    await BackgroundMqttService.start();
-                                if (backgroundStarted) {
-                                  mqttService.disconnect();
-                                  ref.invalidate(mqttServiceProvider);
-                                  statusNotifier.markConnected();
-                                  statusNotifier.setBackgroundActive(true);
-                                } else {
-                                  await mqttService.connect();
-                                  mqttService.subscribe();
-                                  statusNotifier.setBackgroundActive(false);
-                                }
+                                await mqttService.connect();
+                                mqttService.subscribe();
+                                statusNotifier.markConnected();
+                                statusNotifier.setBackgroundActive(false);
                                 if (!context.mounted) {
                                   return;
                                 }
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      backgroundStarted
-                                          ? 'Monitoramento MQTT iniciado em segundo plano.'
-                                          : 'Conectado ao broker MQTT no app.',
-                                    ),
+                                  const SnackBar(
+                                    content: Text('Conectado ao broker MQTT no app.'),
                                   ),
                                 );
                                 if (!notificationsGranted) {
