@@ -1,99 +1,87 @@
-# E-Metrics IoT 📊⚡
+# E-Metrics IoT
 
-Uma aplicação Flutter moderna para visualização em tempo real e histórico de métricas elétricas via MQTT. Ideal para monitoramento de painéis solares, medidores inteligentes e sistemas IoT de energia.
+Aplicativo Flutter para monitoramento eletrico com MQTT, historico local e visualizacao em graficos.
 
-## 🌟 Características
+Projeto pensado para cenarios de IoT de energia, com foco em uso pratico: conectar, acompanhar leituras e analisar comportamento ao longo do tempo.
 
-- ✅ **Dashboard em Tempo Real** - Visualização instantânea de tensão, corrente, potência e energia
-- ✅ **Histórico de Dados** - Gráficos interativos com filtros por período (hora, dia, semana, mês)
-- ✅ **Tema Claro/Escuro** - Interface adaptativa com paleta de cores moderna
-- ✅ **Status de Conexão no AppBar** - Ícones de MQTT e comunicação com dispositivo em todas as telas principais
-- ✅ **Leitura Aprimorada dos Gráficos** - Eixos, linhas e grade com contraste reforçado
-- ✅ **Persistência Local** - Dados salvos em SQLite para acesso offline
-- ✅ **MQTT Integration** - Conexão configurável com brokers MQTT
-- ✅ **Exportação** - Exportar dados em CSV e PDF
-- ✅ **Notificações** - Alertas locais para eventos críticos
-- ✅ **Multi-plataforma** - Android, iOS, Windows, Linux, macOS e Web
+## Visao Geral
 
-## 📋 Requisitos
+- Dashboard em tempo real com tensao, corrente, potencia, energia e fator de potencia
+- Historico com filtros por periodo e graficos legiveis
+- Perfis MQTT por dispositivo
+- Indicadores de status no AppBar
+- Persistencia local com SQLite
+- Exportacao em CSV e PDF
+- Alertas locais
+- Integracao REST opcional com fila offline
 
-- Flutter 3.11.5 ou superior
-- Dart 3.11.5 ou superior
-- Android SDK (para builds Android)
-- Xcode 14+ (para builds iOS)
+## Stack Tecnologica
 
-## 🚀 Setup e Instalação
+- Flutter + Dart
+- Riverpod para estado e orquestracao
+- mqtt_client para comunicacao MQTT
+- sqflite para armazenamento local
+- fl_chart para graficos
 
-### 1. Clonar repositório
+## Estrutura do Projeto
+
+```text
+lib/
+  main.dart
+  src/
+    app.dart
+    data/
+    providers/
+    services/
+    ui/
+      dashboard/
+      history/
+      settings/
+      alerts/
+```
+
+## Como Rodar
+
+1. Clonar repositorio
+
 ```bash
 git clone https://github.com/frahncky/EMetrics-IoT.git
 cd e_metrics_iot
 ```
 
-### 2. Instalar dependências
+2. Instalar dependencias
+
 ```bash
 flutter pub get
 ```
 
-### 3. Executar aplicação
+3. Executar
+
 ```bash
-# Debug
 flutter run
-
-# Release
-flutter run --release
-
-# Específico para plataforma
-flutter run -d android
-flutter run -d ios
-flutter run -d windows
 ```
 
-## 🏗️ Arquitetura
+## Qualidade e Validacao
 
-### Estrutura de Pastas
-```
-lib/
-├── main.dart                 # Ponto de entrada
-├── src/
-│   ├── app.dart            # Configuração do app + temas
-│   ├── data/               # Camada de dados
-│   │   ├── metric_model.dart
-│   │   ├── metric_repository.dart
-│   │   └── local_database.dart
-│   ├── providers/          # State management com Riverpod
-│   │   ├── metric_provider.dart
-│   │   ├── mqtt_provider.dart
-│   │   ├── alert_provider.dart
-│   │   └── theme_provider.dart
-│   ├── services/           # Serviços e integrações
-│   │   ├── mqtt_service.dart
-│   │   └── alert_service.dart
-│   └── ui/                 # Camada de apresentação
-│       ├── dashboard/
-│       ├── history/
-│       └── settings/
+```bash
+flutter analyze
+flutter test
 ```
 
-### Padrões de Design
+## Configuracao MQTT
 
-- **State Management**: Riverpod (FutureProvider, StateNotifierProvider)
-- **Repository Pattern**: Abstração de acesso a dados
-- **Service Layer**: Lógica de negócio desacoplada
-- **Clean Architecture**: Separação clara de responsabilidades
+No menu de configuracoes, informe:
 
-## 🔧 Configuração MQTT
+- Broker
+- Porta
+- Client ID
+- Topico de leitura
+- Topico de requisicao de historico
+- Usuario/senha (quando exigido)
+- TLS (quando exigido)
 
-Na aba **Configurações**, configure:
+Exemplo de payload esperado:
 
-```
-Broker MQTT:    seu-broker.com:1883 (ou IP)
-Client ID:      emetrics_app
-Tópico:         sensor/metrics
-Tópico Request: sensor/request
-```
-
-### Formato de Payload Esperado
 ```json
 {
   "voltage": 220.5,
@@ -105,114 +93,66 @@ Tópico Request: sensor/request
 }
 ```
 
-## 📊 Temas
+## Principais Recursos
 
-### Tema Claro
-- Contraste reforçado para textos, campos e navegação
-- Ideal para ambientes bem iluminados
-- Melhor leitura de valores e linhas nos gráficos
+### Dashboard
 
-### Tema Escuro
-- Cores vibrantes em fundo escuro
-- Menor consumo de bateria (em telas OLED)
-- Confortável em ambientes com pouca luz
+- Indicadores principais em destaque
+- Card de previsao local (quando habilitado)
+- Graficos com melhor contraste em tema claro e escuro
 
-## 🧪 Testes
+### Historico
+
+- Consulta por faixa temporal
+- Comparacao visual de metricas
+- Exportacao para auditoria e analise externa
+
+### Conectividade
+
+- Conexao MQTT manual e controlada
+- Status de conexao do app separado do status do medidor
+- Suporte a monitoramento em segundo plano
+
+## Build
 
 ```bash
-# Rodar testes unitários
-flutter test
-
-# Com cobertura
-flutter test --coverage
-
-# Ver cobertura
-lcov --list coverage/lcov.info
+flutter build apk
+flutter build ios
+flutter build windows
 ```
 
-## 📦 Build para Produção
+## Troubleshooting Rapido
 
-### Android
-```bash
-flutter build apk --release
-flutter build appbundle --release
-```
+### Nao conecta no MQTT
 
-### iOS
-```bash
-flutter build ios --release
-```
+- Confirmar broker/porta
+- Verificar se TLS esta consistente com a porta
+- Validar usuario e senha (ambos preenchidos ou ambos vazios)
 
-### Windows
-```bash
-flutter build windows --release
-```
+### Conecta mas nao recebe leitura
 
-## 🐛 Troubleshooting
+- Confirmar topico correto
+- Confirmar formato do payload
+- Verificar se o dispositivo esta publicando no broker certo
 
-### Conexão MQTT falha
-- Verifique se o broker está ativo
-- Confirme IP/porta corretos
-- Teste com MQTT client (ex: MQTT Explorer)
+## Roadmap
 
-### Dados não aparecem
-- Verifique se o formato do payload está correto
-- Confirme se o tópico está correto
-- Veja logs no console do Flutter
+- [x] Perfis MQTT por dispositivo
+- [x] Dashboard com previsao local
+- [x] Integracao REST com fila offline
+- [x] OAuth Device Flow
+- [ ] Capturas de tela oficiais no README
+- [ ] Guia de deploy para ambiente produtivo
 
-### Erros de build
-```bash
-# Limpar cache
-flutter clean
+## Contribuicao
 
-# Redownload de dependências
-flutter pub get
+Contribuicoes sao bem-vindas via pull request.
 
-# Atualizar Flutter
-flutter upgrade
-```
+1. Criar branch de feature
+2. Implementar alteracoes
+3. Rodar analyze e testes
+4. Abrir PR com contexto objetivo
 
-## 🔒 Dependências Principais
+## Licenca
 
-- **flutter_riverpod**: State management
-- **mqtt_client**: Integração MQTT
-- **sqflite**: Base de dados local
-- **fl_chart**: Gráficos interativos
-- **shared_preferences**: Persistência de preferências
-- **flutter_local_notifications**: Alertas
-- **csv**: Exportação CSV
-- **pdf**: Geração de PDFs
-
-## 📝 Licença
-
-Este projeto é privado. Entre em contato para mais informações.
-
-## 🤝 Contribuindo
-
-Para contribuir:
-
-1. Faça um fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## 📧 Contato e Suporte
-
-Para bugs, sugestões ou dúvidas:
-- Abra uma issue no GitHub
-- Consulte a documentação da API
-- Verifique o arquivo AGENTS.md para padrões de desenvolvimento
-
-## 🚀 Roadmap
-
-- [x] Modo offline melhorado com sincronização automática (fila SQLite + flush REST)
-- [x] Previsões locais por regressão linear (forecast card no dashboard)
-- [x] Dashboard personalizável com persistência de preferências
-- [x] API REST para integração com terceiros (IntegrationService + backend de exemplo)
-- [x] Autenticação com OAuth Device Flow
-- [x] Suporte a múltiplos brokers/dispositivos (perfis MQTT)
-
----
-
-**Desenvolvido com ❤️ para IoT**
+Projeto privado.
