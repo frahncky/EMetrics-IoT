@@ -1,10 +1,10 @@
-# E-Metrics IoT
+# E-Metrics IoT 📊⚡
 
 Aplicativo Flutter para monitoramento eletrico com MQTT, historico local e visualizacao em graficos.
 
 Projeto pensado para cenarios de IoT de energia, com foco em uso pratico: conectar, acompanhar leituras e analisar comportamento ao longo do tempo.
 
-## Visao Geral
+## 🎯 Visao Geral
 
 - Dashboard em tempo real com tensao, corrente, potencia, energia e fator de potencia
 - Historico com filtros por periodo e graficos legiveis
@@ -15,7 +15,7 @@ Projeto pensado para cenarios de IoT de energia, com foco em uso pratico: conect
 - Alertas locais
 - Integracao REST opcional com fila offline
 
-## Stack Tecnologica
+## 🧰 Stack Tecnologica
 
 - Flutter + Dart
 - Riverpod para estado e orquestracao
@@ -23,7 +23,7 @@ Projeto pensado para cenarios de IoT de energia, com foco em uso pratico: conect
 - sqflite para armazenamento local
 - fl_chart para graficos
 
-## Estrutura do Projeto
+## 🏗️ Estrutura do Projeto
 
 ```text
 lib/
@@ -40,7 +40,7 @@ lib/
       alerts/
 ```
 
-## Como Rodar
+## 🚀 Como Rodar
 
 1. Clonar repositorio
 
@@ -61,14 +61,14 @@ flutter pub get
 flutter run
 ```
 
-## Qualidade e Validacao
+## ✅ Qualidade e Validacao
 
 ```bash
 flutter analyze
 flutter test
 ```
 
-## Configuracao MQTT
+## 🔌 Configuracao MQTT
 
 No menu de configuracoes, informe:
 
@@ -93,27 +93,27 @@ Exemplo de payload esperado:
 }
 ```
 
-## Principais Recursos
+## 🌟 Principais Recursos
 
-### Dashboard
+### 📈 Dashboard
 
 - Indicadores principais em destaque
 - Card de previsao local (quando habilitado)
 - Graficos com melhor contraste em tema claro e escuro
 
-### Historico
+### 🕓 Historico
 
 - Consulta por faixa temporal
 - Comparacao visual de metricas
 - Exportacao para auditoria e analise externa
 
-### Conectividade
+### 📡 Conectividade
 
 - Conexao MQTT manual e controlada
 - Status de conexao do app separado do status do medidor
 - Suporte a monitoramento em segundo plano
 
-## Build
+## 📦 Build
 
 ```bash
 flutter build apk
@@ -121,21 +121,21 @@ flutter build ios
 flutter build windows
 ```
 
-## Troubleshooting Rapido
+## 🛠️ Troubleshooting Rapido
 
-### Nao conecta no MQTT
+### ❌ Nao conecta no MQTT
 
 - Confirmar broker/porta
 - Verificar se TLS esta consistente com a porta
 - Validar usuario e senha (ambos preenchidos ou ambos vazios)
 
-### Conecta mas nao recebe leitura
+### ⚠️ Conecta mas nao recebe leitura
 
 - Confirmar topico correto
 - Confirmar formato do payload
 - Verificar se o dispositivo esta publicando no broker certo
 
-## Roadmap
+## 🗺️ Roadmap
 
 - [x] Perfis MQTT por dispositivo
 - [x] Dashboard com previsao local
@@ -144,7 +144,7 @@ flutter build windows
 - [ ] Capturas de tela oficiais no README
 - [ ] Guia de deploy para ambiente produtivo
 
-## Contribuicao
+## 🤝 Contribuicao
 
 Contribuicoes sao bem-vindas via pull request.
 
@@ -153,6 +153,6 @@ Contribuicoes sao bem-vindas via pull request.
 3. Rodar analyze e testes
 4. Abrir PR com contexto objetivo
 
-## Licenca
+## 🔒 Licenca
 
 Projeto privado.
