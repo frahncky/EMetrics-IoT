@@ -218,11 +218,16 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
       );
     }
 
-    if (lastMetricTime == null) {
+    final hasFreshReadingAfterConnect =
+        lastMetricTime != null &&
+        (status.lastConnectedAt == null ||
+            !lastMetricTime.isBefore(status.lastConnectedAt!));
+
+    if (!hasFreshReadingAfterConnect) {
       return const _StatusVisual(
         icon: Icons.sensors,
         color: AppColors.statusWarning,
-        message: 'Dispositivo conectado, sem leituras ainda.',
+        message: 'Dispositivo conectado, sem leituras após a conexão.',
       );
     }
 

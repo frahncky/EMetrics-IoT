@@ -80,19 +80,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
         ),
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondary.withValues(
-                  alpha: isDarkMode ? 0.2 : 0.14,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.bolt,
-                color: Theme.of(context).colorScheme.secondary,
-                size: 22,
-              ),
+            Icon(
+              Icons.bolt,
+              color: Theme.of(context).colorScheme.secondary,
+              size: 22,
             ),
             const SizedBox(width: 8),
             Text(

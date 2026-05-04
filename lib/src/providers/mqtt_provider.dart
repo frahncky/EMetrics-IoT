@@ -15,7 +15,7 @@ typedef BackgroundHistoryRequestHandler = Future<void> Function({
 });
 
 final mqttServiceProvider = Provider<MqttService>((ref) {
-  final settings = ref.watch(mqttSettingsProvider);
+  final settings = ref.read(mqttSettingsProvider);
   final status = ref.read(mqttStatusProvider.notifier);
   final service = MqttService(
     broker: settings.broker,
