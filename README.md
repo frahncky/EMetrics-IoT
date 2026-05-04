@@ -7,6 +7,8 @@ Uma aplicação Flutter moderna para visualização em tempo real e histórico d
 - ✅ **Dashboard em Tempo Real** - Visualização instantânea de tensão, corrente, potência e energia
 - ✅ **Histórico de Dados** - Gráficos interativos com filtros por período (hora, dia, semana, mês)
 - ✅ **Tema Claro/Escuro** - Interface adaptativa com paleta de cores moderna
+- ✅ **Status de Conexão no AppBar** - Ícones de MQTT e comunicação com dispositivo em todas as telas principais
+- ✅ **Leitura Aprimorada dos Gráficos** - Eixos, linhas e grade com contraste reforçado
 - ✅ **Persistência Local** - Dados salvos em SQLite para acesso offline
 - ✅ **MQTT Integration** - Conexão configurável com brokers MQTT
 - ✅ **Exportação** - Exportar dados em CSV e PDF
@@ -106,9 +108,9 @@ Tópico Request: sensor/request
 ## 📊 Temas
 
 ### Tema Claro
-- Cores suaves e azuis cinzentos
+- Contraste reforçado para textos, campos e navegação
 - Ideal para ambientes bem iluminados
-- Reduz cansaço visual em uso prolongado
+- Melhor leitura de valores e linhas nos gráficos
 
 ### Tema Escuro
 - Cores vibrantes em fundo escuro
