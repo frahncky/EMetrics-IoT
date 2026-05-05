@@ -415,7 +415,7 @@ class HistoryChart extends StatelessWidget {
       case 'energy':
         return const _FieldMeta('Energia', 'kWh', Color(0xFF8B5CF6));
       case 'pf':
-        return const _FieldMeta('Fator Potência', '', Color(0xFF9D8CFF));
+        return const _FieldMeta('Fator de potência', '', Color(0xFF9D8CFF));
       case 'frequency':
         return const _FieldMeta('Frequência', 'Hz', Color(0xFF22C55E));
       default:
@@ -657,7 +657,7 @@ const _metricFieldOptions = [
   _MetricFieldOption('current', 'Corrente'),
   _MetricFieldOption('voltage', 'Tensão'),
   _MetricFieldOption('energy', 'Energia'),
-  _MetricFieldOption('pf', 'Fator Potência'),
+  _MetricFieldOption('pf', 'Fator de potência'),
   _MetricFieldOption('frequency', 'Frequência'),
 ];
 

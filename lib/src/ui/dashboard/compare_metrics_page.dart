@@ -331,7 +331,7 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
       case 'power':
         return const _FieldMeta('Potência', 'W', Color(0xFFF59E0B));
       case 'pf':
-        return const _FieldMeta('Fator Potência', '', Color(0xFF6366F1));
+        return const _FieldMeta('Fator de potência', '', Color(0xFF6366F1));
       case 'frequency':
         return const _FieldMeta('Frequência', 'Hz', Color(0xFF22C55E));
       case 'energy':
@@ -481,7 +481,7 @@ class _MetricDropdown extends StatelessWidget {
         DropdownMenuItem(value: 'voltage', child: Text('Tensão')),
         DropdownMenuItem(value: 'current', child: Text('Corrente')),
         DropdownMenuItem(value: 'power', child: Text('Potência')),
-        DropdownMenuItem(value: 'pf', child: Text('Fator Potência')),
+        DropdownMenuItem(value: 'pf', child: Text('Fator de potência')),
         DropdownMenuItem(value: 'frequency', child: Text('Frequência')),
         DropdownMenuItem(value: 'energy', child: Text('Energia')),
       ],

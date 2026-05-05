@@ -60,7 +60,7 @@ class _HistoryChartSelector extends StatelessWidget {
       {'label': 'Corrente', 'value': 'current'},
       {'label': 'Tensão', 'value': 'voltage'},
       {'label': 'Energia', 'value': 'energy'},
-      {'label': 'Fator Potência', 'value': 'pf'},
+      {'label': 'Fator de potência', 'value': 'pf'},
       {'label': 'Frequência', 'value': 'frequency'},
     ];
     final secondaryColor = Theme.of(context).colorScheme.secondary;

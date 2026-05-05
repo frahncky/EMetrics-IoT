@@ -1,4 +1,14 @@
 {
     "cmake.sourceDirectory": "F:/DevIA/e_metrics_iot/windows/flutter",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "cSpell.words": [
+        "configura",
+        "Emetrics",
+        "locais",
+        "nativas",
+        "registra",
+        "requer",
+        "Sequência",
+        "serviço"
+    ]
 }

@@ -270,7 +270,7 @@ class _ForecastCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _ForecastMetricChip(
-                label: 'Potencia em 30 min',
+                label: 'Potência em 30 min',
                 value: '${formatWithSIPrefix(snapshot.projectedPowerWatts)} W',
               ),
               _ForecastMetricChip(
@@ -278,7 +278,7 @@ class _ForecastCard extends StatelessWidget {
                 value: '${snapshot.projectedEnergyKwh.toStringAsFixed(3)} kWh',
               ),
               _ForecastMetricChip(
-                label: 'Inclinacao',
+                label: 'Inclinação',
                 value: '${snapshot.powerSlopePerMinute.toStringAsFixed(2)} W/min',
               ),
             ],

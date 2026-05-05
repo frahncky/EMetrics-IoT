@@ -10,7 +10,7 @@ class ChartSelector extends StatelessWidget {
     const fields = [
       {'label': 'Potência (W)', 'value': 'power'},
       {'label': 'Energia (kWh)', 'value': 'energy'},
-      {'label': 'Fator Potência', 'value': 'pf'},
+      {'label': 'Fator de potência', 'value': 'pf'},
     ];
     return Wrap(
       spacing: 8,

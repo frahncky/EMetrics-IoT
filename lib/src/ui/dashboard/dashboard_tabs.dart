@@ -66,7 +66,7 @@ class _RealtimeChartWithInternalSelector extends StatelessWidget {
       {'label': 'Potência Ativa', 'value': 'power'},
       {'label': 'Potência Aparente', 'value': 'power_apparent'},
       {'label': 'Potência Reativa', 'value': 'power_reactive'},
-      {'label': 'Fator Potência', 'value': 'pf'},
+      {'label': 'Fator de potência', 'value': 'pf'},
       {'label': 'Frequência', 'value': 'frequency'},
       {'label': 'Energia', 'value': 'energy'},
     ];

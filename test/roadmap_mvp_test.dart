@@ -222,7 +222,7 @@ void main() {
     expect(repository.pending, isEmpty);
   });
 
-  test('forecastProvider calcula tendencia com leituras recentes', () {
+  test('forecastProvider calcula tendência com leituras recentes', () {
     final metrics = List<Metric>.generate(6, (index) {
       return Metric(
         timestamp: DateTime(2026, 5, 3, 10, index * 5),

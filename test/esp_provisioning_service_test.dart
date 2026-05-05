@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('EspProvisioningService', () {
-    test('buildProvisioningUri cria endpoint padrao com host cru', () {
+    test('buildProvisioningUri cria endpoint padrão com host cru', () {
       final uri = EspProvisioningService.buildProvisioningUri('192.168.4.1');
 
       expect(uri.toString(), 'http://192.168.4.1/provision');

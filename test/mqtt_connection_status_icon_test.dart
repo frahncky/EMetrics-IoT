@@ -14,7 +14,7 @@ class _FixedMqttStatusNotifier extends MqttStatusNotifier {
 }
 
 void main() {
-  testWidgets('abre dialogo central de conexao ao segurar icone MQTT', (
+  testWidgets('abre diálogo central de conexão ao segurar ícone MQTT', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -45,7 +45,7 @@ void main() {
   });
 
   testWidgets(
-    'nao marca medidor como ativo com leitura anterior a conexao atual',
+    'não marca medidor como ativo com leitura anterior à conexão atual',
     (tester) async {
       final connectedAt = DateTime.now();
       final oldReading = connectedAt.subtract(const Duration(minutes: 1));

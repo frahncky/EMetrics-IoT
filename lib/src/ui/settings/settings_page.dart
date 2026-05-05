@@ -255,7 +255,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Sincronizacao REST: ${result.deliveredCount} enviados, ${result.failedCount} falharam.',
+          'Sincronização REST: ${result.deliveredCount} enviados, ${result.failedCount} falharam.',
         ),
       ),
     );
@@ -276,7 +276,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Abra ${session.verificationUri} e informe o codigo ${session.userCode}.',
+          'Abra ${session.verificationUri} e informe o código ${session.userCode}.',
         ),
         duration: const Duration(seconds: 8),
       ),

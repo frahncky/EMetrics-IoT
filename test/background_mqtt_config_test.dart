@@ -127,7 +127,7 @@ void main() {
       expect(prefs.getString('mqtt_password'), isNull);
     });
 
-    test('identifica quando o perfil de conexao MQTT muda', () {
+    test('identifica quando o perfil de conexão MQTT muda', () {
       const base = BackgroundMqttConfig(
         broker: 'broker.local',
         port: 1883,

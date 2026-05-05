@@ -83,7 +83,7 @@ MqttReceivedMessage<MqttMessage> _buildMessage(String payload) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('mqttMetricSaver nao persiste no foreground com background ativo', () async {
+  test('mqttMetricSaver não persiste no foreground com background ativo', () async {
     final spyRepo = _SpyMetricRepository();
     final integrationDisabledService = IntegrationService(
       repository: spyRepo,

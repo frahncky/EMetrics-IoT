@@ -27,7 +27,7 @@ class _FakeMqttStatusNotifier extends MqttStatusNotifier {
 }
 
 void main() {
-  testWidgets('HistoryPage exibe feedback quando solicitacao de historico falha', (
+  testWidgets('HistoryPage exibe feedback quando solicitação de histórico falha', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(

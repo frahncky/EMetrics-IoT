@@ -112,14 +112,14 @@ class OAuthDeviceService {
         continue;
       }
       if (error == 'access_denied') {
-        throw StateError('Autorizacao recusada no provedor OAuth.');
+        throw StateError('Autorização recusada no provedor OAuth.');
       }
       if (error == 'expired_token') {
-        throw StateError('Codigo OAuth expirado. Inicie novamente.');
+        throw StateError('Código OAuth expirado. Inicie novamente.');
       }
       throw StateError('Falha OAuth: $error');
     }
 
-    throw TimeoutException('Tempo esgotado aguardando autorizacao OAuth.');
+    throw TimeoutException('Tempo esgotado aguardando autorização OAuth.');
   }
 }
