@@ -37,6 +37,7 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Tooltip(
+            triggerMode: TooltipTriggerMode.tap,
             message: deviceVisual.message,
             child: Icon(
               deviceVisual.icon,
@@ -163,19 +164,19 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
     switch (status.phase) {
       case MqttConnectionPhase.error:
         return _StatusVisual(
-          icon: Icons.error_outline,
+          icon: Icons.cloud_off,
           color: AppColors.statusError,
           message: status.lastMessage ?? 'Monitoramento com erro.',
         );
       case MqttConnectionPhase.connecting:
         return const _StatusVisual(
-          icon: Icons.sync,
+          icon: Icons.cloud_sync,
           color: AppColors.statusWarning,
           message: 'MQTT conectando.',
         );
       case MqttConnectionPhase.connected:
         return _StatusVisual(
-          icon: status.backgroundActive ? Icons.sensors : Icons.sensors_outlined,
+          icon: status.backgroundActive ? Icons.cloud_sync : Icons.cloud_done,
           color: AppColors.statusSuccess,
           message: status.backgroundActive
               ? 'Monitoramento ativo em segundo plano.'
@@ -196,25 +197,25 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
   ) {
     if (status.phase == MqttConnectionPhase.error) {
       return const _StatusVisual(
-        icon: Icons.device_unknown,
+        icon: Icons.electric_meter_outlined,
         color: AppColors.statusError,
-        message: 'Comunicação com dispositivo com erro.',
+        message: 'Medidor não conectado.',
       );
     }
 
     if (status.phase == MqttConnectionPhase.connecting) {
       return const _StatusVisual(
-        icon: Icons.sensors_off,
-        color: AppColors.statusWarning,
-        message: 'Aguardando comunicação do dispositivo.',
+        icon: Icons.electric_meter_outlined,
+        color: AppColors.statusIdle,
+        message: 'Medidor não conectado.',
       );
     }
 
     if (status.phase != MqttConnectionPhase.connected) {
       return const _StatusVisual(
-        icon: Icons.sensors_off,
+        icon: Icons.electric_meter_outlined,
         color: AppColors.statusIdle,
-        message: 'Sem comunicação com o dispositivo.',
+        message: 'Medidor não conectado.',
       );
     }
 
@@ -225,25 +226,25 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
 
     if (!hasFreshReadingAfterConnect) {
       return const _StatusVisual(
-        icon: Icons.sensors,
-        color: AppColors.statusWarning,
-        message: 'Dispositivo conectado, sem leituras após a conexão.',
+        icon: Icons.electric_meter_outlined,
+        color: AppColors.statusIdle,
+        message: 'Medidor não conectado.',
       );
     }
 
     final stale = DateTime.now().difference(lastMetricTime).inMinutes >= 5;
     if (stale) {
       return _StatusVisual(
-        icon: Icons.sync_problem,
+        icon: Icons.electric_meter,
         color: AppColors.statusWarning,
-        message: 'Última leitura ${_relativeTime(lastMetricTime)}.',
+        message: 'Medidor conectado. Última leitura ${_relativeTime(lastMetricTime)}.',
       );
     }
 
     return const _StatusVisual(
-      icon: Icons.sensors,
+      icon: Icons.electric_meter,
       color: AppColors.statusSuccess,
-      message: 'Comunicação com dispositivo ativa.',
+      message: 'Medidor conectado com envio/recebimento de dados.',
     );
   }
 
