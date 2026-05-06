@@ -85,6 +85,27 @@ class SettingsValidators {
     return null;
   }
 
+  static String? validateRetentionDays(
+    String? value, {
+    required String fieldLabel,
+  }) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return 'Informe $fieldLabel.';
+    }
+    final parsed = int.tryParse(text);
+    if (parsed == null) {
+      return 'Valor inválido. Use apenas números inteiros.';
+    }
+    if (parsed < 1) {
+      return 'A retenção mínima é de 1 dia.';
+    }
+    if (parsed > 3650) {
+      return 'A retenção máxima é de 3650 dias.';
+    }
+    return null;
+  }
+
   static String? validateDecimal(
     String? value, {
     required String fieldLabel,

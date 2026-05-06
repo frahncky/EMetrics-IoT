@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mqtt_client/mqtt_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _SpyMetricRepository extends MetricRepository {
   int insertCalls = 0;
@@ -22,6 +23,9 @@ class _SpyMetricRepository extends MetricRepository {
   Future<void> insertMetric(Metric metric) async {
     insertCalls++;
   }
+
+  @override
+  Future<int> deleteMetricsOlderThan(DateTime cutoff) async => 0;
 }
 
 class _FakeMqttSettingsNotifier extends MqttSettingsNotifier {
@@ -82,6 +86,10 @@ MqttReceivedMessage<MqttMessage> _buildMessage(String payload) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
 
   test('mqttMetricSaver não persiste no foreground com background ativo', () async {
     final spyRepo = _SpyMetricRepository();

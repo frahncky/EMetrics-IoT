@@ -6,6 +6,7 @@ import 'integration_settings_provider.dart';
 import 'mqtt_stream_provider.dart';
 import 'mqtt_metric_parser.dart';
 import '../services/background_mqtt_service.dart';
+import '../services/storage_settings_store.dart';
 import '../services/integration_service.dart';
 import 'mqtt_settings_provider.dart';
 
@@ -50,7 +51,8 @@ final integrationAutoSyncProvider = Provider<void>((ref) {
 final mqttMetricSaverProvider = Provider<void>((ref) {
   Future<void> lastOperation = Future.value();
   Timer? debounceTimer;
-  
+  DateTime? lastRetentionCleanupAt;
+
   ref.watch(mqttStreamProvider).whenData((messages) async {
     // Ignora se o serviço MQTT em segundo plano já está persistindo as métricas.
     final isBackgroundActive = await ref.read(backgroundRunningCheckProvider)();
@@ -68,12 +70,24 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
       final metric = parseMetricFromMqtt(payloadString);
       if (metric != null) {
         final repo = ref.read(metricRepositoryProvider);
-        final activeProfile = await ref.read(mqttSettingsProvider.notifier).load();
+        final activeProfile = await ref
+            .read(mqttSettingsProvider.notifier)
+            .load();
         await repo.insertMetric(metric);
+        final now = DateTime.now();
+        if (lastRetentionCleanupAt == null ||
+            now.difference(lastRetentionCleanupAt!).inHours >= 1) {
+          final storageSettings = await const StorageSettingsStore().load();
+          final cutoff = now.subtract(
+            Duration(days: storageSettings.localRetentionDays),
+          );
+          await repo.deleteMetricsOlderThan(cutoff);
+          lastRetentionCleanupAt = now;
+        }
         await ref
             .read(integrationServiceProvider)
             .submitMetric(metric, profileId: activeProfile.profileId);
-        
+
         // Debounce: cancela e reagenda para que um burst de mensagens
         // dispare apenas uma invalidação ao final da ráfaga.
         debounceTimer?.cancel();

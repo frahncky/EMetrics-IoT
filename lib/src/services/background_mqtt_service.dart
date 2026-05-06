@@ -7,16 +7,20 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/metric_repository.dart';
+import 'device_storage_status_store.dart';
 import '../providers/mqtt_metric_parser.dart';
 import 'background_mqtt_config.dart';
 import 'mqtt_credentials_store.dart';
 import 'mqtt_service.dart';
+import 'storage_settings_store.dart';
 
 class BackgroundMqttService {
   static const _notificationChannelId = 'mqtt_background_channel';
   static const _notificationId = 101;
   static const _historyRequestEvent = 'requestHistory';
   static const _historyRequestResultEvent = 'requestHistoryResult';
+  static const _storageConfigEvent = 'configureDeviceStorage';
+  static const _storageConfigResultEvent = 'configureDeviceStorageResult';
 
   static Future<bool> isRunning() async {
     try {
@@ -39,7 +43,8 @@ class BackgroundMqttService {
           autoStartOnBoot: true,
           notificationChannelId: _notificationChannelId,
           initialNotificationTitle: 'E-Metrics IoT',
-          initialNotificationContent: 'Monitoramento MQTT em segundo plano ativo.',
+          initialNotificationContent:
+              'Monitoramento MQTT em segundo plano ativo.',
           foregroundServiceNotificationId: _notificationId,
         ),
         iosConfiguration: IosConfiguration(
@@ -108,10 +113,48 @@ class BackgroundMqttService {
     final ok = response?['ok'] == true;
     if (!ok) {
       final rawError = response?['error'];
-      final message =
-          rawError is String && rawError.trim().isNotEmpty
+      final message = rawError is String && rawError.trim().isNotEmpty
           ? rawError
           : 'Falha ao solicitar histórico no monitoramento em segundo plano.';
+      throw MqttServiceException(message);
+    }
+  }
+
+  static Future<void> configureDeviceStorageRetention({
+    required int sdRetentionDays,
+  }) async {
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (!isRunning) {
+      throw const MqttServiceException(
+        'O monitoramento em segundo plano não está ativo.',
+      );
+    }
+
+    final requestId =
+        '${DateTime.now().microsecondsSinceEpoch}_storage_$sdRetentionDays';
+
+    service.invoke(_storageConfigEvent, {
+      'requestId': requestId,
+      'sdRetentionDays': sdRetentionDays,
+    });
+
+    final response = await service
+        .on(_storageConfigResultEvent)
+        .firstWhere((payload) => payload?['requestId'] == requestId)
+        .timeout(
+          const Duration(seconds: 8),
+          onTimeout: () => throw TimeoutException(
+            'Tempo limite ao configurar armazenamento em segundo plano.',
+          ),
+        );
+
+    final ok = response?['ok'] == true;
+    if (!ok) {
+      final rawError = response?['error'];
+      final message = rawError is String && rawError.trim().isNotEmpty
+          ? rawError
+          : 'Falha ao configurar armazenamento no monitoramento em segundo plano.';
       throw MqttServiceException(message);
     }
   }
@@ -124,6 +167,22 @@ class BackgroundMqttService {
     Timer? reconnectTimer;
     MqttService? mqtt;
     BackgroundMqttConfig? activeConfig;
+    DateTime? lastRetentionCleanupAt;
+
+    Future<void> pruneLocalHistoryIfNeeded(MetricRepository repo) async {
+      final now = DateTime.now();
+      if (lastRetentionCleanupAt != null &&
+          now.difference(lastRetentionCleanupAt!).inHours < 1) {
+        return;
+      }
+
+      final storageSettings = await const StorageSettingsStore().load();
+      final cutoff = now.subtract(
+        Duration(days: storageSettings.localRetentionDays),
+      );
+      await repo.deleteMetricsOlderThan(cutoff);
+      lastRetentionCleanupAt = now;
+    }
 
     Future<void> connectAndListen() async {
       try {
@@ -135,7 +194,8 @@ class BackgroundMqttService {
         );
 
         final configChanged =
-            activeConfig != null && !activeConfig!.sameConnectionProfile(config);
+            activeConfig != null &&
+            !activeConfig!.sameConnectionProfile(config);
 
         if (configChanged) {
           await mqttSub?.cancel();
@@ -171,10 +231,15 @@ class BackgroundMqttService {
           final last = messages.last;
           final payload = (last.payload as MqttPublishMessage).payload.message;
           final payloadString = String.fromCharCodes(payload);
+          final storageStatus = parseDeviceStorageStatusFromMqtt(payloadString);
+          if (storageStatus != null) {
+            await const DeviceStorageStatusStore().save(storageStatus);
+          }
           final metric = parseMetricFromMqtt(payloadString);
           if (metric != null) {
             final repo = MetricRepository();
             await repo.insertMetric(metric);
+            await pruneLocalHistoryIfNeeded(repo);
           }
         });
 
@@ -248,6 +313,57 @@ class BackgroundMqttService {
       } catch (e, stackTrace) {
         developer.log(
           'Falha ao solicitar histórico via serviço MQTT em segundo plano',
+          name: 'BackgroundMqttService',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        await sendResult(ok: false, error: e.toString());
+      }
+    });
+
+    service.on(_storageConfigEvent).listen((payload) async {
+      final data = payload ?? <String, dynamic>{};
+      final requestId = data['requestId'];
+
+      Future<void> sendResult({required bool ok, String? error}) async {
+        if (requestId is! String || requestId.isEmpty) {
+          return;
+        }
+        service.invoke(_storageConfigResultEvent, {
+          'requestId': requestId,
+          'ok': ok,
+          if (error != null && error.isNotEmpty) 'error': error,
+        });
+      }
+
+      try {
+        final sdRetentionDays = data['sdRetentionDays'];
+        if (sdRetentionDays is! int) {
+          await sendResult(
+            ok: false,
+            error: 'Payload inválido para configuração de armazenamento.',
+          );
+          return;
+        }
+
+        if (mqtt == null || !mqtt!.isConnected) {
+          await connectAndListen();
+        }
+        if (mqtt == null || !mqtt!.isConnected) {
+          await sendResult(
+            ok: false,
+            error: 'Não foi possível conectar ao broker MQTT em segundo plano.',
+          );
+          return;
+        }
+
+        await mqtt!.configureDeviceStorageRetention(
+          sdRetentionDays: sdRetentionDays,
+        );
+        await sendResult(ok: true);
+      } catch (e, stackTrace) {
+        developer.log(
+          'Falha ao configurar armazenamento via serviço MQTT em segundo plano',
           name: 'BackgroundMqttService',
           error: e,
           stackTrace: stackTrace,

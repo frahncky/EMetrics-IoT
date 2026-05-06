@@ -79,6 +79,31 @@ void main() {
       expect(SettingsValidators.validateInterval('3600'), isNull);
     });
 
+    test('validateRetentionDays exige inteiro na faixa válida', () {
+      expect(
+        SettingsValidators.validateRetentionDays('', fieldLabel: 'a retenção'),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateRetentionDays('0', fieldLabel: 'a retenção'),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateRetentionDays(
+          '3651',
+          fieldLabel: 'a retenção',
+        ),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateRetentionDays(
+          '30',
+          fieldLabel: 'a retenção',
+        ),
+        isNull,
+      );
+    });
+
     test('validateDecimal aceita ponto e vírgula decimal', () {
       expect(
         SettingsValidators.validateDecimal('220.5', fieldLabel: 'a tensão'),

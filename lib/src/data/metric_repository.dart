@@ -42,6 +42,16 @@ class MetricRepository {
     return result.map((e) => Metric.fromMap(e)).toList();
   }
 
+  /// Remove metricas anteriores a [cutoff] do banco local.
+  Future<int> deleteMetricsOlderThan(DateTime cutoff) async {
+    final db = await LocalDatabase.database;
+    return db.delete(
+      'metrics',
+      where: 'timestamp < ?',
+      whereArgs: [cutoff.millisecondsSinceEpoch],
+    );
+  }
+
   /// Adiciona uma métrica à fila de sincronização de integração.
   ///
   /// Usa [profileId] para associar o item ao perfil MQTT ativo no momento da ingestão.

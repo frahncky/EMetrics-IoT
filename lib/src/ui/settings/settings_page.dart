@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/dashboard_preferences_provider.dart';
+import '../../providers/device_storage_provider.dart';
 import '../../providers/integration_settings_provider.dart';
 import '../../providers/measurement_settings_provider.dart';
+import '../../providers/metric_provider.dart';
 import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_metric_saver.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
+import '../../providers/storage_settings_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/alert_service.dart';
 import '../../services/oauth_device_service.dart';
 import '../../services/background_mqtt_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/device_storage_status_store.dart';
 import '../auth/login_page.dart';
 import '../shared/mqtt_connection_status_icon.dart';
 import 'esp_provisioning_page.dart';
@@ -26,7 +30,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage>
-  with WidgetsBindingObserver {
+    with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _brokerController = TextEditingController();
   final _portController = TextEditingController(text: '1883');
@@ -37,12 +41,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   final _requestTopicController = TextEditingController();
   final _profileNameController = TextEditingController();
   final _intervalController = TextEditingController(text: '5');
+  final _localRetentionDaysController = TextEditingController(text: '30');
+  final _deviceRetentionDaysController = TextEditingController(text: '30');
   final _voltageMinController = TextEditingController();
   final _voltageMaxController = TextEditingController();
   final _energyLimitController = TextEditingController();
   final _tariffController = TextEditingController();
   final _integrationBaseUrlController = TextEditingController();
-  final _integrationPathController = TextEditingController(text: '/api/metrics');
+  final _integrationPathController = TextEditingController(
+    text: '/api/metrics',
+  );
   final _integrationApiKeyController = TextEditingController();
   final _oauthClientIdController = TextEditingController();
   final _oauthScopeController = TextEditingController();
@@ -88,7 +96,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   /// os controllers de texto do formulário.
   Future<void> _loadSettings() async {
     final settings = await ref.read(mqttSettingsProvider.notifier).load();
-    final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+    final profiles = await ref
+        .read(mqttSettingsProvider.notifier)
+        .loadProfiles();
     if (!mounted) {
       return;
     }
@@ -116,7 +126,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     _oauthEnabled = integrationSettings.oauthEnabled;
     _oauthClientIdController.text = integrationSettings.oauthClientId;
     _oauthScopeController.text = integrationSettings.oauthScope;
-    _oauthDeviceEndpointController.text = integrationSettings.oauthDeviceEndpoint;
+    _oauthDeviceEndpointController.text =
+        integrationSettings.oauthDeviceEndpoint;
     _oauthTokenEndpointController.text = integrationSettings.oauthTokenEndpoint;
 
     final dashboardPreferences = await ref
@@ -139,6 +150,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       measurementSettings.energyLimitKwh,
     );
     _tariffController.text = _formatDecimal(measurementSettings.tariffPerKwh);
+
+    final storageSettings = await ref
+        .read(storageSettingsProvider.notifier)
+        .load();
+    await ref.read(deviceStorageProvider.notifier).load();
+    if (!mounted) {
+      return;
+    }
+    _localRetentionDaysController.text = storageSettings.localRetentionDays
+        .toString();
+    _deviceRetentionDaysController.text = storageSettings.deviceRetentionDays
+        .toString();
   }
 
   /// Persiste todas as configurações do formulário nos providers correspondentes.
@@ -184,17 +207,61 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     await ref
         .read(dashboardPreferencesProvider.notifier)
         .setShowForecastCard(_showForecastCard);
+    await _saveStorageSettings(sendToDevice: false);
     if (mounted) {
-      final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+      final profiles = await ref
+          .read(mqttSettingsProvider.notifier)
+          .loadProfiles();
       setState(() => _profiles = profiles);
     }
+  }
+
+  Future<int> _applyLocalRetention(int retentionDays) async {
+    final cutoff = DateTime.now().subtract(Duration(days: retentionDays));
+    final removed = await ref
+        .read(metricRepositoryProvider)
+        .deleteMetricsOlderThan(cutoff);
+    ref.invalidate(metricsProvider);
+    ref.invalidate(metricsByRangeProvider);
+    return removed;
+  }
+
+  Future<int> _saveStorageSettings({required bool sendToDevice}) async {
+    final storageSettings = await ref
+        .read(storageSettingsProvider.notifier)
+        .update(
+          localRetentionDays: _parseRetentionDays(
+            _localRetentionDaysController.text,
+          ),
+          deviceRetentionDays: _parseRetentionDays(
+            _deviceRetentionDaysController.text,
+          ),
+        );
+
+    final removed = await _applyLocalRetention(
+      storageSettings.localRetentionDays,
+    );
+
+    if (sendToDevice) {
+      await _sendDeviceStorageRetention(storageSettings.deviceRetentionDays);
+    }
+
+    return removed;
+  }
+
+  Future<void> _sendDeviceStorageRetention(int retentionDays) async {
+    await ref.read(deviceStorageConfigHandlerProvider)(
+      sdRetentionDays: retentionDays,
+    );
   }
 
   Future<void> _createProfile() async {
     final profile = await ref
         .read(mqttSettingsProvider.notifier)
         .createProfile(name: 'Dispositivo ${_profiles.length + 1}');
-    final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+    final profiles = await ref
+        .read(mqttSettingsProvider.notifier)
+        .loadProfiles();
     if (!mounted) {
       return;
     }
@@ -211,8 +278,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   }
 
   Future<void> _selectProfile(String profileId) async {
-    final profile = await ref.read(mqttSettingsProvider.notifier).selectProfile(profileId);
-    final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+    final profile = await ref
+        .read(mqttSettingsProvider.notifier)
+        .selectProfile(profileId);
+    final profiles = await ref
+        .read(mqttSettingsProvider.notifier)
+        .loadProfiles();
     if (!mounted) {
       return;
     }
@@ -230,8 +301,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
 
   Future<void> _deleteActiveProfile() async {
     final profileId = ref.read(mqttSettingsProvider).profileId;
-    final profile = await ref.read(mqttSettingsProvider.notifier).deleteProfile(profileId);
-    final profiles = await ref.read(mqttSettingsProvider.notifier).loadProfiles();
+    final profile = await ref
+        .read(mqttSettingsProvider.notifier)
+        .deleteProfile(profileId);
+    final profiles = await ref
+        .read(mqttSettingsProvider.notifier)
+        .loadProfiles();
     if (!mounted) {
       return;
     }
@@ -248,7 +323,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   }
 
   Future<void> _syncIntegrationNow() async {
-    final result = await ref.read(integrationServiceProvider).flushPendingQueue();
+    final result = await ref
+        .read(integrationServiceProvider)
+        .flushPendingQueue();
     if (!mounted) {
       return;
     }
@@ -286,11 +363,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       clientId: integrationSettings.oauthClientId,
       session: session,
     );
-    await ref.read(integrationSettingsProvider.notifier).saveOAuthToken(
-      accessToken: token.accessToken,
-      tokenType: token.tokenType,
-      expiresAt: token.expiresAt,
-    );
+    await ref
+        .read(integrationSettingsProvider.notifier)
+        .saveOAuthToken(
+          accessToken: token.accessToken,
+          tokenType: token.tokenType,
+          expiresAt: token.expiresAt,
+        );
     if (!mounted) {
       return;
     }
@@ -302,6 +381,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   /// Converte [value] de string (aceita vírgula ou ponto) para `double`.
   double _parseDecimal(String value) {
     return double.parse(value.trim().replaceAll(',', '.'));
+  }
+
+  int _parseRetentionDays(String value) {
+    return int.tryParse(value.trim()) ?? 30;
   }
 
   /// Formata [value] sem casas decimais se for inteiro; caso contrário 2 casas.
@@ -349,6 +432,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     final authState = ref.watch(authProvider);
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final integrationSettings = ref.watch(integrationSettingsProvider);
+    final deviceStorageStatus = ref.watch(deviceStorageProvider);
     final tabContents = <Widget>[
       // ── Aba: MQTT ────────────────────────────────────────────────────────────
       // Gerencia perfis de dispositivo, broker, porta, credenciais e TLS.
@@ -358,7 +442,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           children: [
             DropdownButtonFormField<String>(
               isExpanded: true,
-              initialValue: _profiles.any((profile) => profile.id == mqttSettings.profileId)
+              initialValue:
+                  _profiles.any(
+                    (profile) => profile.id == mqttSettings.profileId,
+                  )
                   ? mqttSettings.profileId
                   : null,
               decoration: const InputDecoration(
@@ -406,7 +493,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextButton.icon(
-                    onPressed: _profiles.length > 1 ? _deleteActiveProfile : null,
+                    onPressed: _profiles.length > 1
+                        ? _deleteActiveProfile
+                        : null,
                     icon: const Icon(Icons.delete_outline),
                     label: const Text('Excluir perfil'),
                   ),
@@ -484,8 +573,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               label: 'Campo Tópico MQTT',
               child: TextFormField(
                 controller: _topicController,
-                validator: (value) =>
-                    SettingsValidators.validateTopic(value, fieldLabel: 'o tópico MQTT'),
+                validator: (value) => SettingsValidators.validateTopic(
+                  value,
+                  fieldLabel: 'o tópico MQTT',
+                ),
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.topic),
                   labelText: 'Tópico MQTT',
@@ -562,6 +653,85 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            _ResponsiveFieldPair(
+              first: Semantics(
+                label: 'Campo retenção no banco do celular',
+                child: TextFormField(
+                  controller: _localRetentionDaysController,
+                  keyboardType: TextInputType.number,
+                  validator: (value) =>
+                      SettingsValidators.validateRetentionDays(
+                        value,
+                        fieldLabel: 'a retenção no banco do celular',
+                      ),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.phone_android_outlined),
+                    labelText: 'Retenção no celular (dias)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              second: Semantics(
+                label: 'Campo retenção no SD card do medidor',
+                child: TextFormField(
+                  controller: _deviceRetentionDaysController,
+                  keyboardType: TextInputType.number,
+                  validator: (value) =>
+                      SettingsValidators.validateRetentionDays(
+                        value,
+                        fieldLabel: 'a retenção no SD card do medidor',
+                      ),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.sd_storage_outlined),
+                    labelText: 'Retenção no SD do medidor (dias)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _DeviceStorageUsageTile(status: deviceStorageStatus),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  FocusScope.of(context).unfocus();
+                  if (!_formKey.currentState!.validate()) {
+                    return;
+                  }
+                  try {
+                    final removed = await _saveStorageSettings(
+                      sendToDevice: true,
+                    );
+                    if (!context.mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Armazenamento atualizado. $removed registros locais removidos.',
+                        ),
+                      ),
+                    );
+                  } catch (e) {
+                    if (!context.mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Retenção local salva. Falha ao enviar para o medidor: ${_toUserMessage(e)}',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Aplicar armazenamento'),
+              ),
+            ),
           ],
         ),
       ),
@@ -576,7 +746,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                 label: 'Campo tensão mínima para alerta',
                 child: TextFormField(
                   controller: _voltageMinController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   validator: (value) => SettingsValidators.validateDecimal(
                     value,
                     fieldLabel: 'a tensão mínima',
@@ -595,7 +767,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                 label: 'Campo tensão máxima para alerta',
                 child: TextFormField(
                   controller: _voltageMaxController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   validator: _validateVoltageMax,
                   decoration: const InputDecoration(
                     prefixIcon: Icon(Icons.electrical_services),
@@ -610,7 +784,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               label: 'Campo limite de consumo para alerta',
               child: TextFormField(
                 controller: _energyLimitController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 validator: (value) => SettingsValidators.validateDecimal(
                   value,
                   fieldLabel: 'o limite de consumo',
@@ -630,7 +806,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               label: 'Campo tarifa por kWh',
               child: TextFormField(
                 controller: _tariffController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 validator: (value) => SettingsValidators.validateDecimal(
                   value,
                   fieldLabel: 'a tarifa por kWh',
@@ -656,7 +834,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Exibir previsão no dashboard'),
-              subtitle: const Text('Ativa o card de tendência e projeção local.'),
+              subtitle: const Text(
+                'Ativa o card de tendência e projeção local.',
+              ),
               value: _showForecastCard,
               onChanged: (value) {
                 setState(() => _showForecastCard = value);
@@ -742,7 +922,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Ativar integração REST'),
-              subtitle: const Text('Envia leituras para API de terceiros com fila offline.'),
+              subtitle: const Text(
+                'Envia leituras para API de terceiros com fila offline.',
+              ),
               value: _integrationEnabled,
               onChanged: (value) {
                 setState(() => _integrationEnabled = value);
@@ -909,17 +1091,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                                 statusNotifier.markConnecting();
                                 await BackgroundMqttService.stop();
                                 ref.invalidate(mqttServiceProvider);
-                                final mqttService = ref.read(mqttServiceProvider);
+                                final mqttService = ref.read(
+                                  mqttServiceProvider,
+                                );
                                 await mqttService.connect();
                                 mqttService.subscribe();
                                 statusNotifier.markConnected();
                                 statusNotifier.setBackgroundActive(false);
+                                await _sendDeviceStorageRetention(
+                                  _parseRetentionDays(
+                                    _deviceRetentionDaysController.text,
+                                  ),
+                                );
                                 if (!context.mounted) {
                                   return;
                                 }
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Conectado ao broker MQTT no app.'),
+                                    content: Text(
+                                      'Conectado ao broker MQTT no app.',
+                                    ),
                                   ),
                                 );
                                 if (!notificationsGranted) {
@@ -961,25 +1152,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                         child: SizedBox(
                           height: 46,
                           child: OutlinedButton.icon(
-                            icon: const Icon(Icons.pause_circle_outline, size: 18),
+                            icon: const Icon(
+                              Icons.pause_circle_outline,
+                              size: 18,
+                            ),
                             iconAlignment: IconAlignment.start,
                             onPressed: () async {
                               await BackgroundMqttService.stop();
                               final mqttService = ref.read(mqttServiceProvider);
                               mqttService.disconnect();
                               ref.invalidate(mqttServiceProvider);
-                              ref.read(mqttStatusProvider.notifier).setBackgroundActive(false);
-                              ref.read(mqttStatusProvider.notifier).markDisconnected(
-                                'Monitoramento MQTT pausado.',
-                              );
+                              ref
+                                  .read(mqttStatusProvider.notifier)
+                                  .setBackgroundActive(false);
+                              ref
+                                  .read(mqttStatusProvider.notifier)
+                                  .markDisconnected(
+                                    'Monitoramento MQTT pausado.',
+                                  );
                               if (!context.mounted) {
                                 return;
                               }
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text(
-                                    'Monitoramento MQTT pausado.',
-                                  ),
+                                  content: Text('Monitoramento MQTT pausado.'),
                                 ),
                               );
                             },
@@ -1003,7 +1199,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                   },
                   tabs: const [
                     Tab(icon: Icon(Icons.cloud_outlined), text: 'MQTT'),
-                    Tab(icon: Icon(Icons.history_toggle_off), text: 'Histórico'),
+                    Tab(
+                      icon: Icon(Icons.history_toggle_off),
+                      text: 'Histórico',
+                    ),
                     Tab(icon: Icon(Icons.tune), text: 'Medição'),
                     Tab(icon: Icon(Icons.palette_outlined), text: 'Aparência'),
                     Tab(icon: Icon(Icons.hub_outlined), text: 'Integração'),
@@ -1013,13 +1212,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                 Expanded(
                   child: Theme(
                     data: Theme.of(context).copyWith(
-                      inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
-                        isDense: false,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
+                      inputDecorationTheme: Theme.of(context)
+                          .inputDecorationTheme
+                          .copyWith(
+                            isDense: false,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                          ),
                     ),
                     child: tabContents[_selectedTab],
                   ),
@@ -1044,6 +1245,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     _requestTopicController.dispose();
     _profileNameController.dispose();
     _intervalController.dispose();
+    _localRetentionDaysController.dispose();
+    _deviceRetentionDaysController.dispose();
     _voltageMinController.dispose();
     _voltageMaxController.dispose();
     _energyLimitController.dispose();
@@ -1059,12 +1262,110 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   }
 }
 
+class _DeviceStorageUsageTile extends StatelessWidget {
+  final DeviceStorageStatus status;
+
+  const _DeviceStorageUsageTile({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final usage = status.sdUsagePercent;
+    final theme = Theme.of(context);
+    final available = status.sdAvailable;
+    final title = usage == null
+        ? 'Uso do SD card'
+        : 'Uso do SD card: ${usage.toStringAsFixed(1)}%';
+    final subtitle = _subtitle();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outline),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                available == false
+                    ? Icons.sd_card_alert_outlined
+                    : Icons.sd_storage_outlined,
+                color: available == false
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          LinearProgressIndicator(
+            value: usage == null ? null : usage / 100,
+            minHeight: 8,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          const SizedBox(height: 8),
+          Text(subtitle, style: theme.textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+
+  String _subtitle() {
+    if (!status.hasTelemetry) {
+      return 'Aguardando telemetria do medidor.';
+    }
+    if (status.sdAvailable == false || status.usingSd == false) {
+      return 'SD card indisponível no medidor.';
+    }
+    final used = status.sdUsedBytes;
+    final total = status.sdTotalBytes;
+    final updatedAt = status.updatedAt;
+    final parts = <String>[];
+    if (used != null && total != null && total > 0) {
+      parts.add('${_formatBytes(used)} de ${_formatBytes(total)}');
+    }
+    if (updatedAt != null) {
+      parts.add('Atualizado ${_formatDateTime(updatedAt)}');
+    }
+    return parts.isEmpty ? 'SD card disponível.' : parts.join(' - ');
+  }
+
+  String _formatBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+    final decimals = value >= 10 || unitIndex == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(decimals)} ${units[unitIndex]}';
+  }
+
+  String _formatDateTime(DateTime value) {
+    final local = value.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$day/$month $hour:$minute';
+  }
+}
+
 class _SettingsSection extends StatelessWidget {
   final List<Widget> children;
 
-  const _SettingsSection({
-    required this.children,
-  });
+  const _SettingsSection({required this.children});
 
   @override
   Widget build(BuildContext context) {
@@ -1082,23 +1383,14 @@ class _ResponsiveFieldPair extends StatelessWidget {
   final Widget first;
   final Widget second;
 
-  const _ResponsiveFieldPair({
-    required this.first,
-    required this.second,
-  });
+  const _ResponsiveFieldPair({required this.first, required this.second});
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 560) {
-          return Column(
-            children: [
-              first,
-              const SizedBox(height: 12),
-              second,
-            ],
-          );
+          return Column(children: [first, const SizedBox(height: 12), second]);
         }
 
         return Row(

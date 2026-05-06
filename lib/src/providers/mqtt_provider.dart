@@ -4,15 +4,17 @@ import '../services/mqtt_service.dart';
 import 'mqtt_settings_provider.dart';
 import 'mqtt_status_provider.dart';
 
-typedef HistoryRequestHandler = Future<void> Function({
-  required DateTime from,
-  required DateTime to,
-});
+typedef HistoryRequestHandler =
+    Future<void> Function({required DateTime from, required DateTime to});
 
-typedef BackgroundHistoryRequestHandler = Future<void> Function({
-  required DateTime from,
-  required DateTime to,
-});
+typedef BackgroundHistoryRequestHandler =
+    Future<void> Function({required DateTime from, required DateTime to});
+
+typedef DeviceStorageConfigHandler =
+    Future<void> Function({required int sdRetentionDays});
+
+typedef BackgroundDeviceStorageConfigHandler =
+    Future<void> Function({required int sdRetentionDays});
 
 final mqttServiceProvider = Provider<MqttService>((ref) {
   final settings = ref.read(mqttSettingsProvider);
@@ -35,13 +37,21 @@ final mqttServiceProvider = Provider<MqttService>((ref) {
   return service;
 });
 
-final backgroundHistoryRequestProvider = Provider<BackgroundHistoryRequestHandler>((
-  ref,
-) {
-  return ({required DateTime from, required DateTime to}) {
-    return BackgroundMqttService.requestHistory(from: from, to: to);
-  };
-});
+final backgroundHistoryRequestProvider =
+    Provider<BackgroundHistoryRequestHandler>((ref) {
+      return ({required DateTime from, required DateTime to}) {
+        return BackgroundMqttService.requestHistory(from: from, to: to);
+      };
+    });
+
+final backgroundDeviceStorageConfigProvider =
+    Provider<BackgroundDeviceStorageConfigHandler>((ref) {
+      return ({required int sdRetentionDays}) {
+        return BackgroundMqttService.configureDeviceStorageRetention(
+          sdRetentionDays: sdRetentionDays,
+        );
+      };
+    });
 
 /// Provider do handler de solicitação de histórico MQTT.
 ///
@@ -62,3 +72,21 @@ final historyRequestHandlerProvider = Provider<HistoryRequestHandler>((ref) {
     await mqttService.requestHistory(from: from, to: to);
   };
 });
+
+final deviceStorageConfigHandlerProvider = Provider<DeviceStorageConfigHandler>(
+  (ref) {
+    final status = ref.watch(mqttStatusProvider);
+    final mqttService = ref.read(mqttServiceProvider);
+    final backgroundConfig = ref.read(backgroundDeviceStorageConfigProvider);
+
+    return ({required int sdRetentionDays}) async {
+      if (status.backgroundActive) {
+        await backgroundConfig(sdRetentionDays: sdRetentionDays);
+        return;
+      }
+      await mqttService.configureDeviceStorageRetention(
+        sdRetentionDays: sdRetentionDays,
+      );
+    };
+  },
+);

@@ -15,7 +15,14 @@ Exemplo de firmware com provisionamento via AP local para receber Wi-Fi e MQTT d
   "power": 112.0,
   "pf": 0.98,
   "frequency": 60.0,
-  "energy": 1.23
+  "energy": 1.23,
+  "storage": {
+    "usingSd": true,
+    "sdAvailable": true,
+    "sdUsedBytes": 1048576,
+    "sdTotalBytes": 33554432,
+    "sdUsagePercent": 3.12
+  }
 }
 ```
 
@@ -69,6 +76,7 @@ Se sua placa usar outro mapeamento, altere no topo do arquivo `main.ino` via def
 - `EMETRICS_SD_MOSI_PIN`
 
 O arquivo de historico fica em `/history.log` e e usado para responder requisicoes de historico por intervalo.
+O app tambem exibe o percentual de uso do SD a partir do campo `storage.sdUsagePercent`.
 
 ## Parametros de buffer (main.ino)
 
@@ -113,6 +121,22 @@ O firmware assina o topico configurado em `mqttRequestTopic` e espera o payload 
 
 Ao receber essa solicitacao, o ESP32 filtra os registros persistidos no intervalo `from`/`to`
 e republica os payloads no topico principal de telemetria (`mqttTopic`).
+
+## Configurar retencao do SD via MQTT
+
+O mesmo topico `mqttRequestTopic` aceita um comando para ajustar por quantos dias o
+historico fica armazenado no SD do medidor:
+
+```json
+{
+  "command": "configureStorage",
+  "sdRetentionDays": 30,
+  "requestedAt": 1746316850000
+}
+```
+
+O valor aceito fica entre 1 e 3650 dias. O firmware salva a configuracao em NVS
+e remove registros do arquivo `/history.log` mais antigos que o periodo configurado.
 
 ## Observacao sobre TLS
 

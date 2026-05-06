@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -86,14 +85,18 @@ class MqttService {
     }
     client.connectionMessage = connectMessage;
 
-    developer.log('Iniciando conexão MQTT em $broker:$port', name: 'MqttService');
+    developer.log(
+      'Iniciando conexão MQTT em $broker:$port',
+      name: 'MqttService',
+    );
 
     try {
       await client.connect();
 
       final state = client.connectionStatus?.state;
       if (state != MqttConnectionState.connected) {
-        final code = client.connectionStatus?.returnCode?.name ?? 'desconhecido';
+        final code =
+            client.connectionStatus?.returnCode?.name ?? 'desconhecido';
         client.disconnect();
         onDisconnectedStatus?.call(
           'Não foi possível conectar ao broker MQTT (código: $code).',
@@ -121,7 +124,9 @@ class MqttService {
         stackTrace: stackTrace,
       );
       onError?.call('Erro inesperado ao conectar ao broker MQTT.');
-      throw const MqttServiceException('Erro inesperado ao conectar ao broker MQTT.');
+      throw const MqttServiceException(
+        'Erro inesperado ao conectar ao broker MQTT.',
+      );
     }
   }
 
@@ -131,12 +136,16 @@ class MqttService {
   /// Lança [MqttServiceException] se o cliente não estiver conectado.
   void subscribe() {
     if (!isConnected) {
-      throw const MqttServiceException('Conecte ao broker MQTT antes de se inscrever em tópicos.');
+      throw const MqttServiceException(
+        'Conecte ao broker MQTT antes de se inscrever em tópicos.',
+      );
     }
 
     final result = client.subscribe(topic, MqttQos.atLeastOnce);
     if (result == null) {
-      throw const MqttServiceException('Falha ao assinar o tópico MQTT configurado.');
+      throw const MqttServiceException(
+        'Falha ao assinar o tópico MQTT configurado.',
+      );
     }
 
     developer.log('Inscrito no tópico MQTT: $topic', name: 'MqttService');
@@ -161,12 +170,19 @@ class MqttService {
   /// - `requestedAt`: epoch em milissegundos da solicitação
   ///
   /// Lança [MqttServiceException] se [from] for posterior a [to].
-  Future<void> requestHistory({required DateTime from, required DateTime to}) async {
+  Future<void> requestHistory({
+    required DateTime from,
+    required DateTime to,
+  }) async {
     if (!isConnected) {
-      throw const MqttServiceException('Conecte ao broker MQTT antes de solicitar histórico.');
+      throw const MqttServiceException(
+        'Conecte ao broker MQTT antes de solicitar histórico.',
+      );
     }
     if (to.isBefore(from)) {
-      throw const MqttServiceException('Período inválido para solicitação de histórico.');
+      throw const MqttServiceException(
+        'Período inválido para solicitação de histórico.',
+      );
     }
 
     try {
@@ -178,10 +194,15 @@ class MqttService {
       final builder = MqttClientPayloadBuilder()..addString(payload);
       final data = builder.payload;
       if (data == null) {
-        throw const MqttServiceException('Falha ao montar a mensagem de solicitação de histórico.');
+        throw const MqttServiceException(
+          'Falha ao montar a mensagem de solicitação de histórico.',
+        );
       }
       client.publishMessage(requestTopic, MqttQos.atLeastOnce, data);
-      developer.log('Solicitação de histórico publicada em $requestTopic', name: 'MqttService');
+      developer.log(
+        'Solicitação de histórico publicada em $requestTopic',
+        name: 'MqttService',
+      );
     } on MqttServiceException {
       rethrow;
     } catch (e, stackTrace) {
@@ -192,6 +213,57 @@ class MqttService {
         stackTrace: stackTrace,
       );
       throw const MqttServiceException('Erro ao solicitar histórico via MQTT.');
+    }
+  }
+
+  /// Publica a configuracao de retencao do historico salvo no SD do medidor.
+  ///
+  /// O firmware ESP32 consome esse comando no mesmo [requestTopic] usado por
+  /// solicitacoes de historico.
+  Future<void> configureDeviceStorageRetention({
+    required int sdRetentionDays,
+  }) async {
+    if (!isConnected) {
+      throw const MqttServiceException(
+        'Conecte ao broker MQTT antes de configurar o armazenamento do medidor.',
+      );
+    }
+    if (sdRetentionDays < 1 || sdRetentionDays > 3650) {
+      throw const MqttServiceException(
+        'A retenção do SD deve estar entre 1 e 3650 dias.',
+      );
+    }
+
+    try {
+      final payload = jsonEncode({
+        'command': 'configureStorage',
+        'sdRetentionDays': sdRetentionDays,
+        'requestedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+      final builder = MqttClientPayloadBuilder()..addString(payload);
+      final data = builder.payload;
+      if (data == null) {
+        throw const MqttServiceException(
+          'Falha ao montar a mensagem de configuração do medidor.',
+        );
+      }
+      client.publishMessage(requestTopic, MqttQos.atLeastOnce, data);
+      developer.log(
+        'Configuração de armazenamento publicada em $requestTopic',
+        name: 'MqttService',
+      );
+    } on MqttServiceException {
+      rethrow;
+    } catch (e, stackTrace) {
+      developer.log(
+        'Erro ao publicar configuração de armazenamento',
+        name: 'MqttService',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      throw const MqttServiceException(
+        'Erro ao configurar armazenamento do medidor via MQTT.',
+      );
     }
   }
 

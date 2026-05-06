@@ -46,6 +46,7 @@ struct DeviceConfig {
   char mqttRequestTopic[129];
   char mqttClientId[65];
   bool useTls;
+  uint16_t sdRetentionDays;
   bool valid;
 };
 
@@ -60,6 +61,7 @@ DeviceConfig config = {
   "emetrics/pzem/history/request",
   "esp32_pzem_001",
   false,
+  30,
   false,
 };
 
@@ -71,11 +73,14 @@ constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 5000;    // retentatida de reco
 constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;    // retentativa de reconexao MQTT
 constexpr unsigned long HISTORY_PUBLISH_DELAY_MS = 10;    // pausa entre publicacoes de replay
 constexpr bool MQTT_RETAINED = true;
-constexpr size_t TELEMETRY_PAYLOAD_SIZE = 220;            // bytes por payload JSON
+constexpr size_t TELEMETRY_PAYLOAD_SIZE = 360;            // bytes por payload JSON
 constexpr size_t TELEMETRY_QUEUE_CAPACITY = 30;           // capacidade do buffer circular offline
 constexpr uint8_t FLUSH_BATCH_LIMIT = 5;                  // publicacoes por iteracao do loop
 constexpr uint16_t HISTORY_REPLAY_LIMIT = 300;            // linhas maximas por resposta de historico
 constexpr size_t HISTORY_FILE_MAX_BYTES = 256 * 1024;     // 256 KB: tamanho maximo do arquivo de historico
+constexpr uint16_t DEFAULT_SD_RETENTION_DAYS = 30;        // retencao padrao do historico local
+constexpr uint16_t MAX_SD_RETENTION_DAYS = 3650;          // limite para comando vindo do app
+constexpr unsigned long HISTORY_RETENTION_PRUNE_INTERVAL_MS = 60UL * 60UL * 1000UL;
 constexpr const char* HISTORY_FILE_PATH = "/history.log";
 
 #ifndef EMETRICS_SD_CS_PIN
@@ -118,6 +123,7 @@ uint64_t bootEpochOffsetMs = 0;
 bool bootEpochOffsetValid = false;
 bool historyStorageReady = false;
 bool historyStorageUsesSd = false;
+unsigned long lastHistoryRetentionPruneMs = 0;
 
 struct HistoryRequest {
   uint64_t from = 0;
@@ -129,9 +135,13 @@ uint64_t currentEpochMs();
 void appendHistoryRecord(const char* payload, uint64_t timestampMs);
 void replayHistoryRange(uint64_t fromMs, uint64_t toMs);
 HistoryRequest parseHistoryRequest(const char* payload, unsigned int length);
+bool parseStorageConfigCommand(const char* payload, unsigned int length, uint16_t& sdRetentionDays);
+void applyStorageConfigCommand(uint16_t sdRetentionDays);
+void pruneHistoryByRetentionIfNeeded(uint64_t nowMs, bool force);
 void onMqttMessage(char* topic, byte* payload, unsigned int length);
 File openHistoryFile(const char* mode);
 bool removeHistoryFile();
+void saveConfig();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SINCRONIZACAO DE TEMPO (SNTP / NTP)
@@ -214,6 +224,31 @@ bool removeHistoryFile() {
   return SPIFFS.remove(HISTORY_FILE_PATH);
 }
 
+struct DeviceStorageUsage {
+  bool sdAvailable = false;
+  bool usingSd = false;
+  uint64_t usedBytes = 0;
+  uint64_t totalBytes = 0;
+  float usagePercent = 0.0f;
+};
+
+DeviceStorageUsage readDeviceStorageUsage() {
+  DeviceStorageUsage usage;
+  if (!ensureHistoryStorageReady() || !historyStorageUsesSd) {
+    return usage;
+  }
+
+  usage.sdAvailable = true;
+  usage.usingSd = true;
+  usage.usedBytes = SD.usedBytes();
+  usage.totalBytes = SD.totalBytes();
+  if (usage.totalBytes > 0) {
+    usage.usagePercent = (static_cast<float>(usage.usedBytes) * 100.0f) /
+                         static_cast<float>(usage.totalBytes);
+  }
+  return usage;
+}
+
 /**
  * Remove a metade mais antiga do arquivo de historico quando ele ultrapassa
  * HISTORY_FILE_MAX_BYTES. Usa alocacao String para simplificar o manuseio
@@ -257,6 +292,65 @@ void compactHistoryIfNeeded() {
   rewrite.close();
 }
 
+void pruneHistoryByRetentionIfNeeded(uint64_t nowMs, bool force) {
+  if (nowMs == 0 || !ensureHistoryStorageReady()) {
+    return;
+  }
+
+  const unsigned long loopNow = millis();
+  if (!force && lastHistoryRetentionPruneMs != 0 &&
+      loopNow - lastHistoryRetentionPruneMs < HISTORY_RETENTION_PRUNE_INTERVAL_MS) {
+    return;
+  }
+  lastHistoryRetentionPruneMs = loopNow;
+
+  const uint64_t retentionMs =
+      static_cast<uint64_t>(config.sdRetentionDays) * 24ULL * 60ULL * 60ULL * 1000ULL;
+  if (retentionMs == 0 || nowMs <= retentionMs) {
+    return;
+  }
+
+  const uint64_t cutoffMs = nowMs - retentionMs;
+  File historyFile = openHistoryFile(FILE_READ);
+  if (!historyFile) {
+    return;
+  }
+
+  String kept;
+  kept.reserve(HISTORY_FILE_MAX_BYTES + 64);
+  bool dropped = false;
+
+  while (historyFile.available()) {
+    const String line = historyFile.readStringUntil('\n');
+    const int sep = line.indexOf(';');
+    if (sep <= 0 || sep >= line.length() - 1) {
+      kept += line;
+      kept += '\n';
+      continue;
+    }
+
+    const uint64_t timestampMs = strtoull(line.substring(0, sep).c_str(), nullptr, 10);
+    if (timestampMs >= cutoffMs) {
+      kept += line;
+      kept += '\n';
+    } else {
+      dropped = true;
+    }
+  }
+  historyFile.close();
+
+  if (!dropped) {
+    return;
+  }
+
+  File rewrite = openHistoryFile(FILE_WRITE);
+  if (!rewrite) {
+    return;
+  }
+  rewrite.print(kept);
+  rewrite.close();
+}
+
 void appendHistoryRecord(const char* payload, uint64_t timestampMs) {
   if (timestampMs == 0 || !ensureHistoryStorageReady()) {
     return;
@@ -270,6 +364,7 @@ void appendHistoryRecord(const char* payload, uint64_t timestampMs) {
   historyFile.printf("%llu;%s\n", timestampMs, payload);
   historyFile.close();
   compactHistoryIfNeeded();
+  pruneHistoryByRetentionIfNeeded(timestampMs, false);
 }
 
 bool extractUInt64Field(const String& source, const char* key, uint64_t& outValue) {
@@ -334,6 +429,35 @@ HistoryRequest parseHistoryRequest(const char* payload, unsigned int length) {
   return request;
 }
 
+bool parseStorageConfigCommand(const char* payload, unsigned int length, uint16_t& sdRetentionDays) {
+  String raw;
+  raw.reserve(length + 1);
+  for (unsigned int i = 0; i < length; i++) {
+    raw += static_cast<char>(payload[i]);
+  }
+
+  if (raw.indexOf("\"configureStorage\"") < 0 && raw.indexOf("\"sdRetentionDays\"") < 0) {
+    return false;
+  }
+
+  uint64_t days = 0;
+  const bool hasRetention =
+      extractUInt64Field(raw, "sdRetentionDays", days) ||
+      extractUInt64Field(raw, "storageRetentionDays", days);
+  if (!hasRetention || days == 0 || days > MAX_SD_RETENTION_DAYS) {
+    return false;
+  }
+
+  sdRetentionDays = static_cast<uint16_t>(days);
+  return true;
+}
+
+void applyStorageConfigCommand(uint16_t sdRetentionDays) {
+  config.sdRetentionDays = sdRetentionDays;
+  saveConfig();
+  pruneHistoryByRetentionIfNeeded(currentEpochMs(), true);
+}
+
 /**
  * Republica no topico principal as entradas do historico cujo timestamp
  * esteja no intervalo [fromMs, toMs]. Respeita HISTORY_REPLAY_LIMIT para
@@ -381,6 +505,12 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
+  uint16_t sdRetentionDays = 0;
+  if (parseStorageConfigCommand(reinterpret_cast<char*>(payload), length, sdRetentionDays)) {
+    applyStorageConfigCommand(sdRetentionDays);
+    return;
+  }
+
   const HistoryRequest request = parseHistoryRequest(reinterpret_cast<char*>(payload), length);
   if (!request.valid) {
     return;
@@ -425,6 +555,8 @@ void loadConfig() {
         preferences.getString("mqtt_req_topic", "emetrics/pzem/history/request");
     const String mqttClientId = preferences.getString("mqtt_client_id", "esp32_pzem_001");
     const bool useTls = preferences.getBool("mqtt_tls", false);
+    const uint16_t sdRetentionDays =
+        preferences.getUShort("sd_ret_days", DEFAULT_SD_RETENTION_DAYS);
 
     safeCopy(wifiSsid, config.wifiSsid, sizeof(config.wifiSsid));
     safeCopy(wifiPassword, config.wifiPassword, sizeof(config.wifiPassword));
@@ -436,6 +568,9 @@ void loadConfig() {
     safeCopy(mqttRequestTopic, config.mqttRequestTopic, sizeof(config.mqttRequestTopic));
     safeCopy(mqttClientId, config.mqttClientId, sizeof(config.mqttClientId));
     config.useTls = useTls;
+    config.sdRetentionDays = sdRetentionDays == 0 || sdRetentionDays > MAX_SD_RETENTION_DAYS
+                                 ? DEFAULT_SD_RETENTION_DAYS
+                                 : sdRetentionDays;
     config.valid = strlen(config.wifiSsid) > 0 && strlen(config.mqttHost) > 0;
   }
 
@@ -454,6 +589,7 @@ void saveConfig() {
   preferences.putString("mqtt_req_topic", config.mqttRequestTopic);
   preferences.putString("mqtt_client_id", config.mqttClientId);
   preferences.putBool("mqtt_tls", config.useTls);
+  preferences.putUShort("sd_ret_days", config.sdRetentionDays);
   preferences.putBool("cfg_valid", true);
   preferences.end();
 }
@@ -639,15 +775,22 @@ bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize) {
     return false;
   }
 
+  const DeviceStorageUsage storage = readDeviceStorageUsage();
   snprintf(payloadBuffer,
            payloadBufferSize,
-           "{\"voltage\":%.2f,\"current\":%.3f,\"power\":%.2f,\"pf\":%.3f,\"frequency\":%.2f,\"energy\":%.3f}",
+           "{\"voltage\":%.2f,\"current\":%.3f,\"power\":%.2f,\"pf\":%.3f,\"frequency\":%.2f,\"energy\":%.3f,"
+           "\"storage\":{\"usingSd\":%s,\"sdAvailable\":%s,\"sdUsedBytes\":%llu,\"sdTotalBytes\":%llu,\"sdUsagePercent\":%.2f}}",
            voltage,
            current,
            power,
            pf,
            frequency,
-           energy);
+           energy,
+           storage.usingSd ? "true" : "false",
+           storage.sdAvailable ? "true" : "false",
+           static_cast<unsigned long long>(storage.usedBytes),
+           static_cast<unsigned long long>(storage.totalBytes),
+           storage.usagePercent);
 
   return true;
 }
