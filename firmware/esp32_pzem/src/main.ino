@@ -50,6 +50,11 @@ struct DeviceConfig {
   bool valid;
 };
 
+struct SavedWifiNetwork {
+  char ssid[33];
+  char password[65];
+};
+
 DeviceConfig config = {
   "",
   "",
@@ -81,6 +86,7 @@ constexpr size_t HISTORY_FILE_MAX_BYTES = 256 * 1024;     // 256 KB: tamanho max
 constexpr uint16_t DEFAULT_SD_RETENTION_DAYS = 30;        // retencao padrao do historico local
 constexpr uint16_t MAX_SD_RETENTION_DAYS = 3650;          // limite para comando vindo do app
 constexpr unsigned long HISTORY_RETENTION_PRUNE_INTERVAL_MS = 60UL * 60UL * 1000UL;
+constexpr uint8_t WIFI_NETWORK_CAPACITY = 5;              // redes Wi-Fi salvas no ESP
 constexpr const char* HISTORY_FILE_PATH = "/history.log";
 
 #ifndef EMETRICS_SD_CS_PIN
@@ -111,11 +117,15 @@ PZEM004Tv30 pzem(Serial2, 16, 17);
 unsigned long lastPublishMs = 0;
 unsigned long lastWifiAttemptMs = 0;
 unsigned long lastMqttAttemptMs = 0;
+SavedWifiNetwork wifiNetworks[WIFI_NETWORK_CAPACITY];
+uint8_t wifiNetworkCount = 0;
+uint8_t wifiConnectIndex = 0;
 char telemetryQueue[TELEMETRY_QUEUE_CAPACITY][TELEMETRY_PAYLOAD_SIZE];
 size_t queueHead = 0;
 size_t queueCount = 0;
 
 bool provisioningMode = false;
+bool provisionServerStarted = false;
 bool restartScheduled = false;
 unsigned long restartScheduledAtMs = 0;
 bool sntpConfigured = false;
@@ -142,6 +152,12 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length);
 File openHistoryFile(const char* mode);
 bool removeHistoryFile();
 void saveConfig();
+void saveWifiNetworks(Preferences& prefs);
+void loadWifiNetworks(Preferences& prefs);
+bool upsertWifiNetwork(String ssid, String password, String oldSsid = "", bool keepExistingPassword = false);
+bool deleteWifiNetwork(String ssid);
+int findWifiNetworkIndex(const String& ssid);
+String jsonEscape(const char* value);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SINCRONIZACAO DE TEMPO (SNTP / NTP)
@@ -539,6 +555,145 @@ void safeCopy(String value, char* destination, size_t destinationSize) {
   destination[maxLen] = '\0';
 }
 
+String jsonEscape(const char* value) {
+  String escaped;
+  for (size_t i = 0; value[i] != '\0'; i++) {
+    const char c = value[i];
+    if (c == '"' || c == '\\') {
+      escaped += '\\';
+    }
+    escaped += c;
+  }
+  return escaped;
+}
+
+void clearWifiNetworks() {
+  wifiNetworkCount = 0;
+  wifiConnectIndex = 0;
+  for (uint8_t i = 0; i < WIFI_NETWORK_CAPACITY; i++) {
+    wifiNetworks[i].ssid[0] = '\0';
+    wifiNetworks[i].password[0] = '\0';
+  }
+}
+
+int findWifiNetworkIndex(const String& ssid) {
+  String target = ssid;
+  target.trim();
+  for (uint8_t i = 0; i < wifiNetworkCount; i++) {
+    if (target == wifiNetworks[i].ssid) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void applyWifiNetworkToConfig(uint8_t index) {
+  if (index >= wifiNetworkCount) {
+    return;
+  }
+  safeCopy(String(wifiNetworks[index].ssid), config.wifiSsid, sizeof(config.wifiSsid));
+  safeCopy(String(wifiNetworks[index].password), config.wifiPassword, sizeof(config.wifiPassword));
+}
+
+bool upsertWifiNetwork(String ssid, String password, String oldSsid, bool keepExistingPassword) {
+  ssid.trim();
+  oldSsid.trim();
+  if (ssid.length() == 0 || ssid.length() >= sizeof(config.wifiSsid)) {
+    return false;
+  }
+
+  int targetIndex = oldSsid.length() > 0 ? findWifiNetworkIndex(oldSsid) : findWifiNetworkIndex(ssid);
+  const int duplicateIndex = findWifiNetworkIndex(ssid);
+  if (oldSsid.length() > 0 && duplicateIndex >= 0 && duplicateIndex != targetIndex) {
+    return false;
+  }
+
+  if (targetIndex < 0) {
+    if (wifiNetworkCount >= WIFI_NETWORK_CAPACITY) {
+      return false;
+    }
+    targetIndex = wifiNetworkCount;
+    wifiNetworkCount++;
+  }
+
+  safeCopy(ssid, wifiNetworks[targetIndex].ssid, sizeof(wifiNetworks[targetIndex].ssid));
+  if (!keepExistingPassword || wifiNetworks[targetIndex].password[0] == '\0') {
+    safeCopy(password, wifiNetworks[targetIndex].password, sizeof(wifiNetworks[targetIndex].password));
+  }
+  applyWifiNetworkToConfig(static_cast<uint8_t>(targetIndex));
+  config.valid = wifiNetworkCount > 0 && strlen(config.mqttHost) > 0;
+  return true;
+}
+
+bool deleteWifiNetwork(String ssid) {
+  const int index = findWifiNetworkIndex(ssid);
+  if (index < 0) {
+    return false;
+  }
+
+  for (uint8_t i = static_cast<uint8_t>(index); i + 1 < wifiNetworkCount; i++) {
+    wifiNetworks[i] = wifiNetworks[i + 1];
+  }
+  wifiNetworkCount--;
+  wifiNetworks[wifiNetworkCount].ssid[0] = '\0';
+  wifiNetworks[wifiNetworkCount].password[0] = '\0';
+
+  if (wifiNetworkCount > 0) {
+    applyWifiNetworkToConfig(0);
+  } else {
+    config.wifiSsid[0] = '\0';
+    config.wifiPassword[0] = '\0';
+  }
+  config.valid = wifiNetworkCount > 0 && strlen(config.mqttHost) > 0;
+  wifiConnectIndex = 0;
+  return true;
+}
+
+void loadWifiNetworks(Preferences& prefs) {
+  clearWifiNetworks();
+  const uint8_t storedCount = prefs.getUChar("wifi_net_count", 0);
+  for (uint8_t i = 0; i < storedCount && i < WIFI_NETWORK_CAPACITY; i++) {
+    char ssidKey[16];
+    char passwordKey[16];
+    snprintf(ssidKey, sizeof(ssidKey), "wifi_ssid_%u", i);
+    snprintf(passwordKey, sizeof(passwordKey), "wifi_pwd_%u", i);
+    const String ssid = prefs.getString(ssidKey, "");
+    if (ssid.length() == 0) {
+      continue;
+    }
+    safeCopy(ssid, wifiNetworks[wifiNetworkCount].ssid, sizeof(wifiNetworks[wifiNetworkCount].ssid));
+    safeCopy(prefs.getString(passwordKey, ""), wifiNetworks[wifiNetworkCount].password,
+             sizeof(wifiNetworks[wifiNetworkCount].password));
+    wifiNetworkCount++;
+  }
+
+  if (wifiNetworkCount == 0 && strlen(config.wifiSsid) > 0) {
+    safeCopy(String(config.wifiSsid), wifiNetworks[0].ssid, sizeof(wifiNetworks[0].ssid));
+    safeCopy(String(config.wifiPassword), wifiNetworks[0].password, sizeof(wifiNetworks[0].password));
+    wifiNetworkCount = 1;
+  }
+  if (wifiNetworkCount > 0 && strlen(config.wifiSsid) == 0) {
+    applyWifiNetworkToConfig(0);
+  }
+}
+
+void saveWifiNetworks(Preferences& prefs) {
+  prefs.putUChar("wifi_net_count", wifiNetworkCount);
+  for (uint8_t i = 0; i < WIFI_NETWORK_CAPACITY; i++) {
+    char ssidKey[16];
+    char passwordKey[16];
+    snprintf(ssidKey, sizeof(ssidKey), "wifi_ssid_%u", i);
+    snprintf(passwordKey, sizeof(passwordKey), "wifi_pwd_%u", i);
+    if (i < wifiNetworkCount) {
+      prefs.putString(ssidKey, wifiNetworks[i].ssid);
+      prefs.putString(passwordKey, wifiNetworks[i].password);
+    } else {
+      prefs.remove(ssidKey);
+      prefs.remove(passwordKey);
+    }
+  }
+}
+
 void loadConfig() {
   preferences.begin("emetrics", true);
   const bool valid = preferences.getBool("cfg_valid", false);
@@ -571,8 +726,9 @@ void loadConfig() {
     config.sdRetentionDays = sdRetentionDays == 0 || sdRetentionDays > MAX_SD_RETENTION_DAYS
                                  ? DEFAULT_SD_RETENTION_DAYS
                                  : sdRetentionDays;
-    config.valid = strlen(config.wifiSsid) > 0 && strlen(config.mqttHost) > 0;
   }
+  loadWifiNetworks(preferences);
+  config.valid = wifiNetworkCount > 0 && strlen(config.mqttHost) > 0;
 
   preferences.end();
 }
@@ -590,6 +746,7 @@ void saveConfig() {
   preferences.putString("mqtt_client_id", config.mqttClientId);
   preferences.putBool("mqtt_tls", config.useTls);
   preferences.putUShort("sd_ret_days", config.sdRetentionDays);
+  saveWifiNetworks(preferences);
   preferences.putBool("cfg_valid", true);
   preferences.end();
 }
@@ -634,8 +791,6 @@ bool parseAndApplyProvisioning() {
     return false;
   }
 
-  safeCopy(ssid, config.wifiSsid, sizeof(config.wifiSsid));
-  safeCopy(provisionServer.arg("wifiPassword"), config.wifiPassword, sizeof(config.wifiPassword));
   safeCopy(mqttHost, config.mqttHost, sizeof(config.mqttHost));
   config.mqttPort = mqttPort;
   safeCopy(provisionServer.arg("mqttUser"), config.mqttUser, sizeof(config.mqttUser));
@@ -644,7 +799,9 @@ bool parseAndApplyProvisioning() {
   safeCopy(mqttRequestTopic, config.mqttRequestTopic, sizeof(config.mqttRequestTopic));
   safeCopy(clientId, config.mqttClientId, sizeof(config.mqttClientId));
   config.useTls = provisionServer.arg("useTls") == "1";
-  config.valid = true;
+  if (!upsertWifiNetwork(ssid, provisionServer.arg("wifiPassword"))) {
+    return false;
+  }
 
   saveConfig();
   return true;
@@ -664,21 +821,97 @@ void handleProvision() {
                        "{\"ok\":false,\"message\":\"Parametros invalidos para provisionamento.\"}");
 }
 
+void handleWifiNetworksList() {
+  String body = "{\"ok\":true,\"networks\":[";
+  for (uint8_t i = 0; i < wifiNetworkCount; i++) {
+    if (i > 0) {
+      body += ',';
+    }
+    body += "{\"ssid\":\"";
+    body += jsonEscape(wifiNetworks[i].ssid);
+    body += "\",\"active\":";
+    body += strcmp(wifiNetworks[i].ssid, config.wifiSsid) == 0 ? "true" : "false";
+    body += "}";
+  }
+  body += "]}";
+  provisionServer.send(200, "application/json", body);
+}
+
+void handleWifiNetworkSave() {
+  if (!provisionServer.hasArg("ssid")) {
+    provisionServer.send(
+        400, "application/json", "{\"ok\":false,\"message\":\"Informe o SSID da rede.\"}");
+    return;
+  }
+
+  const String ssid = provisionServer.arg("ssid");
+  const String oldSsid = provisionServer.hasArg("oldSsid") ? provisionServer.arg("oldSsid") : "";
+  const String password =
+      provisionServer.hasArg("wifiPassword") ? provisionServer.arg("wifiPassword") : "";
+  const bool keepPassword = provisionServer.arg("keepPassword") == "1";
+
+  if (!upsertWifiNetwork(ssid, password, oldSsid, keepPassword)) {
+    provisionServer.send(
+        400,
+        "application/json",
+        "{\"ok\":false,\"message\":\"Nao foi possivel salvar a rede. Verifique duplicidade ou limite.\"}");
+    return;
+  }
+
+  saveConfig();
+  provisionServer.send(
+      200, "application/json", "{\"ok\":true,\"message\":\"Rede Wi-Fi salva no ESP32.\"}");
+}
+
+void handleWifiNetworkDelete() {
+  if (!provisionServer.hasArg("ssid")) {
+    provisionServer.send(
+        400, "application/json", "{\"ok\":false,\"message\":\"Informe o SSID da rede.\"}");
+    return;
+  }
+
+  if (!deleteWifiNetwork(provisionServer.arg("ssid"))) {
+    provisionServer.send(
+        404, "application/json", "{\"ok\":false,\"message\":\"Rede Wi-Fi nao encontrada.\"}");
+    return;
+  }
+
+  saveConfig();
+  provisionServer.send(
+      200, "application/json", "{\"ok\":true,\"message\":\"Rede Wi-Fi excluida do ESP32.\"}");
+}
+
+void startProvisioningServer() {
+  if (provisionServerStarted) {
+    return;
+  }
+
+  provisionServer.on("/health", HTTP_GET, handleHealth);
+  provisionServer.on("/provision", HTTP_POST, handleProvision);
+  provisionServer.on("/wifi-networks", HTTP_GET, handleWifiNetworksList);
+  provisionServer.on("/wifi-networks", HTTP_POST, handleWifiNetworkSave);
+  provisionServer.on("/wifi-networks/delete", HTTP_POST, handleWifiNetworkDelete);
+  provisionServer.begin();
+  provisionServerStarted = true;
+}
+
 void startProvisioningMode() {
   provisioningMode = true;
   WiFi.mode(WIFI_AP);
   WiFi.softAP(PROVISION_AP_SSID, PROVISION_AP_PASSWORD);
-
-  provisionServer.on("/health", HTTP_GET, handleHealth);
-  provisionServer.on("/provision", HTTP_POST, handleProvision);
-  provisionServer.begin();
+  startProvisioningServer();
 }
 
 void connectWiFi() {
-  if (!config.valid) {
+  if (!config.valid || wifiNetworkCount == 0) {
     return;
   }
 
+  if (wifiConnectIndex >= wifiNetworkCount) {
+    wifiConnectIndex = 0;
+  }
+  applyWifiNetworkToConfig(wifiConnectIndex);
+  wifiConnectIndex = (wifiConnectIndex + 1) % wifiNetworkCount;
   WiFi.mode(WIFI_STA);
   WiFi.begin(config.wifiSsid, config.wifiPassword);
 }
@@ -853,11 +1086,15 @@ void setup() {
   mqttClient.setServer(config.mqttHost, config.mqttPort);
   mqttClient.setCallback(onMqttMessage);
   connectWiFi();
+  startProvisioningServer();
 }
 
 void loop() {
-  if (provisioningMode) {
+  if (provisionServerStarted) {
     provisionServer.handleClient();
+  }
+
+  if (provisioningMode) {
     if (restartScheduled && millis() - restartScheduledAtMs >= 1500) {
       ESP.restart();
     }

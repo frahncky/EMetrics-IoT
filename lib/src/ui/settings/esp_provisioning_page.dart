@@ -27,6 +27,12 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   final _mqttClientIdController = TextEditingController();
   bool _useTls = false;
   bool _isSubmitting = false;
+  bool _isLoadingNetworks = false;
+  bool _isSavingNetwork = false;
+  String? _editingNetworkSsid;
+  String? _deletingNetworkSsid;
+  List<EspWifiNetwork> _savedNetworks = const [];
+  final EspProvisioningService _service = const EspProvisioningService();
 
   @override
   void initState() {
@@ -50,6 +56,140 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     setState(() => _useTls = settings.useTls);
   }
 
+  Future<void> _loadSavedNetworks({bool silent = false}) async {
+    setState(() => _isLoadingNetworks = true);
+    try {
+      final networks = await _service.loadWifiNetworks(
+        espHost: _espHostController.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _savedNetworks = networks;
+        _isLoadingNetworks = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isLoadingNetworks = false);
+      if (silent) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Não foi possível carregar redes salvas: ${_message(e)}',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveWifiNetwork() async {
+    FocusScope.of(context).unfocus();
+    final ssid = _wifiSsidController.text.trim();
+    if (_espHostController.text.trim().isEmpty || ssid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Informe o IP do ESP32 e o SSID Wi-Fi.')),
+      );
+      return;
+    }
+
+    setState(() => _isSavingNetwork = true);
+    final editing = _editingNetworkSsid;
+    final result = await _service.saveWifiNetwork(
+      espHost: _espHostController.text,
+      ssid: ssid,
+      wifiPassword: _wifiPasswordController.text,
+      oldSsid: editing,
+      keepPassword:
+          editing != null && _wifiPasswordController.text.trim().isEmpty,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _isSavingNetwork = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : Colors.redAccent,
+      ),
+    );
+
+    if (result.ok) {
+      setState(() {
+        _editingNetworkSsid = null;
+        _wifiPasswordController.clear();
+      });
+      await _loadSavedNetworks();
+    }
+  }
+
+  Future<void> _deleteWifiNetwork(EspWifiNetwork network) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir rede Wi-Fi'),
+        content: Text('Excluir "${network.ssid}" das redes salvas no ESP32?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    setState(() => _deletingNetworkSsid = network.ssid);
+    final result = await _service.deleteWifiNetwork(
+      espHost: _espHostController.text,
+      ssid: network.ssid,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _deletingNetworkSsid = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : Colors.redAccent,
+      ),
+    );
+    if (result.ok) {
+      if (_editingNetworkSsid == network.ssid) {
+        _cancelWifiNetworkEdit();
+      }
+      await _loadSavedNetworks();
+    }
+  }
+
+  void _editWifiNetwork(EspWifiNetwork network) {
+    setState(() {
+      _editingNetworkSsid = network.ssid;
+      _wifiSsidController.text = network.ssid;
+      _wifiPasswordController.clear();
+    });
+  }
+
+  void _cancelWifiNetworkEdit() {
+    setState(() {
+      _editingNetworkSsid = null;
+      _wifiSsidController.clear();
+      _wifiPasswordController.clear();
+    });
+  }
+
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) {
@@ -58,8 +198,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
 
     setState(() => _isSubmitting = true);
 
-    final service = const EspProvisioningService();
-    final result = await service.provision(
+    final result = await _service.provision(
       espHost: _espHostController.text,
       wifiSsid: _wifiSsidController.text,
       wifiPassword: _wifiPasswordController.text,
@@ -91,6 +230,15 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     }
   }
 
+  String _message(Object error) {
+    const exceptionPrefix = 'Exception: ';
+    final text = error.toString();
+    if (text.startsWith(exceptionPrefix)) {
+      return text.substring(exceptionPrefix.length);
+    }
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -102,7 +250,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
             padding: const EdgeInsets.all(16),
             children: [
               const Text(
-                'Conecte o celular na rede AP do ESP32 e envie as configurações.',
+                'Conecte o celular ao AP do ESP32 ou informe o IP do ESP na rede local.',
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -118,12 +266,41 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                   return null;
                 },
               ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _isLoadingNetworks ? null : _loadSavedNetworks,
+                  icon: _isLoadingNetworks
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: Text(
+                    _isLoadingNetworks
+                        ? 'Carregando...'
+                        : 'Carregar redes salvas',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _SavedNetworksPanel(
+                networks: _savedNetworks,
+                editingSsid: _editingNetworkSsid,
+                deletingSsid: _deletingNetworkSsid,
+                onEdit: _editWifiNetwork,
+                onDelete: _deleteWifiNetwork,
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _wifiSsidController,
-                decoration: const InputDecoration(
-                  labelText: 'SSID Wi-Fi',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: _editingNetworkSsid == null
+                      ? 'SSID Wi-Fi'
+                      : 'SSID Wi-Fi em edição',
+                  border: const OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if ((value ?? '').trim().isEmpty) {
@@ -138,8 +315,41 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                 obscureText: true,
                 decoration: const InputDecoration(
                   labelText: 'Senha Wi-Fi',
+                  helperText:
+                      'Ao editar, deixe em branco para manter a senha salva.',
                   border: OutlineInputBorder(),
                 ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isSavingNetwork ? null : _saveWifiNetwork,
+                      icon: _isSavingNetwork
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(
+                        _isSavingNetwork
+                            ? 'Salvando...'
+                            : _editingNetworkSsid == null
+                            ? 'Salvar rede'
+                            : 'Atualizar rede',
+                      ),
+                    ),
+                  ),
+                  if (_editingNetworkSsid != null) ...[
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _cancelWifiNetworkEdit,
+                      child: const Text('Cancelar'),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 20),
               TextFormField(
@@ -180,8 +390,10 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _mqttTopicController,
-                validator: (value) =>
-                    SettingsValidators.validateTopic(value, fieldLabel: 'o tópico MQTT'),
+                validator: (value) => SettingsValidators.validateTopic(
+                  value,
+                  fieldLabel: 'o tópico MQTT',
+                ),
                 decoration: const InputDecoration(
                   labelText: 'Tópico MQTT',
                   border: OutlineInputBorder(),
@@ -225,7 +437,9 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.send),
-                label: Text(_isSubmitting ? 'Enviando...' : 'Enviar para ESP32'),
+                label: Text(
+                  _isSubmitting ? 'Enviando...' : 'Enviar para ESP32',
+                ),
               ),
             ],
           ),
@@ -247,5 +461,97 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     _mqttRequestTopicController.dispose();
     _mqttClientIdController.dispose();
     super.dispose();
+  }
+}
+
+class _SavedNetworksPanel extends StatelessWidget {
+  final List<EspWifiNetwork> networks;
+  final String? editingSsid;
+  final String? deletingSsid;
+  final ValueChanged<EspWifiNetwork> onEdit;
+  final ValueChanged<EspWifiNetwork> onDelete;
+
+  const _SavedNetworksPanel({
+    required this.networks,
+    required this.editingSsid,
+    required this.deletingSsid,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outline),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.wifi, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Redes salvas no ESP32',
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (networks.isEmpty)
+            Text('Nenhuma rede carregada.', style: theme.textTheme.bodySmall)
+          else
+            ...networks.map((network) {
+              final deleting = deletingSsid == network.ssid;
+              final editing = editingSsid == network.ssid;
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  network.active
+                      ? Icons.check_circle_outline
+                      : Icons.wifi_outlined,
+                  color: network.active ? theme.colorScheme.primary : null,
+                ),
+                title: Text(network.ssid, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                  editing
+                      ? 'Editando'
+                      : network.active
+                      ? 'Rede em uso'
+                      : 'Salva no ESP32',
+                ),
+                trailing: Wrap(
+                  spacing: 4,
+                  children: [
+                    IconButton(
+                      tooltip: 'Editar rede',
+                      onPressed: deleting ? null : () => onEdit(network),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                    IconButton(
+                      tooltip: 'Excluir rede',
+                      onPressed: deleting ? null : () => onDelete(network),
+                      icon: deleting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
   }
 }

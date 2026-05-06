@@ -48,6 +48,18 @@ Campos esperados em /provision (form-urlencoded):
 - clientId
 - useTls (1 ou 0)
 
+O ESP32 tambem salva a rede Wi-Fi enviada em uma lista local. O app pode
+gerenciar essa lista quando estiver conectado ao AP do ESP ou ao IP do ESP na
+rede local:
+
+- GET `/wifi-networks`: lista redes salvas.
+- POST `/wifi-networks`: cria ou edita uma rede (`ssid`, `wifiPassword`,
+  `oldSsid` opcional, `keepPassword` 1 ou 0).
+- POST `/wifi-networks/delete`: exclui uma rede (`ssid`).
+
+O firmware mantém ate 5 redes salvas e tenta reconectar alternando entre elas
+quando o Wi-Fi cai.
+
 ## Robustez incluida neste exemplo
 
 - Configuracao persistida em NVS (Preferences)

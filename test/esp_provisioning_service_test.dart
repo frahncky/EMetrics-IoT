@@ -9,6 +9,12 @@ void main() {
       expect(uri.toString(), 'http://192.168.4.1/provision');
     });
 
+    test('buildWifiNetworksUri cria endpoint de redes salvas', () {
+      final uri = EspProvisioningService.buildWifiNetworksUri('192.168.4.1');
+
+      expect(uri.toString(), 'http://192.168.4.1/wifi-networks');
+    });
+
     test('buildProvisioningUri preserva schema e porta existentes', () {
       final uri = EspProvisioningService.buildProvisioningUri(
         'http://10.0.0.55:8080',
@@ -41,6 +47,32 @@ void main() {
       expect(body['mqttRequestTopic'], 'emetrics/pzem/history/request');
       expect(body['clientId'], 'esp32-01');
       expect(body['useTls'], '1');
+    });
+
+    test('buildWifiNetworkFormData serializa edição de rede', () {
+      final body = EspProvisioningService.buildWifiNetworkFormData(
+        ssid: ' NovaRede ',
+        wifiPassword: '',
+        oldSsid: ' Antiga ',
+        keepPassword: true,
+      );
+
+      expect(body['ssid'], 'NovaRede');
+      expect(body['oldSsid'], 'Antiga');
+      expect(body['wifiPassword'], '');
+      expect(body['keepPassword'], '1');
+    });
+
+    test('parseWifiNetworks decodifica lista do ESP32', () {
+      final networks = EspProvisioningService.parseWifiNetworks(
+        '{"ok":true,"networks":[{"ssid":"Casa","active":true},{"ssid":"Loja","active":false}]}',
+      );
+
+      expect(networks, hasLength(2));
+      expect(networks.first.ssid, 'Casa');
+      expect(networks.first.active, isTrue);
+      expect(networks.last.ssid, 'Loja');
+      expect(networks.last.active, isFalse);
     });
   });
 }
