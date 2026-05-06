@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -52,6 +53,8 @@ class MqttService {
     client = MqttServerClient(broker, clientId);
     client.port = port;
     client.secure = useTls;
+    client.setProtocolV311();
+    client.connectTimeoutPeriod = 10000;
     client.keepAlivePeriod = 20;
     client.onDisconnected = onDisconnected;
     // Desativa logs verbosos internos do mqtt_client em produção.
@@ -98,22 +101,35 @@ class MqttService {
         final code =
             client.connectionStatus?.returnCode?.name ?? 'desconhecido';
         client.disconnect();
-        onDisconnectedStatus?.call(
-          'Não foi possível conectar ao broker MQTT (código: $code).',
+        developer.log(
+          'Broker MQTT recusou conexão. Código: $code',
+          name: 'MqttService',
         );
-        throw MqttServiceException(
-          'Não foi possível conectar ao broker MQTT (código: $code).',
-        );
+        const message = 'Broker MQTT recusou a conexão.';
+        onDisconnectedStatus?.call(message);
+        throw const MqttServiceException(message);
       }
       onConnected?.call();
+    } on NoConnectionException catch (e) {
+      final message = _connectionFailureMessage(e);
+      developer.log('Erro de conexão MQTT: $e', name: 'MqttService');
+      onError?.call(message);
+      throw MqttServiceException(message);
     } on SocketException catch (e) {
+      final message = _connectionFailureMessage(e);
       developer.log('Erro de conexão MQTT: ${e.message}', name: 'MqttService');
-      onError?.call(
-        'Não foi possível conectar ao broker MQTT. Verifique sua conexão de rede.',
-      );
-      throw const MqttServiceException(
-        'Não foi possível conectar ao broker MQTT. Verifique sua conexão de rede.',
-      );
+      onError?.call(message);
+      throw MqttServiceException(message);
+    } on HandshakeException catch (e) {
+      final message = _connectionFailureMessage(e);
+      developer.log('Erro TLS MQTT: $e', name: 'MqttService');
+      onError?.call(message);
+      throw MqttServiceException(message);
+    } on TimeoutException catch (e) {
+      final message = _connectionFailureMessage(e);
+      developer.log('Timeout MQTT: $e', name: 'MqttService');
+      onError?.call(message);
+      throw MqttServiceException(message);
     } on MqttServiceException {
       rethrow;
     } catch (e, stackTrace) {
@@ -128,6 +144,16 @@ class MqttService {
         'Erro inesperado ao conectar ao broker MQTT.',
       );
     }
+  }
+
+  String _connectionFailureMessage(Object error) {
+    if (error is TimeoutException) {
+      return 'Tempo esgotado ao conectar ao broker MQTT.';
+    }
+    if (error is HandshakeException) {
+      return 'Falha TLS ao conectar ao broker MQTT.';
+    }
+    return 'Não foi possível conectar ao broker MQTT.';
   }
 
   /// Assina o [topic] configurado com QoS `atLeastOnce`.

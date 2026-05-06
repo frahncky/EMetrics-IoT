@@ -23,6 +23,30 @@ void main() {
       expect(uri.toString(), 'http://10.0.0.55:8080/provision');
     });
 
+    test('buildDefaultEspClientId cria Client ID diferente do app', () {
+      final clientId = EspProvisioningService.buildDefaultEspClientId(
+        'emetrics_app',
+      );
+
+      expect(clientId, 'emetrics_app_esp32');
+      expect(clientId, isNot('emetrics_app'));
+    });
+
+    test('buildDefaultEspClientId respeita limite do formulário', () {
+      final clientId = EspProvisioningService.buildDefaultEspClientId(
+        'app_${'x' * 80}',
+      );
+
+      expect(clientId.length, lessThanOrEqualTo(50));
+      expect(clientId.endsWith('_esp32'), isTrue);
+    });
+
+    test('buildDefaultEspClientId usa padrão quando app não tem Client ID', () {
+      final clientId = EspProvisioningService.buildDefaultEspClientId('  ');
+
+      expect(clientId, 'esp32_pzem_001');
+    });
+
     test('buildFormData serializa payload esperado', () {
       final body = EspProvisioningService.buildFormData(
         wifiSsid: ' MinhaRede ',

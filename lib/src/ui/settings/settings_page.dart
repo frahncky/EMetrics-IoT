@@ -1123,14 +1123,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                                   );
                                 }
                               } catch (e) {
+                                final message = _toUserMessage(e);
+                                ref
+                                    .read(mqttStatusProvider.notifier)
+                                    .markError(message);
                                 if (!context.mounted) {
                                   return;
                                 }
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(
-                                      'Erro ao conectar: ${_toUserMessage(e)}',
-                                    ),
+                                    content: Text('Erro ao conectar: $message'),
                                   ),
                                 );
                               }

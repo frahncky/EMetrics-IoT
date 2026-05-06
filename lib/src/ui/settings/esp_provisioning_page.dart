@@ -31,6 +31,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   bool _isSavingNetwork = false;
   String? _editingNetworkSsid;
   String? _deletingNetworkSsid;
+  String _appMqttClientId = '';
   List<EspWifiNetwork> _savedNetworks = const [];
   final EspProvisioningService _service = const EspProvisioningService();
 
@@ -52,7 +53,9 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     _mqttPasswordController.text = settings.password;
     _mqttTopicController.text = settings.topic;
     _mqttRequestTopicController.text = settings.requestTopic;
-    _mqttClientIdController.text = settings.clientId;
+    _appMqttClientId = settings.clientId.trim();
+    _mqttClientIdController.text =
+        EspProvisioningService.buildDefaultEspClientId(_appMqttClientId);
     setState(() => _useTls = settings.useTls);
   }
 
@@ -188,6 +191,18 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
       _wifiSsidController.clear();
       _wifiPasswordController.clear();
     });
+  }
+
+  String? _validateEspClientId(String? value) {
+    final error = SettingsValidators.validateClientId(value);
+    if (error != null) {
+      return error;
+    }
+
+    if (value?.trim() == _appMqttClientId) {
+      return 'Use um Client ID diferente do app para o ESP32.';
+    }
+    return null;
   }
 
   Future<void> _submit() async {
@@ -414,9 +429,10 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _mqttClientIdController,
-                validator: SettingsValidators.validateClientId,
+                validator: _validateEspClientId,
                 decoration: const InputDecoration(
-                  labelText: 'Client ID',
+                  labelText: 'Client ID do ESP32',
+                  helperText: 'Deve ser diferente do Client ID usado pelo app.',
                   border: OutlineInputBorder(),
                 ),
               ),

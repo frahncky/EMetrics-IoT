@@ -26,6 +26,23 @@ class EspWifiNetwork {
 class EspProvisioningService {
   const EspProvisioningService();
 
+  static const int mqttClientIdMaxLength = 50;
+  static const String defaultEspClientId = 'esp32_pzem_001';
+  static const String _espClientIdSuffix = '_esp32';
+
+  static String buildDefaultEspClientId(String appClientId) {
+    final normalized = appClientId.trim().replaceAll(RegExp(r'\s+'), '_');
+    if (normalized.isEmpty) {
+      return defaultEspClientId;
+    }
+
+    final maxBaseLength = mqttClientIdMaxLength - _espClientIdSuffix.length;
+    final base = normalized.length > maxBaseLength
+        ? normalized.substring(0, maxBaseLength)
+        : normalized;
+    return '$base$_espClientIdSuffix';
+  }
+
   static Uri buildUri(String hostOrUrl, {String path = '/', int port = 80}) {
     final raw = hostOrUrl.trim();
     if (raw.isEmpty) {
