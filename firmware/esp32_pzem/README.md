@@ -60,10 +60,25 @@ rede local:
 O firmware mantém ate 5 redes salvas e tenta reconectar alternando entre elas
 quando o Wi-Fi cai.
 
+## AP de fallback
+
+Depois da primeira configuracao, o ESP continua iniciando o servidor HTTP local.
+Se ele ficar 60 segundos sem conseguir conectar em uma rede salva, ou se a lista
+de redes ficar vazia, ele abre automaticamente o AP `EMetrics-Setup` em modo
+AP+STA. Nesse modo:
+
+- O ESP continua tentando conectar nas redes salvas.
+- O app pode acessar `http://192.168.4.1` para editar ou excluir redes.
+- Ao reconectar na rede configurada, o AP de fallback e desligado sozinho.
+
+Se o ESP iniciar sem nenhuma configuracao valida, ele entra no modo de
+provisionamento inicial e permanece somente como AP ate receber `/provision`.
+
 ## Robustez incluida neste exemplo
 
 - Configuracao persistida em NVS (Preferences)
 - Reconexao nao bloqueante de Wi-Fi e MQTT
+- AP de fallback para recuperar o acesso local quando a rede configurada cai
 - Fila circular em RAM para segurar amostras durante queda do broker
 - Envio em lote apos reconexao
 - Historico persistente em cartao microSD (Adafruit) para replay sob demanda

@@ -75,6 +75,7 @@ DeviceConfig config = {
 // ═══════════════════════════════════════════════════════════════════════════
 constexpr unsigned long PUBLISH_INTERVAL_MS = 2000;       // intervalo entre leituras PZEM
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 5000;    // retentatida de reconexao WiFi
+constexpr unsigned long WIFI_FALLBACK_AP_DELAY_MS = 60UL * 1000UL;
 constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;    // retentativa de reconexao MQTT
 constexpr unsigned long HISTORY_PUBLISH_DELAY_MS = 10;    // pausa entre publicacoes de replay
 constexpr bool MQTT_RETAINED = true;
@@ -116,6 +117,7 @@ PZEM004Tv30 pzem(Serial2, 16, 17);
 
 unsigned long lastPublishMs = 0;
 unsigned long lastWifiAttemptMs = 0;
+unsigned long wifiDisconnectedSinceMs = 0;
 unsigned long lastMqttAttemptMs = 0;
 SavedWifiNetwork wifiNetworks[WIFI_NETWORK_CAPACITY];
 uint8_t wifiNetworkCount = 0;
@@ -126,6 +128,7 @@ size_t queueCount = 0;
 
 bool provisioningMode = false;
 bool provisionServerStarted = false;
+bool fallbackApActive = false;
 bool restartScheduled = false;
 unsigned long restartScheduledAtMs = 0;
 bool sntpConfigured = false;
@@ -761,10 +764,15 @@ void scheduleRestart() {
 }
 
 void handleHealth() {
+  String body = "{\"ok\":true,\"mode\":\"";
+  body += provisioningMode ? "provisioning" : (fallbackApActive ? "fallback_ap" : "normal");
+  body += "\",\"fallbackAp\":";
+  body += fallbackApActive ? "true" : "false";
+  body += ",\"message\":\"ESP pronto para receber configuracao.\"}";
   provisionServer.send(
       200,
       "application/json",
-      "{\"ok\":true,\"mode\":\"provisioning\",\"message\":\"ESP pronto para receber configuracao.\"}");
+      body);
 }
 
 bool parseAndApplyProvisioning() {
@@ -902,6 +910,28 @@ void startProvisioningMode() {
   startProvisioningServer();
 }
 
+void startFallbackAccessPoint() {
+  if (provisioningMode || fallbackApActive) {
+    return;
+  }
+
+  fallbackApActive = true;
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(PROVISION_AP_SSID, PROVISION_AP_PASSWORD);
+  startProvisioningServer();
+}
+
+void stopFallbackAccessPoint() {
+  if (provisioningMode || !fallbackApActive) {
+    return;
+  }
+
+  WiFi.softAPdisconnect(true);
+  fallbackApActive = false;
+  WiFi.mode(WIFI_STA);
+  wifiDisconnectedSinceMs = 0;
+}
+
 void connectWiFi() {
   if (!config.valid || wifiNetworkCount == 0) {
     return;
@@ -912,8 +942,37 @@ void connectWiFi() {
   }
   applyWifiNetworkToConfig(wifiConnectIndex);
   wifiConnectIndex = (wifiConnectIndex + 1) % wifiNetworkCount;
-  WiFi.mode(WIFI_STA);
+  WiFi.mode(fallbackApActive ? WIFI_AP_STA : WIFI_STA);
+  if (wifiDisconnectedSinceMs == 0) {
+    wifiDisconnectedSinceMs = millis();
+  }
   WiFi.begin(config.wifiSsid, config.wifiPassword);
+}
+
+void ensureFallbackAccessPoint() {
+  if (provisioningMode) {
+    return;
+  }
+
+  if (!config.valid || wifiNetworkCount == 0) {
+    wifiDisconnectedSinceMs = 0;
+    startFallbackAccessPoint();
+    return;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    stopFallbackAccessPoint();
+    return;
+  }
+
+  const unsigned long now = millis();
+  if (wifiDisconnectedSinceMs == 0) {
+    wifiDisconnectedSinceMs = now;
+  }
+
+  if (now - wifiDisconnectedSinceMs >= WIFI_FALLBACK_AP_DELAY_MS) {
+    startFallbackAccessPoint();
+  }
 }
 
 void ensureWiFiConnected() {
@@ -1094,13 +1153,15 @@ void loop() {
     provisionServer.handleClient();
   }
 
+  if (restartScheduled && millis() - restartScheduledAtMs >= 1500) {
+    ESP.restart();
+  }
+
   if (provisioningMode) {
-    if (restartScheduled && millis() - restartScheduledAtMs >= 1500) {
-      ESP.restart();
-    }
     return;
   }
 
+  ensureFallbackAccessPoint();
   ensureWiFiConnected();
   if (WiFi.status() == WL_CONNECTED) {
     refreshEpochOffsetIfNeeded();
