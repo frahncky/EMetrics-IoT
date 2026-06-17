@@ -4,7 +4,7 @@ Exemplo de firmware com provisionamento via AP local para receber Wi-Fi e MQTT d
 
 ## Estrutura
 
-- src/main.ino
+- esp32_pzem.ino
 
 ## Payload publicado
 
@@ -90,12 +90,12 @@ provisionamento inicial e permanece somente como AP ate receber `/provision`.
 
 Por padrao, o firmware tenta iniciar o cartao SD no barramento SPI com os pinos:
 
-- CS: `5`
+- CS: `14`
 - SCK: `18`
 - MISO: `19`
 - MOSI: `23`
 
-Se sua placa usar outro mapeamento, altere no topo do arquivo `main.ino` via defines:
+Se sua placa usar outro mapeamento, altere no topo do arquivo `esp32_pzem.ino` via defines:
 
 - `EMETRICS_SD_CS_PIN`
 - `EMETRICS_SD_SCK_PIN`
@@ -105,7 +105,7 @@ Se sua placa usar outro mapeamento, altere no topo do arquivo `main.ino` via def
 O arquivo de historico fica em `/history.log` e e usado para responder requisicoes de historico por intervalo.
 O app tambem exibe o percentual de uso do SD a partir do campo `storage.sdUsagePercent`.
 
-## Parametros de buffer (main.ino)
+## Parametros de buffer (esp32_pzem.ino)
 
 - TELEMETRY_QUEUE_CAPACITY: quantidade maxima de amostras na fila
 - FLUSH_BATCH_LIMIT: quantas amostras enviar por iteracao do loop
