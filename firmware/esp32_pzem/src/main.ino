@@ -91,7 +91,7 @@ constexpr uint8_t WIFI_NETWORK_CAPACITY = 5;              // redes Wi-Fi salvas 
 constexpr const char* HISTORY_FILE_PATH = "/history.log";
 
 #ifndef EMETRICS_SD_CS_PIN
-#define EMETRICS_SD_CS_PIN 5
+#define EMETRICS_SD_CS_PIN 14
 #endif
 
 #ifndef EMETRICS_SD_SCK_PIN

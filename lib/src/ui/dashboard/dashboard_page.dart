@@ -86,13 +86,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               size: 28,
             ),
             const SizedBox(width: 8),
-            Text(
-              'E-Metrics IoT',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-                letterSpacing: 0.2,
-                color: isDarkMode ? Colors.white : Colors.black87,
+            Flexible(
+              child: Text(
+                'E-Metrics IoT',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  letterSpacing: 0.2,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -107,8 +111,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 const MqttConnectionStatusIcon(rightPadding: 0),
-                SizedBox(
-                  width: 210,
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.42,
+                  ),
                   child: Text(
                     'Dispositivo: ${mqttSettings.profileName}',
                     style: TextStyle(
@@ -130,68 +136,62 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
       ),
       // Drawer removido
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            metricsAsync.when(
-              data: (metrics) {
-                final last = metrics.isNotEmpty ? metrics.first : null;
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        top: 8,
-                        left: 8,
-                        right: 8,
-                        bottom: 0,
-                      ),
-                      child: _MainIndicators(
-                        voltage: last?.voltage ?? 0,
-                        current: last?.current ?? 0,
-                        power: last?.power ?? 0,
-                        energy: last?.energy ?? 0,
-                        pf: last?.pf ?? 0,
-                      ),
-                    ),
-                    if (dashboardPreferences.showForecastCard)
+        child: metricsAsync.when(
+          data: (metrics) {
+            final last = metrics.isNotEmpty ? metrics.first : null;
+            return CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                        child: forecastAsync.when(
-                          data: (forecast) {
-                            if (forecast == null) {
-                              return const SizedBox.shrink();
-                            }
-                            return _ForecastCard(snapshot: forecast);
-                          },
-                          loading: () => const SizedBox.shrink(),
-                          error: (_, _) => const SizedBox.shrink(),
+                        padding: const EdgeInsets.only(
+                          top: 8,
+                          left: 8,
+                          right: 8,
+                          bottom: 0,
+                        ),
+                        child: _MainIndicators(
+                          voltage: last?.voltage ?? 0,
+                          current: last?.current ?? 0,
+                          power: last?.power ?? 0,
+                          energy: last?.energy ?? 0,
+                          pf: last?.pf ?? 0,
                         ),
                       ),
-                  ],
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Text(
-                  'Erro ao carregar dados: $e',
-                  style: const TextStyle(color: AppColors.errorDataText),
+                      if (dashboardPreferences.showForecastCard)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                          child: forecastAsync.when(
+                            data: (forecast) {
+                              if (forecast == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return _ForecastCard(snapshot: forecast);
+                            },
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, _) => const SizedBox.shrink(),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
+                SliverFillRemaining(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    child: DashboardTabs(),
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(
+            child: Text(
+              'Erro ao carregar dados: $e',
+              style: const TextStyle(color: AppColors.errorDataText),
             ),
-            // Dois gráficos em abas
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  8,
-                  0,
-                  8,
-                  8,
-                ), // Espaço inferior para afastar do menu
-                child: DashboardTabs(),
-              ),
-            ),
-            // Aviso de erro MQTT removido
-          ],
+          ),
         ),
       ),
     );
