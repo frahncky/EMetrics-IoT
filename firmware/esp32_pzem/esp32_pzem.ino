@@ -15,6 +15,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <Wire.h>
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
@@ -106,6 +107,26 @@ constexpr const char* HISTORY_FILE_PATH = "/history.log";
 #define EMETRICS_SD_MOSI_PIN 23
 #endif
 
+#ifndef EMETRICS_I2C_SDA_PIN
+#define EMETRICS_I2C_SDA_PIN 21
+#endif
+
+#ifndef EMETRICS_I2C_SCL_PIN
+#define EMETRICS_I2C_SCL_PIN 22
+#endif
+
+#ifndef EMETRICS_LCD_I2C_ADDRESS
+#define EMETRICS_LCD_I2C_ADDRESS 0x27  // Endereco I2C do LCD (0x27 ou 0x3F comumente)
+#endif
+
+#ifndef EMETRICS_LCD_COLS
+#define EMETRICS_LCD_COLS 20
+#endif
+
+#ifndef EMETRICS_LCD_ROWS
+#define EMETRICS_LCD_ROWS 4
+#endif
+
 WiFiClient wifiClient;
 WiFiClientSecure secureClient;
 PubSubClient mqttClient(wifiClient);
@@ -114,6 +135,133 @@ Preferences preferences;
 
 // UART2 (ESP32): RX=16, TX=17
 PZEM004Tv30 pzem(Serial2, 16, 17);
+
+// LCD 4x20 I2C Display - Driver simplificado com PCF8574
+// Usa apenas Wire para comunicacao, sem bibliotecas externas
+class SimpleLCD {
+private:
+  uint8_t address;
+  uint8_t cols;
+  uint8_t rows;
+  uint8_t currentRow = 0;
+  uint8_t currentCol = 0;
+  
+  // PCF8574 pin mapping (backpack)
+  static constexpr uint8_t RS = 0;   // Register Select
+  static constexpr uint8_t RW = 1;   // Read/Write
+  static constexpr uint8_t EN = 2;   // Enable
+  static constexpr uint8_t BL = 3;   // Backlight
+  static constexpr uint8_t D4 = 4;   // Data pins
+  static constexpr uint8_t D5 = 5;
+  static constexpr uint8_t D6 = 6;
+  static constexpr uint8_t D7 = 7;
+  
+  void write4bits(uint8_t value) {
+    uint8_t backlight = BL;  // backlight sempre on
+    uint8_t data = (value & 0xF0) | backlight;
+    Wire.beginTransmission(address);
+    Wire.write(data | (1 << EN));  // com enable alto
+    Wire.endTransmission();
+    delayMicroseconds(1);
+    Wire.beginTransmission(address);
+    Wire.write(data & ~(1 << EN));  // com enable baixo
+    Wire.endTransmission();
+    delayMicroseconds(100);
+  }
+  
+  void sendCommand(uint8_t cmd) {
+    write4bits(cmd & 0xF0);
+    write4bits((cmd << 4) & 0xF0);
+  }
+  
+public:
+  SimpleLCD(uint8_t addr, uint8_t c, uint8_t r) : address(addr), cols(c), rows(r) {}
+  
+  void init() {
+    delay(500);
+    // Inicializacao do LCD em modo 4-bits
+    write4bits(0x30);
+    delay(5);
+    write4bits(0x30);
+    delayMicroseconds(100);
+    write4bits(0x30);
+    delay(5);
+    write4bits(0x20);  // modo 4-bits
+    delay(5);
+    
+    sendCommand(0x28);  // 4-bit, 2 linhas, fonte 5x8
+    sendCommand(0x0C);  // display on, cursor off, blink off
+    sendCommand(0x06);  // auto increment, sem shift
+    clear();
+  }
+  
+  void clear() {
+    sendCommand(0x01);
+    delay(2);
+    currentRow = 0;
+    currentCol = 0;
+  }
+  
+  void backlight() {
+    // Backlight eh ligado por padrao no metodo write4bits
+    // Este metodo e chamado por compatibilidade
+  }
+  
+  void setCursor(uint8_t col, uint8_t row) {
+    currentCol = col;
+    currentRow = row;
+    uint8_t addr = 0x80;
+    if (row == 1) addr = 0xC0;
+    else if (row == 2) addr = 0x94;
+    else if (row == 3) addr = 0xD4;
+    addr += col;
+    sendCommand(addr);
+  }
+  
+  void print(const char* str) {
+    while (*str) {
+      uint8_t backlight = (1 << BL);  // backlight on
+      uint8_t data = (*str & 0xF0) | (1 << RS) | backlight;  // RS alto para dados
+      Wire.beginTransmission(address);
+      Wire.write(data | (1 << EN));
+      Wire.endTransmission();
+      delayMicroseconds(1);
+      Wire.beginTransmission(address);
+      Wire.write(data & ~(1 << EN));
+      Wire.endTransmission();
+      delayMicroseconds(100);
+      
+      data = ((*str << 4) & 0xF0) | (1 << RS) | backlight;
+      Wire.beginTransmission(address);
+      Wire.write(data | (1 << EN));
+      Wire.endTransmission();
+      delayMicroseconds(1);
+      Wire.beginTransmission(address);
+      Wire.write(data & ~(1 << EN));
+      Wire.endTransmission();
+      delayMicroseconds(100);
+      
+      currentCol++;
+      str++;
+    }
+  }
+  
+  void print(float value, uint8_t decimals) {
+    char buf[16];
+    dtostrf(value, 0, decimals, buf);
+    print(buf);
+  }
+  
+  void print(const String& str) {
+    print(str.c_str());
+  }
+};
+
+SimpleLCD lcd(EMETRICS_LCD_I2C_ADDRESS, EMETRICS_LCD_COLS, EMETRICS_LCD_ROWS);
+
+unsigned long lastLcdUpdateMs = 0;
+uint8_t lcdDisplayIndex = 0;  // indice para rotacao entre diferentes dados
+constexpr unsigned long LCD_UPDATE_INTERVAL_MS = 4000;  // troca de informacao a cada 4 segundos
 
 unsigned long lastPublishMs = 0;
 unsigned long lastWifiAttemptMs = 0;
@@ -1127,12 +1275,134 @@ void flushQueuedMetrics() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// LCD 4x20 I2C - ATUALIZACAO DE DISPLAY
+// Rotacao entre diferentes dados de medicao em intervalos fixos
+// ═══════════════════════════════════════════════════════════════════════════
+
+void updateLcdDisplay() {
+  const unsigned long now = millis();
+  if (now - lastLcdUpdateMs < LCD_UPDATE_INTERVAL_MS) {
+    return;  // nao e hora de atualizar ainda
+  }
+  lastLcdUpdateMs = now;
+
+  // Le os dados atuais do PZEM
+  float voltage = pzem.voltage();
+  float current = pzem.current();
+  float power = pzem.power();
+  float energy = pzem.energy();
+  float frequency = pzem.frequency();
+  float pf = pzem.pf();
+
+  // Verifica se leitura foi bem-sucedida
+  if (isnan(voltage) || isnan(current) || isnan(power)) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Erro ao ler PZEM");
+    lcd.setCursor(0, 1);
+    lcd.print("Verifique conexao");
+    return;
+  }
+
+  // Limpa o display
+  lcd.clear();
+
+  // Mostra diferentes dados conforme lcdDisplayIndex
+  switch (lcdDisplayIndex % 6) {
+    case 0:  // Tensao
+      lcd.setCursor(0, 0);
+      lcd.print("Tensao (V)");
+      lcd.setCursor(0, 1);
+      lcd.print(voltage, 1);
+      lcd.print(" V");
+      break;
+
+    case 1:  // Corrente
+      lcd.setCursor(0, 0);
+      lcd.print("Corrente (A)");
+      lcd.setCursor(0, 1);
+      lcd.print(current, 3);
+      lcd.print(" A");
+      break;
+
+    case 2:  // Potencia
+      lcd.setCursor(0, 0);
+      lcd.print("Potencia (W)");
+      lcd.setCursor(0, 1);
+      lcd.print(power, 2);
+      lcd.print(" W");
+      break;
+
+    case 3:  // Frequencia
+      lcd.setCursor(0, 0);
+      lcd.print("Frequencia (Hz)");
+      lcd.setCursor(0, 1);
+      lcd.print(frequency, 2);
+      lcd.print(" Hz");
+      break;
+
+    case 4:  // Fator de Potencia
+      lcd.setCursor(0, 0);
+      lcd.print("Fator Potencia");
+      lcd.setCursor(0, 1);
+      if (!isnan(pf)) {
+        lcd.print(pf, 2);
+      } else {
+        lcd.print("N/A");
+      }
+      break;
+
+    case 5:  // Energia Total
+      lcd.setCursor(0, 0);
+      lcd.print("Energia (kWh)");
+      lcd.setCursor(0, 1);
+      lcd.print(energy, 3);
+      lcd.print(" kWh");
+      break;
+  }
+
+  // Avanca para proximo indice
+  lcdDisplayIndex++;
+
+  // Mostra status de conexao na linha 3
+  lcd.setCursor(0, 3);
+  if (WiFi.status() == WL_CONNECTED) {
+    lcd.print("WiFi: OK");
+  } else {
+    lcd.print("WiFi: OFF");
+  }
+
+  if (mqttClient.connected()) {
+    lcd.print(" | MQTT: ON");
+  } else {
+    lcd.print(" | MQTT: OFF");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SETUP E LOOP PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
 
 void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, 16, 17);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // INICIALIZACAO I2C PARA DISPLAY LCD 4x20 (GPIO21/22)
+  // ═══════════════════════════════════════════════════════════════════════════
+  Wire.begin(EMETRICS_I2C_SDA_PIN, EMETRICS_I2C_SCL_PIN, 100000);
+  delay(500);  // aguarda estabilizacao I2C
+  
+  // Inicializa LCD: set the LCD address to 0x27 for a 20 chars 4 line display
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("EMetrics IoT");
+  lcd.setCursor(0, 1);
+  lcd.print("Display 4x20 OK");
+  delay(2000);  // mostra mensagem inicial por 2 segundos
+  lcd.clear();
 
   ensureHistoryStorageReady();
   loadConfig();
@@ -1182,4 +1452,7 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED && mqttClient.connected()) {
     flushQueuedMetrics();
   }
+
+  // Atualiza display LCD com dados de medicao alternando
+  updateLcdDisplay();
 }
