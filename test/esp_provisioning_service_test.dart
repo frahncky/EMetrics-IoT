@@ -50,6 +50,7 @@ void main() {
     test('buildFormData serializa payload esperado', () {
       final body = EspProvisioningService.buildFormData(
         wifiSsid: ' MinhaRede ',
+        wifiUsername: ' usuario.rede ',
         wifiPassword: 'wifi123',
         mqttHost: ' broker.local ',
         mqttPort: 1883,
@@ -62,6 +63,7 @@ void main() {
       );
 
       expect(body['ssid'], 'MinhaRede');
+  expect(body['wifiUsername'], 'usuario.rede');
       expect(body['wifiPassword'], 'wifi123');
       expect(body['mqttHost'], 'broker.local');
       expect(body['mqttPort'], '1883');
@@ -76,14 +78,18 @@ void main() {
     test('buildWifiNetworkFormData serializa edição de rede', () {
       final body = EspProvisioningService.buildWifiNetworkFormData(
         ssid: ' NovaRede ',
+        wifiUsername: ' user.enterprise ',
         wifiPassword: '',
         oldSsid: ' Antiga ',
+        keepUsername: true,
         keepPassword: true,
       );
 
       expect(body['ssid'], 'NovaRede');
       expect(body['oldSsid'], 'Antiga');
+      expect(body['wifiUsername'], 'user.enterprise');
       expect(body['wifiPassword'], '');
+      expect(body['keepUsername'], '1');
       expect(body['keepPassword'], '1');
     });
 

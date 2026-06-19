@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/mqtt_settings_provider.dart';
+import '../../services/esp_local_host_store.dart';
 import '../../services/esp_provisioning_service.dart';
 import 'settings_validators.dart';
 
@@ -17,6 +18,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   final _formKey = GlobalKey<FormState>();
   final _espHostController = TextEditingController(text: '192.168.4.1');
   final _wifiSsidController = TextEditingController();
+  final _wifiUsernameController = TextEditingController();
   final _wifiPasswordController = TextEditingController();
   final _mqttHostController = TextEditingController();
   final _mqttPortController = TextEditingController(text: '1883');
@@ -34,6 +36,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   String _appMqttClientId = '';
   List<EspWifiNetwork> _savedNetworks = const [];
   final EspProvisioningService _service = const EspProvisioningService();
+  final EspLocalHostStore _espHostStore = const EspLocalHostStore();
 
   @override
   void initState() {
@@ -42,6 +45,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   }
 
   Future<void> _prefillFromSettings() async {
+    _espHostController.text = await _espHostStore.loadHost();
     final settings = await ref.read(mqttSettingsProvider.notifier).load();
     if (!mounted) {
       return;
@@ -59,9 +63,14 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     setState(() => _useTls = settings.useTls);
   }
 
+  Future<void> _saveCurrentEspHost() async {
+    await _espHostStore.saveHost(_espHostController.text);
+  }
+
   Future<void> _loadSavedNetworks({bool silent = false}) async {
     setState(() => _isLoadingNetworks = true);
     try {
+      await _saveCurrentEspHost();
       final networks = await _service.loadWifiNetworks(
         espHost: _espHostController.text,
       );
@@ -102,11 +111,15 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
 
     setState(() => _isSavingNetwork = true);
     final editing = _editingNetworkSsid;
+    await _saveCurrentEspHost();
     final result = await _service.saveWifiNetwork(
       espHost: _espHostController.text,
       ssid: ssid,
+      wifiUsername: _wifiUsernameController.text,
       wifiPassword: _wifiPasswordController.text,
       oldSsid: editing,
+      keepUsername:
+          editing != null && _wifiUsernameController.text.trim().isEmpty,
       keepPassword:
           editing != null && _wifiPasswordController.text.trim().isEmpty,
     );
@@ -126,6 +139,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     if (result.ok) {
       setState(() {
         _editingNetworkSsid = null;
+        _wifiUsernameController.clear();
         _wifiPasswordController.clear();
       });
       await _loadSavedNetworks();
@@ -155,6 +169,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     }
 
     setState(() => _deletingNetworkSsid = network.ssid);
+    await _saveCurrentEspHost();
     final result = await _service.deleteWifiNetwork(
       espHost: _espHostController.text,
       ssid: network.ssid,
@@ -181,6 +196,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     setState(() {
       _editingNetworkSsid = network.ssid;
       _wifiSsidController.text = network.ssid;
+      _wifiUsernameController.clear();
       _wifiPasswordController.clear();
     });
   }
@@ -189,6 +205,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     setState(() {
       _editingNetworkSsid = null;
       _wifiSsidController.clear();
+      _wifiUsernameController.clear();
       _wifiPasswordController.clear();
     });
   }
@@ -212,10 +229,12 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     }
 
     setState(() => _isSubmitting = true);
+    await _saveCurrentEspHost();
 
     final result = await _service.provision(
       espHost: _espHostController.text,
       wifiSsid: _wifiSsidController.text,
+      wifiUsername: _wifiUsernameController.text,
       wifiPassword: _wifiPasswordController.text,
       mqttHost: _mqttHostController.text,
       mqttPort: int.parse(_mqttPortController.text.trim()),
@@ -323,6 +342,15 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _wifiUsernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Usuário Wi-Fi (opcional)',
+                  helperText: 'Preencha apenas para redes que exigem usuário.',
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -468,6 +496,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   void dispose() {
     _espHostController.dispose();
     _wifiSsidController.dispose();
+    _wifiUsernameController.dispose();
     _wifiPasswordController.dispose();
     _mqttHostController.dispose();
     _mqttPortController.dispose();

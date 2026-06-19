@@ -7,6 +7,7 @@ import 'ui/history/history_page.dart';
 import 'ui/settings/settings_page.dart';
 import '../src/providers/alert_provider.dart';
 import '../src/providers/device_storage_provider.dart';
+import '../src/providers/local_metric_collector_provider.dart';
 import '../src/providers/theme_provider.dart';
 import '../src/providers/mqtt_metric_saver.dart';
 import 'theme/app_colors.dart';
@@ -29,6 +30,7 @@ class _AppInitializer extends ConsumerWidget {
     // via ref.listen sem bloquear o ciclo de renderização.
     ref.listen(alertProvider, (previous, next) {});
     ref.listen(deviceStorageTrackerProvider, (previous, next) {});
+    ref.listen(localMetricCollectorProvider, (previous, next) {});
     ref.listen(integrationAutoSyncProvider, (previous, next) {});
     final isDarkMode = ref.watch(themeProvider);
 

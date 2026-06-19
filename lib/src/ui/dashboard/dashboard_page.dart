@@ -3,6 +3,7 @@ import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:math' as math;
 import '../../providers/dashboard_preferences_provider.dart';
 import '../../providers/forecast_provider.dart';
 import '../../providers/metric_provider.dart';
@@ -155,6 +156,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                           voltage: last?.voltage ?? 0,
                           current: last?.current ?? 0,
                           power: last?.power ?? 0,
+                          frequency: last?.frequency ?? 0,
                           energy: last?.energy ?? 0,
                           pf: last?.pf ?? 0,
                         ),
@@ -357,12 +359,14 @@ class _MainIndicators extends StatelessWidget {
   final double voltage;
   final double current;
   final double power;
+  final double frequency;
   final double energy;
   final double pf;
   const _MainIndicators({
     this.voltage = 0,
     this.current = 0,
     this.power = 0,
+    this.frequency = 0,
     this.energy = 0,
     this.pf = 0,
   });
@@ -370,7 +374,10 @@ class _MainIndicators extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double apparent = voltage * current;
-    final double reativa = (voltage * current) * (1 - (pf.isNaN ? 0 : pf));
+    final double active = power;
+    final double reactive = math.sqrt(
+      math.max((apparent * apparent) - (active * active), 0),
+    );
     const spacing = 8.0;
     // Cada card representa uma grandeza elétrica medida pelo PZEM004T.
     final cards = [
@@ -392,7 +399,7 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Reativa',
-        value: formatWithSIPrefix(reativa),
+        value: formatWithSIPrefix(reactive),
         icon: Icons.waves,
         color: AppColors.metricReactive,
         compact: true,
@@ -432,7 +439,7 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Frequência',
-        value: '--',
+        value: frequency > 0 ? frequency.toStringAsFixed(2) : '--',
         icon: Icons.ssid_chart,
         color: AppColors.metricFrequency,
         compact: true,

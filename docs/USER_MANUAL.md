@@ -248,8 +248,11 @@ Permite configurar as credenciais Wi-Fi e MQTT diretamente no ESP32 via rede AP 
 
 1. Coloque o ESP32 em modo de provisionamento (o firmware deve expor um AP HTTP).
 2. Conecte o celular ao Wi-Fi do ESP32.
-3. Abra a tela de provisionamento no app, preencha SSID, senha Wi-Fi e dados MQTT.
+3. Abra a tela de provisionamento no app, preencha SSID, usuário Wi-Fi (opcional), senha Wi-Fi e dados MQTT.
 4. Toque em **Provisionar** — as configurações são enviadas ao ESP32 via HTTP.
+
+Observação: o app também pode coletar medições localmente via HTTP (IP do ESP32),
+mesmo sem conexão MQTT com a internet.
 
 ---
 

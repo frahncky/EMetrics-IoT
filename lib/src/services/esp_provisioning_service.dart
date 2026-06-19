@@ -77,6 +77,7 @@ class EspProvisioningService {
 
   static Map<String, String> buildFormData({
     required String wifiSsid,
+    required String wifiUsername,
     required String wifiPassword,
     required String mqttHost,
     required int mqttPort,
@@ -89,6 +90,7 @@ class EspProvisioningService {
   }) {
     return {
       'ssid': wifiSsid.trim(),
+      'wifiUsername': wifiUsername.trim(),
       'wifiPassword': wifiPassword,
       'mqttHost': mqttHost.trim(),
       'mqttPort': '$mqttPort',
@@ -103,15 +105,19 @@ class EspProvisioningService {
 
   static Map<String, String> buildWifiNetworkFormData({
     required String ssid,
+    required String wifiUsername,
     required String wifiPassword,
     String? oldSsid,
+    bool keepUsername = false,
     bool keepPassword = false,
   }) {
     return {
       'ssid': ssid.trim(),
+      'wifiUsername': wifiUsername.trim(),
       'wifiPassword': wifiPassword,
       if (oldSsid != null && oldSsid.trim().isNotEmpty)
         'oldSsid': oldSsid.trim(),
+      'keepUsername': keepUsername ? '1' : '0',
       'keepPassword': keepPassword ? '1' : '0',
     };
   }
@@ -135,6 +141,7 @@ class EspProvisioningService {
   Future<EspProvisioningResult> provision({
     required String espHost,
     required String wifiSsid,
+    required String wifiUsername,
     required String wifiPassword,
     required String mqttHost,
     required int mqttPort,
@@ -149,6 +156,7 @@ class EspProvisioningService {
     final uri = buildProvisioningUri(espHost);
     final body = buildFormData(
       wifiSsid: wifiSsid,
+      wifiUsername: wifiUsername,
       wifiPassword: wifiPassword,
       mqttHost: mqttHost,
       mqttPort: mqttPort,
@@ -202,16 +210,20 @@ class EspProvisioningService {
   Future<EspProvisioningResult> saveWifiNetwork({
     required String espHost,
     required String ssid,
+    required String wifiUsername,
     required String wifiPassword,
     String? oldSsid,
+    bool keepUsername = false,
     bool keepPassword = false,
     Duration timeout = const Duration(seconds: 8),
   }) async {
     final uri = buildWifiNetworksUri(espHost);
     final body = buildWifiNetworkFormData(
       ssid: ssid,
+      wifiUsername: wifiUsername,
       wifiPassword: wifiPassword,
       oldSsid: oldSsid,
+      keepUsername: keepUsername,
       keepPassword: keepPassword,
     );
 

@@ -38,6 +38,7 @@ const char* PROVISION_AP_PASSWORD = "12345678";
 // ═══════════════════════════════════════════════════════════════════════════
 struct DeviceConfig {
   char wifiSsid[33];
+  char wifiUsername[65];
   char wifiPassword[65];
   char mqttHost[65];
   uint16_t mqttPort;
@@ -53,10 +54,12 @@ struct DeviceConfig {
 
 struct SavedWifiNetwork {
   char ssid[33];
+  char username[65];
   char password[65];
 };
 
 DeviceConfig config = {
+  "",
   "",
   "",
   "test.mosquitto.org",
@@ -154,11 +157,10 @@ private:
   static constexpr uint8_t D4 = 4;   // Data pins
   static constexpr uint8_t D5 = 5;
   static constexpr uint8_t D6 = 6;
-  static constexpr uint8_t D7 = 7;
-  
+
   void write4bits(uint8_t value) {
-    uint8_t backlight = BL;  // backlight sempre on
-    uint8_t data = (value & 0xF0) | backlight;
+    uint8_t backlightBits = (1 << BL);  // backlight sempre on
+    uint8_t data = (value & 0xF0) | backlightBits;
     Wire.beginTransmission(address);
     Wire.write(data | (1 << EN));  // com enable alto
     Wire.endTransmission();
@@ -220,8 +222,8 @@ public:
   
   void print(const char* str) {
     while (*str) {
-      uint8_t backlight = (1 << BL);  // backlight on
-      uint8_t data = (*str & 0xF0) | (1 << RS) | backlight;  // RS alto para dados
+      uint8_t backlightBits = (1 << BL);  // backlight on
+      uint8_t data = (*str & 0xF0) | (1 << RS) | backlightBits;  // RS alto para dados
       Wire.beginTransmission(address);
       Wire.write(data | (1 << EN));
       Wire.endTransmission();
@@ -231,7 +233,7 @@ public:
       Wire.endTransmission();
       delayMicroseconds(100);
       
-      data = ((*str << 4) & 0xF0) | (1 << RS) | backlight;
+      data = ((*str << 4) & 0xF0) | (1 << RS) | backlightBits;
       Wire.beginTransmission(address);
       Wire.write(data | (1 << EN));
       Wire.endTransmission();
@@ -261,7 +263,11 @@ SimpleLCD lcd(EMETRICS_LCD_I2C_ADDRESS, EMETRICS_LCD_COLS, EMETRICS_LCD_ROWS);
 
 unsigned long lastLcdUpdateMs = 0;
 uint8_t lcdDisplayIndex = 0;  // indice para rotacao entre diferentes dados
-constexpr unsigned long LCD_UPDATE_INTERVAL_MS = 4000;  // troca de informacao a cada 4 segundos
+unsigned long lastMetricRotateMs = 0;
+size_t networkNameScrollOffset = 0;
+String networkNameScrollSource = "";
+constexpr unsigned long LCD_UPDATE_INTERVAL_MS = 700;   // atualizacao visual do LCD
+constexpr unsigned long LCD_METRIC_ROTATE_INTERVAL_MS = 4000;  // troca de informacao a cada 4 segundos
 
 unsigned long lastPublishMs = 0;
 unsigned long lastWifiAttemptMs = 0;
@@ -311,10 +317,16 @@ void pruneHistoryByRetentionIfNeeded(uint64_t nowMs, bool force);
 void onMqttMessage(char* topic, byte* payload, unsigned int length);
 File openHistoryFile(const char* mode);
 bool removeHistoryFile();
+bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize);
 void saveConfig();
 void saveWifiNetworks(Preferences& prefs);
 void loadWifiNetworks(Preferences& prefs);
-bool upsertWifiNetwork(String ssid, String password, String oldSsid = "", bool keepExistingPassword = false);
+bool upsertWifiNetwork(String ssid,
+                       String username,
+                       String password,
+                       String oldSsid = "",
+                       bool keepExistingUsername = false,
+                       bool keepExistingPassword = false);
 bool deleteWifiNetwork(String ssid);
 int findWifiNetworkIndex(const String& ssid);
 String jsonEscape(const char* value);
@@ -724,6 +736,7 @@ void clearWifiNetworks() {
   wifiConnectIndex = 0;
   for (uint8_t i = 0; i < WIFI_NETWORK_CAPACITY; i++) {
     wifiNetworks[i].ssid[0] = '\0';
+    wifiNetworks[i].username[0] = '\0';
     wifiNetworks[i].password[0] = '\0';
   }
 }
@@ -744,11 +757,18 @@ void applyWifiNetworkToConfig(uint8_t index) {
     return;
   }
   safeCopy(String(wifiNetworks[index].ssid), config.wifiSsid, sizeof(config.wifiSsid));
+  safeCopy(String(wifiNetworks[index].username), config.wifiUsername, sizeof(config.wifiUsername));
   safeCopy(String(wifiNetworks[index].password), config.wifiPassword, sizeof(config.wifiPassword));
 }
 
-bool upsertWifiNetwork(String ssid, String password, String oldSsid, bool keepExistingPassword) {
+bool upsertWifiNetwork(String ssid,
+                       String username,
+                       String password,
+                       String oldSsid,
+                       bool keepExistingUsername,
+                       bool keepExistingPassword) {
   ssid.trim();
+  username.trim();
   oldSsid.trim();
   if (ssid.length() == 0 || ssid.length() >= sizeof(config.wifiSsid)) {
     return false;
@@ -769,6 +789,9 @@ bool upsertWifiNetwork(String ssid, String password, String oldSsid, bool keepEx
   }
 
   safeCopy(ssid, wifiNetworks[targetIndex].ssid, sizeof(wifiNetworks[targetIndex].ssid));
+  if (!keepExistingUsername || wifiNetworks[targetIndex].username[0] == '\0') {
+    safeCopy(username, wifiNetworks[targetIndex].username, sizeof(wifiNetworks[targetIndex].username));
+  }
   if (!keepExistingPassword || wifiNetworks[targetIndex].password[0] == '\0') {
     safeCopy(password, wifiNetworks[targetIndex].password, sizeof(wifiNetworks[targetIndex].password));
   }
@@ -788,12 +811,14 @@ bool deleteWifiNetwork(String ssid) {
   }
   wifiNetworkCount--;
   wifiNetworks[wifiNetworkCount].ssid[0] = '\0';
+  wifiNetworks[wifiNetworkCount].username[0] = '\0';
   wifiNetworks[wifiNetworkCount].password[0] = '\0';
 
   if (wifiNetworkCount > 0) {
     applyWifiNetworkToConfig(0);
   } else {
     config.wifiSsid[0] = '\0';
+    config.wifiUsername[0] = '\0';
     config.wifiPassword[0] = '\0';
   }
   config.valid = wifiNetworkCount > 0 && strlen(config.mqttHost) > 0;
@@ -806,14 +831,18 @@ void loadWifiNetworks(Preferences& prefs) {
   const uint8_t storedCount = prefs.getUChar("wifi_net_count", 0);
   for (uint8_t i = 0; i < storedCount && i < WIFI_NETWORK_CAPACITY; i++) {
     char ssidKey[16];
+    char usernameKey[16];
     char passwordKey[16];
     snprintf(ssidKey, sizeof(ssidKey), "wifi_ssid_%u", i);
+    snprintf(usernameKey, sizeof(usernameKey), "wifi_user_%u", i);
     snprintf(passwordKey, sizeof(passwordKey), "wifi_pwd_%u", i);
     const String ssid = prefs.getString(ssidKey, "");
     if (ssid.length() == 0) {
       continue;
     }
     safeCopy(ssid, wifiNetworks[wifiNetworkCount].ssid, sizeof(wifiNetworks[wifiNetworkCount].ssid));
+    safeCopy(prefs.getString(usernameKey, ""), wifiNetworks[wifiNetworkCount].username,
+             sizeof(wifiNetworks[wifiNetworkCount].username));
     safeCopy(prefs.getString(passwordKey, ""), wifiNetworks[wifiNetworkCount].password,
              sizeof(wifiNetworks[wifiNetworkCount].password));
     wifiNetworkCount++;
@@ -821,6 +850,7 @@ void loadWifiNetworks(Preferences& prefs) {
 
   if (wifiNetworkCount == 0 && strlen(config.wifiSsid) > 0) {
     safeCopy(String(config.wifiSsid), wifiNetworks[0].ssid, sizeof(wifiNetworks[0].ssid));
+    safeCopy(String(config.wifiUsername), wifiNetworks[0].username, sizeof(wifiNetworks[0].username));
     safeCopy(String(config.wifiPassword), wifiNetworks[0].password, sizeof(wifiNetworks[0].password));
     wifiNetworkCount = 1;
   }
@@ -833,14 +863,18 @@ void saveWifiNetworks(Preferences& prefs) {
   prefs.putUChar("wifi_net_count", wifiNetworkCount);
   for (uint8_t i = 0; i < WIFI_NETWORK_CAPACITY; i++) {
     char ssidKey[16];
+    char usernameKey[16];
     char passwordKey[16];
     snprintf(ssidKey, sizeof(ssidKey), "wifi_ssid_%u", i);
+    snprintf(usernameKey, sizeof(usernameKey), "wifi_user_%u", i);
     snprintf(passwordKey, sizeof(passwordKey), "wifi_pwd_%u", i);
     if (i < wifiNetworkCount) {
       prefs.putString(ssidKey, wifiNetworks[i].ssid);
+      prefs.putString(usernameKey, wifiNetworks[i].username);
       prefs.putString(passwordKey, wifiNetworks[i].password);
     } else {
       prefs.remove(ssidKey);
+      prefs.remove(usernameKey);
       prefs.remove(passwordKey);
     }
   }
@@ -852,6 +886,7 @@ void loadConfig() {
 
   if (valid) {
     const String wifiSsid = preferences.getString("wifi_ssid", "");
+    const String wifiUsername = preferences.getString("wifi_user", "");
     const String wifiPassword = preferences.getString("wifi_pwd", "");
     const String mqttHost = preferences.getString("mqtt_host", "test.mosquitto.org");
     const uint16_t mqttPort = preferences.getUShort("mqtt_port", 1883);
@@ -866,6 +901,7 @@ void loadConfig() {
         preferences.getUShort("sd_ret_days", DEFAULT_SD_RETENTION_DAYS);
 
     safeCopy(wifiSsid, config.wifiSsid, sizeof(config.wifiSsid));
+    safeCopy(wifiUsername, config.wifiUsername, sizeof(config.wifiUsername));
     safeCopy(wifiPassword, config.wifiPassword, sizeof(config.wifiPassword));
     safeCopy(mqttHost, config.mqttHost, sizeof(config.mqttHost));
     config.mqttPort = mqttPort;
@@ -888,6 +924,7 @@ void loadConfig() {
 void saveConfig() {
   preferences.begin("emetrics", false);
   preferences.putString("wifi_ssid", config.wifiSsid);
+  preferences.putString("wifi_user", config.wifiUsername);
   preferences.putString("wifi_pwd", config.wifiPassword);
   preferences.putString("mqtt_host", config.mqttHost);
   preferences.putUShort("mqtt_port", config.mqttPort);
@@ -924,6 +961,19 @@ void handleHealth() {
       body);
 }
 
+void handleMetrics() {
+  char payload[TELEMETRY_PAYLOAD_SIZE];
+  if (!buildMetricsPayload(payload, sizeof(payload))) {
+    provisionServer.send(
+        503,
+        "application/json",
+        "{\"ok\":false,\"message\":\"Falha ao ler medicao local do PZEM.\"}");
+    return;
+  }
+
+  provisionServer.send(200, "application/json", payload);
+}
+
 bool parseAndApplyProvisioning() {
   if (!provisionServer.hasArg("ssid") || !provisionServer.hasArg("mqttHost") ||
       !provisionServer.hasArg("mqttPort") || !provisionServer.hasArg("mqttTopic") ||
@@ -956,7 +1006,9 @@ bool parseAndApplyProvisioning() {
   safeCopy(mqttRequestTopic, config.mqttRequestTopic, sizeof(config.mqttRequestTopic));
   safeCopy(clientId, config.mqttClientId, sizeof(config.mqttClientId));
   config.useTls = provisionServer.arg("useTls") == "1";
-  if (!upsertWifiNetwork(ssid, provisionServer.arg("wifiPassword"))) {
+  if (!upsertWifiNetwork(ssid,
+                         provisionServer.arg("wifiUsername"),
+                         provisionServer.arg("wifiPassword"))) {
     return false;
   }
 
@@ -986,7 +1038,9 @@ void handleWifiNetworksList() {
     }
     body += "{\"ssid\":\"";
     body += jsonEscape(wifiNetworks[i].ssid);
-    body += "\",\"active\":";
+    body += "\",\"hasUsername\":";
+    body += wifiNetworks[i].username[0] == '\0' ? "false" : "true";
+    body += ",\"active\":";
     body += strcmp(wifiNetworks[i].ssid, config.wifiSsid) == 0 ? "true" : "false";
     body += "}";
   }
@@ -1003,11 +1057,14 @@ void handleWifiNetworkSave() {
 
   const String ssid = provisionServer.arg("ssid");
   const String oldSsid = provisionServer.hasArg("oldSsid") ? provisionServer.arg("oldSsid") : "";
+  const String username =
+      provisionServer.hasArg("wifiUsername") ? provisionServer.arg("wifiUsername") : "";
   const String password =
       provisionServer.hasArg("wifiPassword") ? provisionServer.arg("wifiPassword") : "";
+    const bool keepUsername = provisionServer.arg("keepUsername") == "1";
   const bool keepPassword = provisionServer.arg("keepPassword") == "1";
 
-  if (!upsertWifiNetwork(ssid, password, oldSsid, keepPassword)) {
+    if (!upsertWifiNetwork(ssid, username, password, oldSsid, keepUsername, keepPassword)) {
     provisionServer.send(
         400,
         "application/json",
@@ -1044,6 +1101,7 @@ void startProvisioningServer() {
   }
 
   provisionServer.on("/health", HTTP_GET, handleHealth);
+  provisionServer.on("/metrics", HTTP_GET, handleMetrics);
   provisionServer.on("/provision", HTTP_POST, handleProvision);
   provisionServer.on("/wifi-networks", HTTP_GET, handleWifiNetworksList);
   provisionServer.on("/wifi-networks", HTTP_POST, handleWifiNetworkSave);
@@ -1274,6 +1332,68 @@ void flushQueuedMetrics() {
   }
 }
 
+void printLcdLine(uint8_t row, String text) {
+  if (text.length() > 20) {
+    text = text.substring(0, 20);
+  }
+
+  lcd.setCursor(0, row);
+  lcd.print(text);
+  for (size_t i = text.length(); i < 20; i++) {
+    lcd.print(" ");
+  }
+}
+
+String currentWifiTypeLabel() {
+  if (provisioningMode || fallbackApActive) {
+    return "AP";
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    return "STA";
+  }
+  return "OFF";
+}
+
+String currentNetworkNameLabel() {
+  const String prefix = "Rede: ";
+
+  if (provisioningMode || fallbackApActive) {
+    return prefix + String(PROVISION_AP_SSID);
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    return prefix + WiFi.SSID();
+  }
+  return "Rede: sem conexao";
+}
+
+String currentNetworkLineForLcd() {
+  const size_t maxLineLen = 20;
+  const String base = currentNetworkNameLabel();
+
+  if (base != networkNameScrollSource) {
+    networkNameScrollSource = base;
+    networkNameScrollOffset = 0;
+  }
+
+  if (base.length() <= maxLineLen) {
+    return base;
+  }
+
+  const String marquee = base + "   ";
+  if (networkNameScrollOffset >= marquee.length()) {
+    networkNameScrollOffset = 0;
+  }
+
+  String line = "";
+  for (size_t i = 0; i < maxLineLen; i++) {
+    const size_t idx = (networkNameScrollOffset + i) % marquee.length();
+    line += marquee[idx];
+  }
+
+  networkNameScrollOffset = (networkNameScrollOffset + 1) % marquee.length();
+  return line;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // LCD 4x20 I2C - ATUALIZACAO DE DISPLAY
 // Rotacao entre diferentes dados de medicao em intervalos fixos
@@ -1286,6 +1406,13 @@ void updateLcdDisplay() {
   }
   lastLcdUpdateMs = now;
 
+  if (lastMetricRotateMs == 0) {
+    lastMetricRotateMs = now;
+  } else if (now - lastMetricRotateMs >= LCD_METRIC_ROTATE_INTERVAL_MS) {
+    lastMetricRotateMs = now;
+    lcdDisplayIndex = (lcdDisplayIndex + 1) % 6;
+  }
+
   // Le os dados atuais do PZEM
   float voltage = pzem.voltage();
   float current = pzem.current();
@@ -1296,87 +1423,61 @@ void updateLcdDisplay() {
 
   // Verifica se leitura foi bem-sucedida
   if (isnan(voltage) || isnan(current) || isnan(power)) {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Erro ao ler PZEM");
-    lcd.setCursor(0, 1);
-    lcd.print("Verifique conexao");
+    printLcdLine(0, "Erro ao ler PZEM");
+    printLcdLine(1, "Verifique conexao");
+    printLcdLine(2, currentNetworkLineForLcd());
+    printLcdLine(
+        3,
+        String("Tipo:") + currentWifiTypeLabel() +
+            " MQTT:" +
+            (mqttClient.connected() ? "ON" : "OFF"));
     return;
   }
-
-  // Limpa o display
-  lcd.clear();
 
   // Mostra diferentes dados conforme lcdDisplayIndex
   switch (lcdDisplayIndex % 6) {
     case 0:  // Tensao
-      lcd.setCursor(0, 0);
-      lcd.print("Tensao (V)");
-      lcd.setCursor(0, 1);
-      lcd.print(voltage, 1);
-      lcd.print(" V");
+      printLcdLine(0, "Tensao (V)");
+      printLcdLine(1, String(voltage, 1) + " V");
       break;
 
     case 1:  // Corrente
-      lcd.setCursor(0, 0);
-      lcd.print("Corrente (A)");
-      lcd.setCursor(0, 1);
-      lcd.print(current, 3);
-      lcd.print(" A");
+      printLcdLine(0, "Corrente (A)");
+      printLcdLine(1, String(current, 3) + " A");
       break;
 
     case 2:  // Potencia
-      lcd.setCursor(0, 0);
-      lcd.print("Potencia (W)");
-      lcd.setCursor(0, 1);
-      lcd.print(power, 2);
-      lcd.print(" W");
+      printLcdLine(0, "Potencia (W)");
+      printLcdLine(1, String(power, 2) + " W");
       break;
 
     case 3:  // Frequencia
-      lcd.setCursor(0, 0);
-      lcd.print("Frequencia (Hz)");
-      lcd.setCursor(0, 1);
-      lcd.print(frequency, 2);
-      lcd.print(" Hz");
+      printLcdLine(0, "Frequencia (Hz)");
+      printLcdLine(1, String(frequency, 2) + " Hz");
       break;
 
     case 4:  // Fator de Potencia
-      lcd.setCursor(0, 0);
-      lcd.print("Fator Potencia");
-      lcd.setCursor(0, 1);
+      printLcdLine(0, "Fator Potencia");
       if (!isnan(pf)) {
-        lcd.print(pf, 2);
+        printLcdLine(1, String(pf, 2));
       } else {
-        lcd.print("N/A");
+        printLcdLine(1, "N/A");
       }
       break;
 
     case 5:  // Energia Total
-      lcd.setCursor(0, 0);
-      lcd.print("Energia (kWh)");
-      lcd.setCursor(0, 1);
-      lcd.print(energy, 3);
-      lcd.print(" kWh");
+      printLcdLine(0, "Energia (kWh)");
+      printLcdLine(1, String(energy, 3) + " kWh");
       break;
   }
 
-  // Avanca para proximo indice
-  lcdDisplayIndex++;
-
-  // Mostra status de conexao na linha 3
-  lcd.setCursor(0, 3);
-  if (WiFi.status() == WL_CONNECTED) {
-    lcd.print("WiFi: OK");
-  } else {
-    lcd.print("WiFi: OFF");
-  }
-
-  if (mqttClient.connected()) {
-    lcd.print(" | MQTT: ON");
-  } else {
-    lcd.print(" | MQTT: OFF");
-  }
+  // Mostra rede/tipo e status de conectividade nas linhas 2 e 3.
+  printLcdLine(2, currentNetworkLineForLcd());
+  printLcdLine(
+      3,
+      String("Tipo:") + currentWifiTypeLabel() +
+          " MQTT:" +
+          (mqttClient.connected() ? "ON" : "OFF"));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1429,6 +1530,7 @@ void loop() {
   }
 
   if (provisioningMode) {
+    updateLcdDisplay();
     return;
   }
 

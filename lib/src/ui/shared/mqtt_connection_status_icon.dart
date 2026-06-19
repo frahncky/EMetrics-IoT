@@ -195,36 +195,7 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
     MqttStatusState status,
     DateTime? lastMetricTime,
   ) {
-    if (status.phase == MqttConnectionPhase.error) {
-      return const _StatusVisual(
-        icon: Icons.electric_meter_outlined,
-        color: AppColors.statusError,
-        message: 'Medidor não conectado.',
-      );
-    }
-
-    if (status.phase == MqttConnectionPhase.connecting) {
-      return const _StatusVisual(
-        icon: Icons.electric_meter_outlined,
-        color: AppColors.statusIdle,
-        message: 'Medidor não conectado.',
-      );
-    }
-
-    if (status.phase != MqttConnectionPhase.connected) {
-      return const _StatusVisual(
-        icon: Icons.electric_meter_outlined,
-        color: AppColors.statusIdle,
-        message: 'Medidor não conectado.',
-      );
-    }
-
-    final hasFreshReadingAfterConnect =
-        lastMetricTime != null &&
-        (status.lastConnectedAt == null ||
-            !lastMetricTime.isBefore(status.lastConnectedAt!));
-
-    if (!hasFreshReadingAfterConnect) {
+    if (lastMetricTime == null) {
       return const _StatusVisual(
         icon: Icons.electric_meter_outlined,
         color: AppColors.statusIdle,
@@ -241,10 +212,19 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
       );
     }
 
-    return const _StatusVisual(
+    if (status.phase == MqttConnectionPhase.connected) {
+      return const _StatusVisual(
+        icon: Icons.electric_meter,
+        color: AppColors.statusSuccess,
+        message: 'Medidor conectado com envio/recebimento de dados.',
+      );
+    }
+
+    return _StatusVisual(
       icon: Icons.electric_meter,
       color: AppColors.statusSuccess,
-      message: 'Medidor conectado com envio/recebimento de dados.',
+      message:
+          'Medidor com leitura local ativa. Última leitura ${_relativeTime(lastMetricTime)}.',
     );
   }
 
