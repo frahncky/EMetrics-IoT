@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import '../../data/metric_model.dart';
 import '../../providers/metric_provider.dart';
+import '../shared/chart_metric_values.dart';
 
 typedef FieldSelectorBuilder = Widget Function(BuildContext context);
 
@@ -48,23 +49,24 @@ class RealtimeChart extends ConsumerWidget {
       data: (metrics) {
         final data = metrics.take(30).toList().reversed.toList();
         final hasData = data.isNotEmpty;
+        final values = chartValuesForField(data, field);
         final spots = [
-          for (int i = 0; i < data.length; i++)
-            FlSpot(i.toDouble(), _getFieldValue(data[i], field)),
+          for (int i = 0; i < data.length; i++) FlSpot(i.toDouble(), values[i]),
         ];
         final chartSpots = hasData ? spots : const [FlSpot(0, 0), FlSpot(6, 0)];
-        final scale = hasData
-            ? _computeScale(spots, field)
-            : const _AxisScale(-1, 1, 0.5);
         final unitScale = _computeUnitScale(spots, field, meta.unit);
+        final scale = hasData
+            ? _computeScale(spots, field, unitScale)
+            : const _AxisScale(-1, 1, 0.5);
         final displayUnit = _buildDisplayUnit(meta.unit, unitScale.prefix);
+        final displayInterval = scale.horizontalInterval / unitScale.divisor;
         final labelStep = hasData
             ? (data.length > 6 ? ((data.length - 1) / 4).ceil() : 1)
             : 1;
         final verticalInterval = hasData
             ? (data.length > 4 ? ((data.length - 1) / 4).ceilToDouble() : 1.0)
             : 1.0;
-        final lastValue = hasData ? _getFieldValue(data.last, field) : null;
+        final lastValue = hasData ? values.last : null;
 
         return Container(
           decoration: BoxDecoration(
@@ -239,6 +241,7 @@ class RealtimeChart extends ConsumerWidget {
                                             value,
                                             unitScale,
                                             field == 'pf',
+                                            displayInterval,
                                           ),
                                           style: TextStyle(
                                             color: axisTextColor,
@@ -256,7 +259,11 @@ class RealtimeChart extends ConsumerWidget {
                                   interval: verticalInterval,
                                   getTitlesWidget: (value, meta) {
                                     final label = hasData
-                                        ? _buildBottomLabel(value, data, labelStep)
+                                        ? _buildBottomLabel(
+                                            value,
+                                            data,
+                                            labelStep,
+                                          )
                                         : value.toInt().toString();
                                     return SideTitleWidget(
                                       axisSide: meta.axisSide,
@@ -420,7 +427,12 @@ class RealtimeChart extends ConsumerWidget {
       case 'voltage':
         return const _FieldMeta('Tensão', 'V', Color(0xFFE2B93B));
       case 'energy':
-        return const _FieldMeta('Energia', 'kWh', Color(0xFF8B5CF6));
+      case 'energy_active':
+        return const _FieldMeta('Energia Ativa', 'kWh', Color(0xFF8B5CF6));
+      case 'energy_apparent':
+        return const _FieldMeta('Energia Aparente', 'kVAh', Color(0xFF38BDF8));
+      case 'energy_reactive':
+        return const _FieldMeta('Energia Reativa', 'kVArh', Color(0xFFF97316));
       case 'pf':
         return const _FieldMeta('Fator de potência', '', Color(0xFF9D8CFF));
       case 'frequency':
@@ -430,36 +442,11 @@ class RealtimeChart extends ConsumerWidget {
     }
   }
 
-  double _getFieldValue(Metric metric, String selectedField) {
-    switch (selectedField) {
-      case 'voltage':
-        return metric.voltage;
-      case 'current':
-        return metric.current;
-      case 'power':
-      case 'power_active':
-        return metric.power;
-      case 'power_apparent':
-        return metric.voltage * metric.current;
-      case 'power_reactive':
-        final apparent = metric.voltage * metric.current;
-        final reactiveSquared = math.max(
-          (apparent * apparent) - (metric.power * metric.power),
-          0.0,
-        );
-        return math.sqrt(reactiveSquared);
-      case 'pf':
-        return metric.pf;
-      case 'frequency':
-        return metric.frequency;
-      case 'energy':
-        return metric.energy;
-      default:
-        return 0;
-    }
-  }
-
-  _AxisScale _computeScale(List<FlSpot> spots, String selectedField) {
+  _AxisScale _computeScale(
+    List<FlSpot> spots,
+    String selectedField,
+    _UnitScale unitScale,
+  ) {
     if (spots.isEmpty) {
       return const _AxisScale(-1, 1, 0.5);
     }
@@ -487,15 +474,49 @@ class RealtimeChart extends ConsumerWidget {
       return _AxisScale(paddedMin, safeMax, interval.toDouble());
     }
 
-    final range = maxY - minY;
-    final fallbackPadding = maxY.abs() < 1 ? 1.0 : maxY.abs() * 0.08;
+    // A grade deve ser calculada na unidade que será exibida. Caso contrário,
+    // uma variação muito pequena pode gerar ticks diferentes com o mesmo texto.
+    final minDisplayValue = minY / unitScale.divisor;
+    final maxDisplayValue = maxY / unitScale.divisor;
+    final range = maxDisplayValue - minDisplayValue;
+    final fallbackPadding = maxDisplayValue.abs() < 1
+        ? 1.0
+        : maxDisplayValue.abs() * 0.08;
     final padding = range <= 0 ? fallbackPadding : range * 0.15;
-    final paddedMin = minY - padding;
-    final paddedMax = maxY + padding;
+    final paddedMin = minDisplayValue - padding;
+    final paddedMax = maxDisplayValue + padding;
     final safeMax = paddedMax <= paddedMin ? paddedMin + 1 : paddedMax;
-    final interval = (safeMax - paddedMin) / 3;
+    final interval = _niceInterval(safeMax - paddedMin, 3);
+    final axisMin = (paddedMin / interval).floorToDouble() * interval;
+    final axisMax = (safeMax / interval).ceilToDouble() * interval;
 
-    return _AxisScale(paddedMin, safeMax, interval > 0 ? interval : 1);
+    return _AxisScale(
+      axisMin * unitScale.divisor,
+      axisMax * unitScale.divisor,
+      interval * unitScale.divisor,
+    );
+  }
+
+  double _niceInterval(double range, int targetIntervals) {
+    if (!range.isFinite || range <= 0) {
+      return 1;
+    }
+
+    final rawInterval = range / targetIntervals;
+    final magnitude = math
+        .pow(10, (math.log(rawInterval) / math.ln10).floor())
+        .toDouble();
+    final normalized = rawInterval / magnitude;
+    final niceNormalized = normalized <= 1
+        ? 1.0
+        : normalized <= 2
+        ? 2.0
+        : normalized <= 2.5
+        ? 2.5
+        : normalized <= 5
+        ? 5.0
+        : 10.0;
+    return niceNormalized * magnitude;
   }
 
   String _buildBottomLabel(double value, List<Metric> data, int labelStep) {
@@ -534,13 +555,30 @@ class RealtimeChart extends ConsumerWidget {
 
     if (maxAbs >= 1e9) return const _UnitScale(1e9, 'G');
     if (maxAbs >= 1e6) return const _UnitScale(1e6, 'M');
-    if (maxAbs >= 1e3) return const _UnitScale(1e3, 'K');
+    if (maxAbs >= 1e3) return const _UnitScale(1e3, 'k');
     if (maxAbs > 0 && maxAbs < 1e-3) return const _UnitScale(1e-6, 'μ');
     if (maxAbs > 0 && maxAbs < 1) return const _UnitScale(1e-3, 'm');
     return const _UnitScale(1, '');
   }
 
   String _buildDisplayUnit(String unit, String prefix) {
+    // Energia usa unidades iniciadas em "k" (kWh, kVAh e kVArh). Concatenar
+    // o prefixo diretamente criaria rótulos pouco legíveis como "mkWh".
+    if (unit.startsWith('k') && unit.endsWith('h')) {
+      final baseUnit = unit.substring(1);
+      switch (prefix) {
+        case 'm':
+          return baseUnit;
+        case 'μ':
+          return 'm$baseUnit';
+        case 'k':
+          return 'M$baseUnit';
+        case 'M':
+          return 'G$baseUnit';
+        case 'G':
+          return 'T$baseUnit';
+      }
+    }
     if (unit.isEmpty) {
       return '';
     }
@@ -550,14 +588,40 @@ class RealtimeChart extends ConsumerWidget {
     return '$prefix$unit';
   }
 
-  String _formatScaledValue(double rawValue, _UnitScale scale, bool isPf) {
+  String _formatScaledValue(
+    double rawValue,
+    _UnitScale scale,
+    bool isPf, [
+    double? displayInterval,
+  ]) {
     final value = rawValue / scale.divisor;
     if (isPf) {
       return value.toStringAsFixed(2);
     }
+    if (displayInterval != null) {
+      final fractionDigits = _fractionDigitsForInterval(displayInterval);
+      final zeroThreshold = 0.5 * math.pow(10, -fractionDigits);
+      final normalizedValue = value.abs() < zeroThreshold ? 0.0 : value;
+      return normalizedValue.toStringAsFixed(fractionDigits);
+    }
     if (value.abs() >= 100) return value.toStringAsFixed(0);
     if (value.abs() >= 10) return value.toStringAsFixed(1);
     return value.toStringAsFixed(2);
+  }
+
+  int _fractionDigitsForInterval(double interval) {
+    final absoluteInterval = interval.abs();
+    if (!absoluteInterval.isFinite || absoluteInterval <= 0) {
+      return 2;
+    }
+
+    for (var digits = 0; digits < 6; digits++) {
+      final shifted = absoluteInterval * math.pow(10, digits);
+      if ((shifted - shifted.round()).abs() < 1e-9) {
+        return digits;
+      }
+    }
+    return 6;
   }
 
   void _openExpandedChart(BuildContext context) {
@@ -660,7 +724,9 @@ const _metricFieldOptions = [
   _MetricFieldOption('power_reactive', 'Potência Reativa'),
   _MetricFieldOption('pf', 'Fator de potência'),
   _MetricFieldOption('frequency', 'Frequência'),
-  _MetricFieldOption('energy', 'Energia'),
+  _MetricFieldOption('energy_active', 'Energia Ativa'),
+  _MetricFieldOption('energy_apparent', 'Energia Aparente'),
+  _MetricFieldOption('energy_reactive', 'Energia Reativa'),
 ];
 
 class _MetricFieldOption {

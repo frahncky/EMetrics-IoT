@@ -12,7 +12,7 @@ class DashboardTabs extends ConsumerWidget {
     final preferences = ref.watch(dashboardPreferencesProvider);
     return Column(
       children: [
-          const SizedBox(height: 6),
+        const SizedBox(height: 6),
         Expanded(
           child: _ChartWithSelector(
             selectedField: preferences.topField,
@@ -23,7 +23,7 @@ class DashboardTabs extends ConsumerWidget {
             },
           ),
         ),
-          const SizedBox(height: 6),
+        const SizedBox(height: 6),
         Expanded(
           child: _ChartWithSelector(
             selectedField: preferences.bottomField,
@@ -42,7 +42,10 @@ class DashboardTabs extends ConsumerWidget {
 class _ChartWithSelector extends StatelessWidget {
   final String selectedField;
   final ValueChanged<String> onChanged;
-  const _ChartWithSelector({required this.selectedField, required this.onChanged});
+  const _ChartWithSelector({
+    required this.selectedField,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +59,10 @@ class _ChartWithSelector extends StatelessWidget {
 class _RealtimeChartWithInternalSelector extends StatelessWidget {
   final String selectedField;
   final ValueChanged<String> onChanged;
-  const _RealtimeChartWithInternalSelector({required this.selectedField, required this.onChanged});
+  const _RealtimeChartWithInternalSelector({
+    required this.selectedField,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -68,12 +74,16 @@ class _RealtimeChartWithInternalSelector extends StatelessWidget {
       {'label': 'Potência Reativa', 'value': 'power_reactive'},
       {'label': 'Fator de potência', 'value': 'pf'},
       {'label': 'Frequência', 'value': 'frequency'},
-      {'label': 'Energia', 'value': 'energy'},
+      {'label': 'Energia Ativa', 'value': 'energy_active'},
+      {'label': 'Energia Aparente', 'value': 'energy_apparent'},
+      {'label': 'Energia Reativa', 'value': 'energy_reactive'},
     ];
     final secondaryColor = Theme.of(context).colorScheme.secondary;
     final backgroundColor = Theme.of(context).cardColor;
-    final textColor = Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF1F2937);
-    
+    final textColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : const Color(0xFF1F2937);
+
     return RealtimeChart(
       field: selectedField,
       fieldSelector: (context) {
@@ -81,13 +91,24 @@ class _RealtimeChartWithInternalSelector extends StatelessWidget {
           child: DropdownButton<String>(
             value: selectedField,
             dropdownColor: backgroundColor,
-            style: TextStyle(color: secondaryColor, fontWeight: FontWeight.bold, fontSize: 16),
+            style: TextStyle(
+              color: secondaryColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
             icon: Icon(Icons.arrow_drop_down, color: secondaryColor),
             onChanged: (v) => v != null ? onChanged(v) : null,
-            items: fields.map((f) => DropdownMenuItem(
-              value: f['value'],
-              child: Text(f['label']!, style: TextStyle(color: textColor)),
-            )).toList(),
+            items: fields
+                .map(
+                  (f) => DropdownMenuItem(
+                    value: f['value'],
+                    child: Text(
+                      f['label']!,
+                      style: TextStyle(color: textColor),
+                    ),
+                  ),
+                )
+                .toList(),
           ),
         );
       },

@@ -42,15 +42,22 @@ final deviceStorageProvider =
     );
 
 final deviceStorageTrackerProvider = Provider<void>((ref) {
-  ref.watch(mqttStreamProvider).whenData((messages) async {
+  ref.watch(mqttStreamProvider).whenData((messages) {
     if (messages.isEmpty) {
       return;
     }
 
     final last = messages.last;
     final payload = (last.payload as MqttPublishMessage).payload.message;
-    await ref
-        .read(deviceStorageProvider.notifier)
-        .updateFromPayload(String.fromCharCodes(payload));
+    final payloadString = String.fromCharCodes(payload);
+
+    // Este callback pode executar enquanto o provider ainda está sendo
+    // inicializado. Adiar a escrita impede modificar outro provider durante
+    // a construção do grafo do Riverpod.
+    Future<void>.delayed(Duration.zero, () async {
+      await ref
+          .read(deviceStorageProvider.notifier)
+          .updateFromPayload(payloadString);
+    });
   });
 });

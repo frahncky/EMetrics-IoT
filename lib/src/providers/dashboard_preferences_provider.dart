@@ -10,10 +10,7 @@ class DashboardPreferences {
     required this.bottomField,
   });
 
-  DashboardPreferences copyWith({
-    String? topField,
-    String? bottomField,
-  }) {
+  DashboardPreferences copyWith({String? topField, String? bottomField}) {
     return DashboardPreferences(
       topField: topField ?? this.topField,
       bottomField: bottomField ?? this.bottomField,
@@ -26,20 +23,23 @@ class DashboardPreferencesNotifier extends StateNotifier<DashboardPreferences> {
   static const _bottomFieldKey = 'dashboard_bottom_field';
 
   DashboardPreferencesNotifier()
-      : super(
-          const DashboardPreferences(
-            topField: 'power',
-            bottomField: 'energy',
-          ),
-        ) {
+    : super(
+        const DashboardPreferences(
+          topField: 'power',
+          bottomField: 'energy_active',
+        ),
+      ) {
     load();
   }
 
   Future<DashboardPreferences> load() async {
     final prefs = await SharedPreferences.getInstance();
+    final storedTopField = prefs.getString(_topFieldKey);
+    final storedBottomField = prefs.getString(_bottomFieldKey);
     final nextState = state.copyWith(
-      topField: prefs.getString(_topFieldKey) ?? state.topField,
-      bottomField: prefs.getString(_bottomFieldKey) ?? state.bottomField,
+      topField: _migrateLegacyEnergyField(storedTopField) ?? state.topField,
+      bottomField:
+          _migrateLegacyEnergyField(storedBottomField) ?? state.bottomField,
     );
     if (mounted) {
       state = nextState;
@@ -58,8 +58,13 @@ class DashboardPreferencesNotifier extends StateNotifier<DashboardPreferences> {
     await prefs.setString(_bottomFieldKey, value);
     state = state.copyWith(bottomField: value);
   }
+
+  String? _migrateLegacyEnergyField(String? field) {
+    return field == 'energy' ? 'energy_active' : field;
+  }
 }
 
-final dashboardPreferencesProvider = StateNotifierProvider<
-    DashboardPreferencesNotifier,
-    DashboardPreferences>((ref) => DashboardPreferencesNotifier());
+final dashboardPreferencesProvider =
+    StateNotifierProvider<DashboardPreferencesNotifier, DashboardPreferences>(
+      (ref) => DashboardPreferencesNotifier(),
+    );

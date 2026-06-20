@@ -59,7 +59,9 @@ class _HistoryChartSelector extends StatelessWidget {
       {'label': 'Potência Reativa', 'value': 'power_reactive'},
       {'label': 'Corrente', 'value': 'current'},
       {'label': 'Tensão', 'value': 'voltage'},
-      {'label': 'Energia', 'value': 'energy'},
+      {'label': 'Energia Ativa', 'value': 'energy_active'},
+      {'label': 'Energia Aparente', 'value': 'energy_apparent'},
+      {'label': 'Energia Reativa', 'value': 'energy_reactive'},
       {'label': 'Fator de potência', 'value': 'pf'},
       {'label': 'Frequência', 'value': 'frequency'},
     ];
@@ -105,7 +107,7 @@ class HistoryPage extends ConsumerStatefulWidget {
 
 class _HistoryPageState extends ConsumerState<HistoryPage> {
   String _selectedField1 = 'power';
-  String _selectedField2 = 'energy';
+  String _selectedField2 = 'energy_active';
   HistoryPeriod _period = HistoryPeriod.dia;
   late DateTime _activeFrom;
   late DateTime _activeTo;
@@ -212,7 +214,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final mutedTextColor = isDarkMode
         ? Colors.white70
-      : colorScheme.onSurface.withValues(alpha: 0.82);
+        : colorScheme.onSurface.withValues(alpha: 0.82);
     final successTextColor = isDarkMode
         ? const Color(0xFF22C55E)
         : const Color(0xFF15803D);
@@ -238,10 +240,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                       const Color(0xFF1A202C),
                       const Color(0xFF0F1419).withValues(alpha: 0.9),
                     ]
-                  : [
-                      AppColors.lightCard,
-                      AppColors.lightScaffold,
-                    ],
+                  : [AppColors.lightCard, AppColors.lightScaffold],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -288,9 +287,7 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                     onPressed: _isRequesting ? null : _requestHistoryFromMeter,
                     icon: const Icon(Icons.sync),
                     label: Text(
-                      _isRequesting
-                          ? 'Solicitando...'
-                          : 'Solicitar do medidor',
+                      _isRequesting ? 'Solicitando...' : 'Solicitar do medidor',
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -303,63 +300,60 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
           const SizedBox(height: 8),
           Expanded(
             child: metricsAsync.when(
-                  data: (metrics) {
-                    return Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            metrics.isEmpty
-                                ? 'Sem dados no período selecionado.'
-                                : 'Dados disponíveis no período selecionado.',
-                            style: TextStyle(
-                              color: metrics.isEmpty
-                                  ? mutedTextColor
-                                  : successTextColor,
-                              fontSize: 13,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+              data: (metrics) {
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        metrics.isEmpty
+                            ? 'Sem dados no período selecionado.'
+                            : 'Dados disponíveis no período selecionado.',
+                        style: TextStyle(
+                          color: metrics.isEmpty
+                              ? mutedTextColor
+                              : successTextColor,
+                          fontSize: 13,
                         ),
-                        if (metrics.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                            child: _HistorySummary(
-                              metrics: metrics,
-                              tariffPerKwh: measurementSettings.tariffPerKwh,
-                            ),
-                          ),
-                        Expanded(
-                          child: HistoryChart(
-                            metrics: metrics,
-                            field: _selectedField1,
-                            fieldSelector: (context) => _HistoryChartSelector(
-                              selected: _selectedField1,
-                              onChanged: (f) =>
-                                  setState(() => _selectedField1 = f),
-                            ),
-                          ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    if (metrics.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                        child: _HistorySummary(
+                          metrics: metrics,
+                          tariffPerKwh: measurementSettings.tariffPerKwh,
                         ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: HistoryChart(
-                            metrics: metrics,
-                            field: _selectedField2,
-                            fieldSelector: (context) => _HistoryChartSelector(
-                              selected: _selectedField2,
-                              onChanged: (f) =>
-                                  setState(() => _selectedField2 = f),
-                            ),
-                          ),
+                      ),
+                    Expanded(
+                      child: HistoryChart(
+                        metrics: metrics,
+                        field: _selectedField1,
+                        fieldSelector: (context) => _HistoryChartSelector(
+                          selected: _selectedField1,
+                          onChanged: (f) => setState(() => _selectedField1 = f),
                         ),
-                      ],
-                    );
-                  },
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, _) =>
-                      Center(child: Text('Erro ao carregar histórico: $e')),
-                ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: HistoryChart(
+                        metrics: metrics,
+                        field: _selectedField2,
+                        fieldSelector: (context) => _HistoryChartSelector(
+                          selected: _selectedField2,
+                          onChanged: (f) => setState(() => _selectedField2 = f),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) =>
+                  Center(child: Text('Erro ao carregar histórico: $e')),
+            ),
           ),
         ],
       ),

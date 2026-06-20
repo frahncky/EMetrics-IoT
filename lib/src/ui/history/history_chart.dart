@@ -1,9 +1,9 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:math' as math;
 
 import '../../data/metric_model.dart';
+import '../shared/chart_metric_values.dart';
 
 typedef FieldSelectorBuilder = Widget Function(BuildContext context);
 
@@ -45,9 +45,9 @@ class HistoryChart extends StatelessWidget {
 
     final data = metrics.take(60).toList().reversed.toList();
     final hasData = data.isNotEmpty;
+    final values = chartValuesForField(data, field);
     final spots = [
-      for (int i = 0; i < data.length; i++)
-        FlSpot(i.toDouble(), _getFieldValue(data[i], field)),
+      for (int i = 0; i < data.length; i++) FlSpot(i.toDouble(), values[i]),
     ];
     final chartSpots = hasData ? spots : const [FlSpot(0, 0), FlSpot(6, 0)];
     final scale = hasData
@@ -61,7 +61,7 @@ class HistoryChart extends StatelessWidget {
     final verticalInterval = hasData
         ? (data.length > 4 ? ((data.length - 1) / 4).ceilToDouble() : 1.0)
         : 1.0;
-    final lastValue = hasData ? _getFieldValue(data.last, field) : null;
+    final lastValue = hasData ? values.last : null;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -224,27 +224,25 @@ class HistoryChart extends StatelessWidget {
                               showTitles: true,
                               reservedSize: 38,
                               interval: scale.horizontalInterval,
-                              getTitlesWidget: (value, meta) =>
-                                  SideTitleWidget(
-                                    axisSide: meta.axisSide,
-                                    fitInside:
-                                        SideTitleFitInsideData.fromTitleMeta(
-                                          meta,
-                                          distanceFromEdge: 4,
-                                        ),
-                                    child: Text(
-                                      _formatScaledValue(
-                                        value,
-                                        unitScale,
-                                        field == 'pf',
-                                      ),
-                                      style: TextStyle(
-                                        color: axisTextColor,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                              getTitlesWidget: (value, meta) => SideTitleWidget(
+                                axisSide: meta.axisSide,
+                                fitInside: SideTitleFitInsideData.fromTitleMeta(
+                                  meta,
+                                  distanceFromEdge: 4,
+                                ),
+                                child: Text(
+                                  _formatScaledValue(
+                                    value,
+                                    unitScale,
+                                    field == 'pf',
                                   ),
+                                  style: TextStyle(
+                                    color: axisTextColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                           bottomTitles: AxisTitles(
@@ -405,42 +403,18 @@ class HistoryChart extends StatelessWidget {
       case 'voltage':
         return const _FieldMeta('Tensão', 'V', Color(0xFFE2B93B));
       case 'energy':
-        return const _FieldMeta('Energia', 'kWh', Color(0xFF8B5CF6));
+      case 'energy_active':
+        return const _FieldMeta('Energia Ativa', 'kWh', Color(0xFF8B5CF6));
+      case 'energy_apparent':
+        return const _FieldMeta('Energia Aparente', 'kVAh', Color(0xFF38BDF8));
+      case 'energy_reactive':
+        return const _FieldMeta('Energia Reativa', 'kVArh', Color(0xFFF97316));
       case 'pf':
         return const _FieldMeta('Fator de potência', '', Color(0xFF9D8CFF));
       case 'frequency':
         return const _FieldMeta('Frequência', 'Hz', Color(0xFF22C55E));
       default:
         return _FieldMeta(selectedField, '', Colors.blueAccent);
-    }
-  }
-
-  double _getFieldValue(Metric metric, String selectedField) {
-    switch (selectedField) {
-      case 'power':
-      case 'power_active':
-        return metric.power;
-      case 'power_apparent':
-        return metric.voltage * metric.current;
-      case 'power_reactive':
-        final apparent = metric.voltage * metric.current;
-        final reactiveSquared = math.max(
-          (apparent * apparent) - (metric.power * metric.power),
-          0.0,
-        );
-        return math.sqrt(reactiveSquared);
-      case 'current':
-        return metric.current;
-      case 'voltage':
-        return metric.voltage;
-      case 'energy':
-        return metric.energy;
-      case 'pf':
-        return metric.pf;
-      case 'frequency':
-        return metric.frequency;
-      default:
-        return 0;
     }
   }
 
@@ -519,13 +493,30 @@ class HistoryChart extends StatelessWidget {
 
     if (maxAbs >= 1e9) return const _UnitScale(1e9, 'G');
     if (maxAbs >= 1e6) return const _UnitScale(1e6, 'M');
-    if (maxAbs >= 1e3) return const _UnitScale(1e3, 'K');
+    if (maxAbs >= 1e3) return const _UnitScale(1e3, 'k');
     if (maxAbs > 0 && maxAbs < 1e-3) return const _UnitScale(1e-6, 'μ');
     if (maxAbs > 0 && maxAbs < 1) return const _UnitScale(1e-3, 'm');
     return const _UnitScale(1, '');
   }
 
   String _buildDisplayUnit(String unit, String prefix) {
+    // Energia usa unidades iniciadas em "k" (kWh, kVAh e kVArh). Concatenar
+    // o prefixo diretamente criaria rótulos pouco legíveis como "mkWh".
+    if (unit.startsWith('k') && unit.endsWith('h')) {
+      final baseUnit = unit.substring(1);
+      switch (prefix) {
+        case 'm':
+          return baseUnit;
+        case 'μ':
+          return 'm$baseUnit';
+        case 'k':
+          return 'M$baseUnit';
+        case 'M':
+          return 'G$baseUnit';
+        case 'G':
+          return 'T$baseUnit';
+      }
+    }
     if (unit.isEmpty) {
       return '';
     }
@@ -648,7 +639,9 @@ const _metricFieldOptions = [
   _MetricFieldOption('power_reactive', 'Potência Reativa'),
   _MetricFieldOption('current', 'Corrente'),
   _MetricFieldOption('voltage', 'Tensão'),
-  _MetricFieldOption('energy', 'Energia'),
+  _MetricFieldOption('energy_active', 'Energia Ativa'),
+  _MetricFieldOption('energy_apparent', 'Energia Aparente'),
+  _MetricFieldOption('energy_reactive', 'Energia Reativa'),
   _MetricFieldOption('pf', 'Fator de potência'),
   _MetricFieldOption('frequency', 'Frequência'),
 ];

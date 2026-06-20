@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/metric_model.dart';
 import '../../providers/metric_provider.dart';
+import '../shared/chart_metric_values.dart';
 
 class CompareMetricsPage extends ConsumerStatefulWidget {
   const CompareMetricsPage({super.key});
@@ -32,14 +33,14 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
     );
 
     final axisTextColor = isDarkMode
-      ? Colors.white.withValues(alpha: 0.86)
-      : Colors.black.withValues(alpha: 0.78);
+        ? Colors.white.withValues(alpha: 0.86)
+        : Colors.black.withValues(alpha: 0.78);
     final horizontalGridColor = isDarkMode
-      ? Colors.white.withValues(alpha: 0.18)
-      : Colors.black.withValues(alpha: 0.12);
+        ? Colors.white.withValues(alpha: 0.18)
+        : Colors.black.withValues(alpha: 0.12);
     final verticalGridColor = isDarkMode
-      ? Colors.white.withValues(alpha: 0.12)
-      : Colors.black.withValues(alpha: 0.08);
+        ? Colors.white.withValues(alpha: 0.12)
+        : Colors.black.withValues(alpha: 0.08);
     return Scaffold(
       appBar: AppBar(title: const Text('Comparativo de Métricas')),
       body: Padding(
@@ -65,18 +66,28 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
               child: metricsAsync.when(
                 data: (metrics) {
                   final data = metrics.take(40).toList().reversed.toList();
-                  final last1 = data.isNotEmpty ? _getFieldValue(data.last, _field1) : null;
-                  final last2 = data.isNotEmpty ? _getFieldValue(data.last, _field2) : null;
+                  final values1 = chartValuesForField(data, _field1);
+                  final values2 = chartValuesForField(data, _field2);
+                  final last1 = data.isNotEmpty ? values1.last : null;
+                  final last2 = data.isNotEmpty ? values2.last : null;
                   final seriesSpots1 = [
                     for (int i = 0; i < data.length; i++)
-                      FlSpot(i.toDouble(), _getFieldValue(data[i], _field1)),
+                      FlSpot(i.toDouble(), values1[i]),
                   ];
                   final seriesSpots2 = [
                     for (int i = 0; i < data.length; i++)
-                      FlSpot(i.toDouble(), _getFieldValue(data[i], _field2)),
+                      FlSpot(i.toDouble(), values2[i]),
                   ];
-                  final scale1 = _computeUnitScale(seriesSpots1, _field1, meta1.unit);
-                  final scale2 = _computeUnitScale(seriesSpots2, _field2, meta2.unit);
+                  final scale1 = _computeUnitScale(
+                    seriesSpots1,
+                    _field1,
+                    meta1.unit,
+                  );
+                  final scale2 = _computeUnitScale(
+                    seriesSpots2,
+                    _field2,
+                    meta2.unit,
+                  );
                   final unit1 = _buildDisplayUnit(meta1.unit, scale1.prefix);
                   final unit2 = _buildDisplayUnit(meta2.unit, scale2.prefix);
 
@@ -85,12 +96,18 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                       gradient: cardGradient,
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(
-                        color: Color.lerp(meta1.color, meta2.color, 0.5)!.withValues(alpha: 0.45),
+                        color: Color.lerp(
+                          meta1.color,
+                          meta2.color,
+                          0.5,
+                        )!.withValues(alpha: 0.45),
                         width: 1.2,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: isDarkMode ? 0.28 : 0.08),
+                          color: Colors.black.withValues(
+                            alpha: isDarkMode ? 0.28 : 0.08,
+                          ),
                           blurRadius: 14,
                           offset: const Offset(0, 6),
                         ),
@@ -108,12 +125,12 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                               _LegendPill(
                                 color: meta1.color,
                                 label:
-                                '${meta1.title}: ${last1 != null ? _formatScaledValue(last1, scale1, _field1 == 'pf') : '--'}${unit1.isNotEmpty ? ' $unit1' : ''}',
+                                    '${meta1.title}: ${last1 != null ? _formatScaledValue(last1, scale1, _field1 == 'pf') : '--'}${unit1.isNotEmpty ? ' $unit1' : ''}',
                               ),
                               _LegendPill(
                                 color: meta2.color,
                                 label:
-                                '${meta2.title}: ${last2 != null ? _formatScaledValue(last2, scale2, _field2 == 'pf') : '--'}${unit2.isNotEmpty ? ' $unit2' : ''}',
+                                    '${meta2.title}: ${last2 != null ? _formatScaledValue(last2, scale2, _field2 == 'pf') : '--'}${unit2.isNotEmpty ? ' $unit2' : ''}',
                               ),
                             ],
                           ),
@@ -125,10 +142,10 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                                     data: data,
                                     meta1: meta1,
                                     meta2: meta2,
-                                  unitScale1: scale1,
-                                  unitScale2: scale2,
-                                  displayUnit1: unit1,
-                                  displayUnit2: unit2,
+                                    unitScale1: scale1,
+                                    unitScale2: scale2,
+                                    displayUnit1: unit1,
+                                    displayUnit2: unit2,
                                     axisTextColor: axisTextColor,
                                     horizontalGridColor: horizontalGridColor,
                                     verticalGridColor: verticalGridColor,
@@ -140,7 +157,8 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
                   );
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('Erro ao carregar dados: $e')),
+                error: (e, _) =>
+                    Center(child: Text('Erro ao carregar dados: $e')),
               ),
             ),
           ],
@@ -161,164 +179,179 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
     required Color horizontalGridColor,
     required Color verticalGridColor,
   }) {
+    final values1 = chartValuesForField(data, _field1);
+    final values2 = chartValuesForField(data, _field2);
     final spots1 = [
-      for (int i = 0; i < data.length; i++)
-        FlSpot(i.toDouble(), _getFieldValue(data[i], _field1)),
+      for (int i = 0; i < data.length; i++) FlSpot(i.toDouble(), values1[i]),
     ];
     final spots2 = [
-      for (int i = 0; i < data.length; i++)
-        FlSpot(i.toDouble(), _getFieldValue(data[i], _field2)),
+      for (int i = 0; i < data.length; i++) FlSpot(i.toDouble(), values2[i]),
     ];
     final allSpots = [...spots1, ...spots2];
     final allPf = _field1 == 'pf' && _field2 == 'pf';
     final scale = _computeScale(allSpots, allPf);
     final labelStep = data.length > 6 ? ((data.length - 1) / 4).ceil() : 1;
-    final verticalInterval =
-        data.length > 4 ? ((data.length - 1) / 4).ceilToDouble() : 1.0;
-    final blendedColor =
-        Color.lerp(meta1.color, meta2.color, 0.5)!.withValues(alpha: 0.35);
+    final verticalInterval = data.length > 4
+        ? ((data.length - 1) / 4).ceilToDouble()
+        : 1.0;
+    final blendedColor = Color.lerp(
+      meta1.color,
+      meta2.color,
+      0.5,
+    )!.withValues(alpha: 0.35);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
       child: LineChart(
         LineChartData(
-            backgroundColor: Colors.transparent,
-            minX: 0,
-            maxX: data.length > 1 ? (data.length - 1).toDouble() : 1,
-            minY: scale.minY,
-            maxY: scale.maxY,
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: true,
-              horizontalInterval: scale.horizontalInterval,
-              verticalInterval: verticalInterval,
-              getDrawingHorizontalLine: (value) =>
-                  FlLine(color: horizontalGridColor, strokeWidth: 0.9),
-              getDrawingVerticalLine: (value) =>
-                  FlLine(color: verticalGridColor, strokeWidth: 0.8),
-            ),
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 42,
-                  interval: scale.horizontalInterval,
-                  getTitlesWidget: (value, metaData) => Text(
-                    _formatAxisValue(value, allPf),
-                    style: TextStyle(
-                      color: axisTextColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 24,
-                  interval: verticalInterval,
-                  getTitlesWidget: (value, metaData) => Text(
-                    _buildBottomLabel(value, data, labelStep),
-                    style: TextStyle(
-                      color: axisTextColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-            borderData: FlBorderData(
-              show: true,
-              border: Border(
-                left: BorderSide(color: blendedColor.withValues(alpha: 0.5), width: 1.0),
-                bottom: BorderSide(color: blendedColor.withValues(alpha: 0.5), width: 1.0),
-                right: BorderSide.none,
-                top: BorderSide.none,
-              ),
-            ),
-            lineTouchData: LineTouchData(
-              enabled: true,
-              handleBuiltInTouches: true,
-              touchTooltipData: LineTouchTooltipData(
-                tooltipRoundedRadius: 10,
-                tooltipPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                fitInsideHorizontally: true,
-                fitInsideVertically: true,
-                tooltipBorder:
-                    BorderSide(color: Colors.white.withValues(alpha: 0.18), width: 1),
-                tooltipBgColor: Colors.black.withValues(alpha: 0.82),
-                getTooltipItems: (touchedSpots) {
-                  return touchedSpots.map((spot) {
-                    final index = spot.x.toInt().clamp(0, data.length - 1);
-                    final time = _formatTime(data[index].timestamp);
-                    final spotMeta = spot.barIndex == 0 ? meta1 : meta2;
-                    final isFirstSeries = spot.barIndex == 0;
-                    final isPfSeries = (isFirstSeries ? _field1 : _field2) == 'pf';
-                    final value = isFirstSeries
-                        ? _formatScaledValue(spot.y, unitScale1, isPfSeries)
-                        : _formatScaledValue(spot.y, unitScale2, isPfSeries);
-                    final unitText = isFirstSeries
-                        ? (displayUnit1.isNotEmpty ? ' $displayUnit1' : '')
-                        : (displayUnit2.isNotEmpty ? ' $displayUnit2' : '');
-                    return LineTooltipItem(
-                      '${spotMeta.title}: $value$unitText\n',
-                      TextStyle(
-                        color: spotMeta.color,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                      children: [
-                        TextSpan(
-                          text: time,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontWeight: FontWeight.w500,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList();
-                },
-              ),
-            ),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots1,
-                isCurved: true,
-                preventCurveOverShooting: true,
-                curveSmoothness: 0.24,
-                color: meta1.color,
-                barWidth: 3.6,
-                isStrokeCapRound: true,
-                dotData: FlDotData(show: false),
-                belowBarData: BarAreaData(
-                  show: true,
-                  color: meta1.color.withValues(alpha: 0.16),
-                ),
-              ),
-              LineChartBarData(
-                spots: spots2,
-                isCurved: true,
-                preventCurveOverShooting: true,
-                curveSmoothness: 0.24,
-                color: meta2.color,
-                barWidth: 3.6,
-                isStrokeCapRound: true,
-                dotData: FlDotData(show: false),
-                belowBarData: BarAreaData(
-                  show: true,
-                  color: meta2.color.withValues(alpha: 0.16),
-                ),
-              ),
-            ],
+          backgroundColor: Colors.transparent,
+          minX: 0,
+          maxX: data.length > 1 ? (data.length - 1).toDouble() : 1,
+          minY: scale.minY,
+          maxY: scale.maxY,
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: true,
+            horizontalInterval: scale.horizontalInterval,
+            verticalInterval: verticalInterval,
+            getDrawingHorizontalLine: (value) =>
+                FlLine(color: horizontalGridColor, strokeWidth: 0.9),
+            getDrawingVerticalLine: (value) =>
+                FlLine(color: verticalGridColor, strokeWidth: 0.8),
           ),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 42,
+                interval: scale.horizontalInterval,
+                getTitlesWidget: (value, metaData) => Text(
+                  _formatAxisValue(value, allPf),
+                  style: TextStyle(
+                    color: axisTextColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 24,
+                interval: verticalInterval,
+                getTitlesWidget: (value, metaData) => Text(
+                  _buildBottomLabel(value, data, labelStep),
+                  style: TextStyle(
+                    color: axisTextColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
+          borderData: FlBorderData(
+            show: true,
+            border: Border(
+              left: BorderSide(
+                color: blendedColor.withValues(alpha: 0.5),
+                width: 1.0,
+              ),
+              bottom: BorderSide(
+                color: blendedColor.withValues(alpha: 0.5),
+                width: 1.0,
+              ),
+              right: BorderSide.none,
+              top: BorderSide.none,
+            ),
+          ),
+          lineTouchData: LineTouchData(
+            enabled: true,
+            handleBuiltInTouches: true,
+            touchTooltipData: LineTouchTooltipData(
+              tooltipRoundedRadius: 10,
+              tooltipPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 8,
+              ),
+              fitInsideHorizontally: true,
+              fitInsideVertically: true,
+              tooltipBorder: BorderSide(
+                color: Colors.white.withValues(alpha: 0.18),
+                width: 1,
+              ),
+              tooltipBgColor: Colors.black.withValues(alpha: 0.82),
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((spot) {
+                  final index = spot.x.toInt().clamp(0, data.length - 1);
+                  final time = _formatTime(data[index].timestamp);
+                  final spotMeta = spot.barIndex == 0 ? meta1 : meta2;
+                  final isFirstSeries = spot.barIndex == 0;
+                  final isPfSeries =
+                      (isFirstSeries ? _field1 : _field2) == 'pf';
+                  final value = isFirstSeries
+                      ? _formatScaledValue(spot.y, unitScale1, isPfSeries)
+                      : _formatScaledValue(spot.y, unitScale2, isPfSeries);
+                  final unitText = isFirstSeries
+                      ? (displayUnit1.isNotEmpty ? ' $displayUnit1' : '')
+                      : (displayUnit2.isNotEmpty ? ' $displayUnit2' : '');
+                  return LineTooltipItem(
+                    '${spotMeta.title}: $value$unitText\n',
+                    TextStyle(
+                      color: spotMeta.color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                    children: [
+                      TextSpan(
+                        text: time,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList();
+              },
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots1,
+              isCurved: true,
+              preventCurveOverShooting: true,
+              curveSmoothness: 0.24,
+              color: meta1.color,
+              barWidth: 3.6,
+              isStrokeCapRound: true,
+              dotData: FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                color: meta1.color.withValues(alpha: 0.16),
+              ),
+            ),
+            LineChartBarData(
+              spots: spots2,
+              isCurved: true,
+              preventCurveOverShooting: true,
+              curveSmoothness: 0.24,
+              color: meta2.color,
+              barWidth: 3.6,
+              isStrokeCapRound: true,
+              dotData: FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                color: meta2.color.withValues(alpha: 0.16),
+              ),
+            ),
+          ],
         ),
+      ),
     );
   }
 
@@ -335,28 +368,14 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
       case 'frequency':
         return const _FieldMeta('Frequência', 'Hz', Color(0xFF22C55E));
       case 'energy':
-        return const _FieldMeta('Energia', 'kWh', Color(0xFF8B5CF6));
+      case 'energy_active':
+        return const _FieldMeta('Energia Ativa', 'kWh', Color(0xFF8B5CF6));
+      case 'energy_apparent':
+        return const _FieldMeta('Energia Aparente', 'kVAh', Color(0xFF38BDF8));
+      case 'energy_reactive':
+        return const _FieldMeta('Energia Reativa', 'kVArh', Color(0xFFF97316));
       default:
         return _FieldMeta(selectedField, '', Colors.blueGrey);
-    }
-  }
-
-  double _getFieldValue(Metric metric, String selectedField) {
-    switch (selectedField) {
-      case 'voltage':
-        return metric.voltage;
-      case 'current':
-        return metric.current;
-      case 'power':
-        return metric.power;
-      case 'pf':
-        return metric.pf;
-      case 'frequency':
-        return metric.frequency;
-      case 'energy':
-        return metric.energy;
-      default:
-        return 0;
     }
   }
 
@@ -381,7 +400,9 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
       final normalizedMax = maxY.clamp(0.0, 1.0);
       final paddedMin = (normalizedMin - 0.05).clamp(0.0, 1.0);
       final paddedMax = (normalizedMax + 0.05).clamp(0.0, 1.0);
-      final safeMax = paddedMax <= paddedMin ? (paddedMin + 0.1).clamp(0.0, 1.0) : paddedMax;
+      final safeMax = paddedMax <= paddedMin
+          ? (paddedMin + 0.1).clamp(0.0, 1.0)
+          : paddedMax;
       final interval = ((safeMax - paddedMin) / 4).clamp(0.05, 0.25);
       return _AxisScale(paddedMin, safeMax, interval.toDouble());
     }
@@ -394,11 +415,7 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
     final safeMax = paddedMax <= paddedMin ? paddedMin + 1 : paddedMax;
     final interval = (safeMax - paddedMin) / 4;
 
-    return _AxisScale(
-      paddedMin,
-      safeMax,
-      interval > 0 ? interval : 1,
-    );
+    return _AxisScale(paddedMin, safeMax, interval > 0 ? interval : 1);
   }
 
   String _buildBottomLabel(double value, List<Metric> data, int labelStep) {
@@ -418,7 +435,11 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
     return '$hour:$minute';
   }
 
-  _UnitScale _computeUnitScale(List<FlSpot> spots, String selectedField, String unit) {
+  _UnitScale _computeUnitScale(
+    List<FlSpot> spots,
+    String selectedField,
+    String unit,
+  ) {
     if (selectedField == 'pf' || unit.isEmpty || spots.isEmpty) {
       return const _UnitScale(1, '');
     }
@@ -433,13 +454,30 @@ class _CompareMetricsPageState extends ConsumerState<CompareMetricsPage> {
 
     if (maxAbs >= 1e9) return const _UnitScale(1e9, 'G');
     if (maxAbs >= 1e6) return const _UnitScale(1e6, 'M');
-    if (maxAbs >= 1e3) return const _UnitScale(1e3, 'K');
+    if (maxAbs >= 1e3) return const _UnitScale(1e3, 'k');
     if (maxAbs > 0 && maxAbs < 1e-3) return const _UnitScale(1e-6, 'μ');
     if (maxAbs > 0 && maxAbs < 1) return const _UnitScale(1e-3, 'm');
     return const _UnitScale(1, '');
   }
 
   String _buildDisplayUnit(String unit, String prefix) {
+    // Energia usa unidades iniciadas em "k" (kWh, kVAh e kVArh). Concatenar
+    // o prefixo diretamente criaria rótulos pouco legíveis como "mkWh".
+    if (unit.startsWith('k') && unit.endsWith('h')) {
+      final baseUnit = unit.substring(1);
+      switch (prefix) {
+        case 'm':
+          return baseUnit;
+        case 'μ':
+          return 'm$baseUnit';
+        case 'k':
+          return 'M$baseUnit';
+        case 'M':
+          return 'G$baseUnit';
+        case 'G':
+          return 'T$baseUnit';
+      }
+    }
     if (unit.isEmpty) {
       return '';
     }
@@ -483,7 +521,15 @@ class _MetricDropdown extends StatelessWidget {
         DropdownMenuItem(value: 'power', child: Text('Potência')),
         DropdownMenuItem(value: 'pf', child: Text('Fator de potência')),
         DropdownMenuItem(value: 'frequency', child: Text('Frequência')),
-        DropdownMenuItem(value: 'energy', child: Text('Energia')),
+        DropdownMenuItem(value: 'energy_active', child: Text('Energia Ativa')),
+        DropdownMenuItem(
+          value: 'energy_apparent',
+          child: Text('Energia Aparente'),
+        ),
+        DropdownMenuItem(
+          value: 'energy_reactive',
+          child: Text('Energia Reativa'),
+        ),
       ],
       onChanged: onChanged,
     );
@@ -516,7 +562,11 @@ class _LegendPill extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
