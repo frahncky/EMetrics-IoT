@@ -57,70 +57,97 @@ class IntegrationSettings {
       oauthTokenEndpoint: oauthTokenEndpoint ?? this.oauthTokenEndpoint,
       oauthAccessToken: oauthAccessToken ?? this.oauthAccessToken,
       oauthTokenType: oauthTokenType ?? this.oauthTokenType,
-      oauthExpiresAt: clearExpiry ? null : oauthExpiresAt ?? this.oauthExpiresAt,
+      oauthExpiresAt: clearExpiry
+          ? null
+          : oauthExpiresAt ?? this.oauthExpiresAt,
     );
   }
 }
 
-class IntegrationSettingsNotifier extends StateNotifier<IntegrationSettings> {
-  static const _enabledKey = 'integration_enabled';
-  static const _baseUrlKey = 'integration_base_url';
-  static const _metricsPathKey = 'integration_metrics_path';
-  static const _apiKeyKey = 'integration_api_key';
-  static const _oauthEnabledKey = 'integration_oauth_enabled';
-  static const _oauthClientIdKey = 'integration_oauth_client_id';
-  static const _oauthScopeKey = 'integration_oauth_scope';
-  static const _oauthDeviceEndpointKey = 'integration_oauth_device_endpoint';
-  static const _oauthTokenEndpointKey = 'integration_oauth_token_endpoint';
-  static const _oauthAccessTokenKey = 'integration_oauth_access_token';
-  static const _oauthTokenTypeKey = 'integration_oauth_token_type';
-  static const _oauthExpiresAtKey = 'integration_oauth_expires_at';
+const defaultIntegrationSettings = IntegrationSettings(
+  enabled: false,
+  baseUrl: '',
+  metricsPath: '/api/metrics',
+  apiKey: '',
+  oauthEnabled: false,
+  oauthClientId: '',
+  oauthScope: '',
+  oauthDeviceEndpoint: '',
+  oauthTokenEndpoint: '',
+  oauthAccessToken: '',
+  oauthTokenType: 'Bearer',
+  oauthExpiresAt: null,
+);
 
-  IntegrationSettingsNotifier()
-      : super(
-          const IntegrationSettings(
-            enabled: false,
-            baseUrl: '',
-            metricsPath: '/api/metrics',
-            apiKey: '',
-            oauthEnabled: false,
-            oauthClientId: '',
-            oauthScope: '',
-            oauthDeviceEndpoint: '',
-            oauthTokenEndpoint: '',
-            oauthAccessToken: '',
-            oauthTokenType: 'Bearer',
-            oauthExpiresAt: null,
-          ),
-        ) {
+Future<IntegrationSettings> loadIntegrationSettings() async {
+  const defaults = defaultIntegrationSettings;
+  final prefs = await SharedPreferences.getInstance();
+  final rawExpiresAt = prefs.getInt(
+    IntegrationSettingsNotifier.oauthExpiresAtKey,
+  );
+  return IntegrationSettings(
+    enabled:
+        prefs.getBool(IntegrationSettingsNotifier.enabledKey) ??
+        defaults.enabled,
+    baseUrl:
+        prefs.getString(IntegrationSettingsNotifier.baseUrlKey) ??
+        defaults.baseUrl,
+    metricsPath:
+        prefs.getString(IntegrationSettingsNotifier.metricsPathKey) ??
+        defaults.metricsPath,
+    apiKey:
+        prefs.getString(IntegrationSettingsNotifier.apiKeyKey) ??
+        defaults.apiKey,
+    oauthEnabled:
+        prefs.getBool(IntegrationSettingsNotifier.oauthEnabledKey) ??
+        defaults.oauthEnabled,
+    oauthClientId:
+        prefs.getString(IntegrationSettingsNotifier.oauthClientIdKey) ??
+        defaults.oauthClientId,
+    oauthScope:
+        prefs.getString(IntegrationSettingsNotifier.oauthScopeKey) ??
+        defaults.oauthScope,
+    oauthDeviceEndpoint:
+        prefs.getString(IntegrationSettingsNotifier.oauthDeviceEndpointKey) ??
+        defaults.oauthDeviceEndpoint,
+    oauthTokenEndpoint:
+        prefs.getString(IntegrationSettingsNotifier.oauthTokenEndpointKey) ??
+        defaults.oauthTokenEndpoint,
+    oauthAccessToken:
+        prefs.getString(IntegrationSettingsNotifier.oauthAccessTokenKey) ??
+        defaults.oauthAccessToken,
+    oauthTokenType:
+        prefs.getString(IntegrationSettingsNotifier.oauthTokenTypeKey) ??
+        defaults.oauthTokenType,
+    oauthExpiresAt: rawExpiresAt == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(rawExpiresAt),
+  );
+}
+
+class IntegrationSettingsNotifier extends StateNotifier<IntegrationSettings> {
+  static const enabledKey = 'integration_enabled';
+  static const baseUrlKey = 'integration_base_url';
+  static const metricsPathKey = 'integration_metrics_path';
+  static const apiKeyKey = 'integration_api_key';
+  static const oauthEnabledKey = 'integration_oauth_enabled';
+  static const oauthClientIdKey = 'integration_oauth_client_id';
+  static const oauthScopeKey = 'integration_oauth_scope';
+  static const oauthDeviceEndpointKey = 'integration_oauth_device_endpoint';
+  static const oauthTokenEndpointKey = 'integration_oauth_token_endpoint';
+  static const oauthAccessTokenKey = 'integration_oauth_access_token';
+  static const oauthTokenTypeKey = 'integration_oauth_token_type';
+  static const oauthExpiresAtKey = 'integration_oauth_expires_at';
+  var _revision = 0;
+
+  IntegrationSettingsNotifier() : super(defaultIntegrationSettings) {
     load();
   }
 
   Future<IntegrationSettings> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final rawExpiresAt = prefs.getInt(_oauthExpiresAtKey);
-    final nextState = state.copyWith(
-      enabled: prefs.getBool(_enabledKey) ?? state.enabled,
-      baseUrl: prefs.getString(_baseUrlKey) ?? state.baseUrl,
-      metricsPath: prefs.getString(_metricsPathKey) ?? state.metricsPath,
-      apiKey: prefs.getString(_apiKeyKey) ?? state.apiKey,
-      oauthEnabled: prefs.getBool(_oauthEnabledKey) ?? state.oauthEnabled,
-      oauthClientId: prefs.getString(_oauthClientIdKey) ?? state.oauthClientId,
-      oauthScope: prefs.getString(_oauthScopeKey) ?? state.oauthScope,
-      oauthDeviceEndpoint:
-          prefs.getString(_oauthDeviceEndpointKey) ?? state.oauthDeviceEndpoint,
-      oauthTokenEndpoint:
-          prefs.getString(_oauthTokenEndpointKey) ?? state.oauthTokenEndpoint,
-      oauthAccessToken:
-          prefs.getString(_oauthAccessTokenKey) ?? state.oauthAccessToken,
-      oauthTokenType:
-          prefs.getString(_oauthTokenTypeKey) ?? state.oauthTokenType,
-      oauthExpiresAt: rawExpiresAt == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(rawExpiresAt),
-      clearExpiry: rawExpiresAt == null,
-    );
-    if (mounted) {
+    final loadRevision = _revision;
+    final nextState = await loadIntegrationSettings();
+    if (mounted && loadRevision == _revision) {
       state = nextState;
     }
     return nextState;
@@ -137,11 +164,14 @@ class IntegrationSettingsNotifier extends StateNotifier<IntegrationSettings> {
     required String oauthDeviceEndpoint,
     required String oauthTokenEndpoint,
   }) async {
+    _revision++;
     final prefs = await SharedPreferences.getInstance();
     final nextState = state.copyWith(
       enabled: enabled,
       baseUrl: baseUrl.trim(),
-      metricsPath: metricsPath.trim().isEmpty ? '/api/metrics' : metricsPath.trim(),
+      metricsPath: metricsPath.trim().isEmpty
+          ? '/api/metrics'
+          : metricsPath.trim(),
       apiKey: apiKey.trim(),
       oauthEnabled: oauthEnabled,
       oauthClientId: oauthClientId.trim(),
@@ -149,15 +179,18 @@ class IntegrationSettingsNotifier extends StateNotifier<IntegrationSettings> {
       oauthDeviceEndpoint: oauthDeviceEndpoint.trim(),
       oauthTokenEndpoint: oauthTokenEndpoint.trim(),
     );
-    await prefs.setBool(_enabledKey, nextState.enabled);
-    await prefs.setString(_baseUrlKey, nextState.baseUrl);
-    await prefs.setString(_metricsPathKey, nextState.metricsPath);
-    await prefs.setString(_apiKeyKey, nextState.apiKey);
-    await prefs.setBool(_oauthEnabledKey, nextState.oauthEnabled);
-    await prefs.setString(_oauthClientIdKey, nextState.oauthClientId);
-    await prefs.setString(_oauthScopeKey, nextState.oauthScope);
-    await prefs.setString(_oauthDeviceEndpointKey, nextState.oauthDeviceEndpoint);
-    await prefs.setString(_oauthTokenEndpointKey, nextState.oauthTokenEndpoint);
+    await prefs.setBool(enabledKey, nextState.enabled);
+    await prefs.setString(baseUrlKey, nextState.baseUrl);
+    await prefs.setString(metricsPathKey, nextState.metricsPath);
+    await prefs.setString(apiKeyKey, nextState.apiKey);
+    await prefs.setBool(oauthEnabledKey, nextState.oauthEnabled);
+    await prefs.setString(oauthClientIdKey, nextState.oauthClientId);
+    await prefs.setString(oauthScopeKey, nextState.oauthScope);
+    await prefs.setString(
+      oauthDeviceEndpointKey,
+      nextState.oauthDeviceEndpoint,
+    );
+    await prefs.setString(oauthTokenEndpointKey, nextState.oauthTokenEndpoint);
     state = nextState;
   }
 
@@ -166,13 +199,14 @@ class IntegrationSettingsNotifier extends StateNotifier<IntegrationSettings> {
     required String tokenType,
     DateTime? expiresAt,
   }) async {
+    _revision++;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_oauthAccessTokenKey, accessToken);
-    await prefs.setString(_oauthTokenTypeKey, tokenType);
+    await prefs.setString(oauthAccessTokenKey, accessToken);
+    await prefs.setString(oauthTokenTypeKey, tokenType);
     if (expiresAt != null) {
-      await prefs.setInt(_oauthExpiresAtKey, expiresAt.millisecondsSinceEpoch);
+      await prefs.setInt(oauthExpiresAtKey, expiresAt.millisecondsSinceEpoch);
     } else {
-      await prefs.remove(_oauthExpiresAtKey);
+      await prefs.remove(oauthExpiresAtKey);
     }
     state = state.copyWith(
       oauthAccessToken: accessToken,
@@ -183,10 +217,11 @@ class IntegrationSettingsNotifier extends StateNotifier<IntegrationSettings> {
   }
 
   Future<void> clearOAuthToken() async {
+    _revision++;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_oauthAccessTokenKey);
-    await prefs.remove(_oauthTokenTypeKey);
-    await prefs.remove(_oauthExpiresAtKey);
+    await prefs.remove(oauthAccessTokenKey);
+    await prefs.remove(oauthTokenTypeKey);
+    await prefs.remove(oauthExpiresAtKey);
     state = state.copyWith(
       oauthAccessToken: '',
       oauthTokenType: 'Bearer',
@@ -197,5 +232,5 @@ class IntegrationSettingsNotifier extends StateNotifier<IntegrationSettings> {
 
 final integrationSettingsProvider =
     StateNotifierProvider<IntegrationSettingsNotifier, IntegrationSettings>(
-  (ref) => IntegrationSettingsNotifier(),
-);
+      (ref) => IntegrationSettingsNotifier(),
+    );

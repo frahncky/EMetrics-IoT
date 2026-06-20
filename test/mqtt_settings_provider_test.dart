@@ -25,15 +25,15 @@ class _InMemoryCredentialsStore implements MqttCredentialsStore {
   @override
   Future<String> readPassword() async => password;
 
-    @override
-    Future<String> readPasswordForProfile(String profileId) async =>
+  @override
+  Future<String> readPasswordForProfile(String profileId) async =>
       profilePasswords[profileId] ?? '';
 
   @override
   Future<String> readUsername() async => username;
 
-    @override
-    Future<String> readUsernameForProfile(String profileId) async =>
+  @override
+  Future<String> readUsernameForProfile(String profileId) async =>
       profileUsernames[profileId] ?? '';
 
   @override
@@ -58,7 +58,7 @@ class _InMemoryCredentialsStore implements MqttCredentialsStore {
 
 void main() {
   group('MqttSettingsNotifier', () {
-    test('carrega valores padrão com porta e TLS desativado', () async {
+    test('carrega valores padrão compatíveis com o ESP', () async {
       SharedPreferences.setMockInitialValues({});
       final credentialsStore = _InMemoryCredentialsStore();
       final container = ProviderContainer(
@@ -68,7 +68,9 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final settings = await container.read(mqttSettingsProvider.notifier).load();
+      final settings = await container
+          .read(mqttSettingsProvider.notifier)
+          .load();
 
       expect(settings.broker, 'test.mosquitto.org');
       expect(settings.port, 1883);
@@ -90,16 +92,18 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      await container.read(mqttSettingsProvider.notifier).update(
-        broker: 'broker.local',
-        port: 8883,
-        clientId: 'medidor_app',
-        username: 'user01',
-        password: 'senha01',
-        topic: 'energia/dispositivo01',
-        requestTopic: 'energia/dispositivo01/history/request',
-        useTls: true,
-      );
+      await container
+          .read(mqttSettingsProvider.notifier)
+          .update(
+            broker: 'broker.local',
+            port: 8883,
+            clientId: 'medidor_app',
+            username: 'user01',
+            password: 'senha01',
+            topic: 'energia/dispositivo01',
+            requestTopic: 'energia/dispositivo01/history/request',
+            useTls: true,
+          );
 
       final reloaded = ProviderContainer(
         overrides: [
@@ -108,7 +112,9 @@ void main() {
       );
       addTearDown(reloaded.dispose);
 
-      final settings = await reloaded.read(mqttSettingsProvider.notifier).load();
+      final settings = await reloaded
+          .read(mqttSettingsProvider.notifier)
+          .load();
 
       expect(settings.broker, 'broker.local');
       expect(settings.port, 8883);
@@ -124,6 +130,28 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('mqtt_username'), isNull);
       expect(prefs.getString('mqtt_password'), isNull);
+    });
+
+    test('migra o perfil padrão salvo com TLS incompatível com o ESP', () async {
+      SharedPreferences.setMockInitialValues({
+        'mqtt_profiles_v2':
+            '[{"profileId":"default","profileName":"Dispositivo principal","broker":"test.mosquitto.org","port":8883,"clientId":"emetrics_app","topic":"emetrics/pzem","requestTopic":"emetrics/pzem/history/request","useTls":true}]',
+      });
+      final container = ProviderContainer(
+        overrides: [
+          mqttCredentialsStoreProvider.overrideWithValue(
+            _InMemoryCredentialsStore(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final settings = await container
+          .read(mqttSettingsProvider.notifier)
+          .load();
+
+      expect(settings.port, 1883);
+      expect(settings.useTls, isFalse);
     });
   });
 }

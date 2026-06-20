@@ -226,7 +226,7 @@ class RealtimeChart extends ConsumerWidget {
                               leftTitles: AxisTitles(
                                 sideTitles: SideTitles(
                                   showTitles: true,
-                                  reservedSize: 38,
+                                  reservedSize: 44,
                                   interval: scale.horizontalInterval,
                                   getTitlesWidget: (value, meta) =>
                                       SideTitleWidget(
@@ -243,6 +243,8 @@ class RealtimeChart extends ConsumerWidget {
                                             field == 'pf',
                                             displayInterval,
                                           ),
+                                          maxLines: 1,
+                                          softWrap: false,
                                           style: TextStyle(
                                             color: axisTextColor,
                                             fontSize: 10,
@@ -325,6 +327,7 @@ class RealtimeChart extends ConsumerWidget {
                                   alpha: 0.82,
                                 ),
                                 getTooltipItems: (touchedSpots) {
+                                  if (data.isEmpty) return [];
                                   return touchedSpots.map((spot) {
                                     final index = spot.x.toInt().clamp(
                                       0,

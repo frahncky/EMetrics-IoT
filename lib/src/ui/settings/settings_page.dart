@@ -40,7 +40,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   final _topicController = TextEditingController();
   final _requestTopicController = TextEditingController();
   final _profileNameController = TextEditingController();
-  final _intervalController = TextEditingController(text: '5');
   final _localRetentionDaysController = TextEditingController(text: '30');
   final _deviceRetentionDaysController = TextEditingController(text: '30');
   final _voltageMinController = TextEditingController();
@@ -632,20 +631,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               ),
             ),
             const SizedBox(height: 12),
-            Semantics(
-              label: 'Campo Intervalo de atualização',
-              child: TextFormField(
-                controller: _intervalController,
-                keyboardType: TextInputType.number,
-                validator: SettingsValidators.validateInterval,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.timer),
-                  labelText: 'Intervalo de atualização (s)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
             _ResponsiveFieldPair(
               first: Semantics(
                 label: 'Campo retenção no banco do celular',
@@ -1076,7 +1061,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                                 );
                                 await mqttService.connect();
                                 mqttService.subscribe();
-                                statusNotifier.markConnected();
                                 statusNotifier.setBackgroundActive(false);
                                 await _sendDeviceStorageRetention(
                                   _parseRetentionDays(
@@ -1226,7 +1210,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     _topicController.dispose();
     _requestTopicController.dispose();
     _profileNameController.dispose();
-    _intervalController.dispose();
     _localRetentionDaysController.dispose();
     _deviceRetentionDaysController.dispose();
     _voltageMinController.dispose();
@@ -1240,6 +1223,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     _oauthScopeController.dispose();
     _oauthDeviceEndpointController.dispose();
     _oauthTokenEndpointController.dispose();
+    _oauthDeviceService.cancel();
     super.dispose();
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/background_mqtt_service.dart';
 import '../services/alert_service.dart';
 import 'alert_history_provider.dart';
 import 'measurement_settings_provider.dart';
@@ -48,6 +49,7 @@ final alertProvider = Provider<void>((ref) {
   ref.listen(metricsProvider, (prev, next) async {
     final metrics = next.asData?.value;
     if (metrics == null || metrics.isEmpty) return;
+    if (await BackgroundMqttService.isRunning()) return;
     final last = metrics.first;
     final gate = ref.read(_alertGateProvider);
     final history = ref.read(alertHistoryProvider.notifier);
@@ -73,26 +75,26 @@ final alertProvider = Provider<void>((ref) {
     final voltageOutOfRange =
         last.voltage < settings.voltageMin || last.voltage > settings.voltageMax;
     if (voltageOutOfRange && !gate.voltageOutOfRange) {
+      ref.read(_alertGateProvider.notifier).setVoltageOutOfRange(true);
       await registerAlert(
         type: 'voltage',
         title: 'Tensão fora da faixa',
         message: 'Valor: ${last.voltage.toStringAsFixed(2)} V',
         severity: AlertSeverity.warning,
       );
-      ref.read(_alertGateProvider.notifier).setVoltageOutOfRange(true);
     } else if (!voltageOutOfRange && gate.voltageOutOfRange) {
       ref.read(_alertGateProvider.notifier).setVoltageOutOfRange(false);
     }
 
     final energyExceeded = last.energy > settings.energyLimitKwh;
     if (energyExceeded && !gate.energyExceeded) {
+      ref.read(_alertGateProvider.notifier).setEnergyExceeded(true);
       await registerAlert(
         type: 'energy',
         title: 'Consumo excessivo',
         message: 'Energia acumulada: ${last.energy.toStringAsFixed(2)} kWh',
         severity: AlertSeverity.critical,
       );
-      ref.read(_alertGateProvider.notifier).setEnergyExceeded(true);
     } else if (
         last.energy <= settings.energyLimitKwh * 0.95 && gate.energyExceeded) {
       ref.read(_alertGateProvider.notifier).setEnergyExceeded(false);

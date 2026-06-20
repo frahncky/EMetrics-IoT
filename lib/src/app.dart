@@ -6,8 +6,11 @@ import 'ui/dashboard/dashboard_page.dart';
 import 'ui/history/history_page.dart';
 import 'ui/settings/settings_page.dart';
 import '../src/providers/alert_provider.dart';
+import '../src/providers/alert_history_provider.dart';
 import '../src/providers/device_storage_provider.dart';
 import '../src/providers/local_metric_collector_provider.dart';
+import '../src/providers/metric_provider.dart';
+import '../src/providers/mqtt_status_provider.dart';
 import '../src/providers/theme_provider.dart';
 import '../src/providers/mqtt_metric_saver.dart';
 import 'theme/app_colors.dart';
@@ -33,6 +36,20 @@ class _AppInitializer extends ConsumerWidget {
     ref.listen(localMetricCollectorProvider, (previous, next) {});
     ref.listen(integrationAutoSyncProvider, (previous, next) {});
     ref.listen(mqttMetricSaverProvider, (previous, next) {});
+    ref.listen(backgroundMqttConnectionEventsProvider, (previous, next) {
+      next.whenData(
+        (event) => ref
+            .read(mqttStatusProvider.notifier)
+            .applyBackgroundConnectionEvent(event),
+      );
+    });
+    ref.listen(backgroundMqttMetricPersistedProvider, (previous, next) {
+      next.whenData((_) {
+        ref.invalidate(metricsProvider);
+        ref.invalidate(metricsByRangeProvider);
+        ref.invalidate(alertHistoryProvider);
+      });
+    });
     final isDarkMode = ref.watch(themeProvider);
 
     // Escolhe tema com base na preferência salva pelo usuário.

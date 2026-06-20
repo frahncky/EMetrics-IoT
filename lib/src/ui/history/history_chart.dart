@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -222,7 +224,7 @@ class HistoryChart extends StatelessWidget {
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              reservedSize: 38,
+                              reservedSize: 44,
                               interval: scale.horizontalInterval,
                               getTitlesWidget: (value, meta) => SideTitleWidget(
                                 axisSide: meta.axisSide,
@@ -236,6 +238,8 @@ class HistoryChart extends StatelessWidget {
                                     unitScale,
                                     field == 'pf',
                                   ),
+                                  maxLines: 1,
+                                  softWrap: false,
                                   style: TextStyle(
                                     color: axisTextColor,
                                     fontSize: 10,
@@ -426,12 +430,8 @@ class HistoryChart extends StatelessWidget {
     var minY = spots.first.y;
     var maxY = spots.first.y;
     for (final spot in spots.skip(1)) {
-      if (spot.y < minY) {
-        minY = spot.y;
-      }
-      if (spot.y > maxY) {
-        maxY = spot.y;
-      }
+      if (spot.y < minY) minY = spot.y;
+      if (spot.y > maxY) maxY = spot.y;
     }
 
     if (selectedField == 'pf') {
@@ -452,9 +452,30 @@ class HistoryChart extends StatelessWidget {
     final paddedMin = minY - padding;
     final paddedMax = maxY + padding;
     final safeMax = paddedMax <= paddedMin ? paddedMin + 1 : paddedMax;
-    final interval = (safeMax - paddedMin) / 3;
+    final interval = _niceInterval(safeMax - paddedMin, 3);
+    final axisMin = (paddedMin / interval).floorToDouble() * interval;
+    final axisMax = (safeMax / interval).ceilToDouble() * interval;
 
-    return _AxisScale(paddedMin, safeMax, interval > 0 ? interval : 1);
+    return _AxisScale(axisMin, axisMax, interval);
+  }
+
+  double _niceInterval(double range, int targetIntervals) {
+    if (!range.isFinite || range <= 0) return 1;
+    final rawInterval = range / targetIntervals;
+    final magnitude = math
+        .pow(10, (math.log(rawInterval) / math.ln10).floor())
+        .toDouble();
+    final normalized = rawInterval / magnitude;
+    final niceNormalized = normalized <= 1
+        ? 1.0
+        : normalized <= 2
+        ? 2.0
+        : normalized <= 2.5
+        ? 2.5
+        : normalized <= 5
+        ? 5.0
+        : 10.0;
+    return niceNormalized * magnitude;
   }
 
   String _buildBottomLabel(double value, List<Metric> data, int labelStep) {

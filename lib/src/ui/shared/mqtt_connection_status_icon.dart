@@ -23,10 +23,11 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(mqttStatusProvider);
-    final metricsAsync = ref.watch(metricsProvider);
-    final lastMetricTime = metricsAsync.asData?.value.isNotEmpty == true
-        ? metricsAsync.asData!.value.first.timestamp
-        : null;
+    final metricsData = ref.watch(metricsProvider).asData;
+    final lastMetricTime =
+        metricsData != null && metricsData.value.isNotEmpty
+            ? metricsData.value.first.timestamp
+            : null;
 
     final mqttVisual = _mqttVisual(status);
     final deviceVisual = _deviceVisual(status, lastMetricTime);
@@ -109,13 +110,12 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
       final mqttService = ref.read(mqttServiceProvider);
       await mqttService.connect();
       mqttService.subscribe();
-      statusNotifier.markConnected();
       statusNotifier.setBackgroundActive(false);
       if (!context.mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Conectado ao broker MQTT.')),
+        const SnackBar(content: Text('Conectado ao broker MQTT no app.')),
       );
     } catch (error) {
       statusNotifier.markError(_toUserMessage(error));
@@ -209,6 +209,15 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
         icon: Icons.electric_meter,
         color: AppColors.statusWarning,
         message: 'Medidor conectado. Última leitura ${_relativeTime(lastMetricTime)}.',
+      );
+    }
+
+    if (status.phase == MqttConnectionPhase.error) {
+      return _StatusVisual(
+        icon: Icons.electric_meter,
+        color: AppColors.statusWarning,
+        message:
+            'Medidor com leitura local. MQTT com erro. Última leitura ${_relativeTime(lastMetricTime)}.',
       );
     }
 

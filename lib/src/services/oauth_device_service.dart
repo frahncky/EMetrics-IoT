@@ -35,8 +35,13 @@ class OAuthTokenResult {
 
 class OAuthDeviceService {
   final http.Client _client;
+  bool _cancelled = false;
 
   OAuthDeviceService({http.Client? client}) : _client = client ?? http.Client();
+
+  void cancel() => _cancelled = true;
+
+  void reset() => _cancelled = false;
 
   Future<DeviceAuthorizationSession> startDeviceAuthorization({
     required Uri deviceEndpoint,
@@ -77,7 +82,8 @@ class OAuthDeviceService {
     );
     var intervalSeconds = session.intervalSeconds;
 
-    while (DateTime.now().isBefore(deadline)) {
+    _cancelled = false;
+    while (!_cancelled && DateTime.now().isBefore(deadline)) {
       final response = await _client.post(
         tokenEndpoint,
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -120,6 +126,9 @@ class OAuthDeviceService {
       throw StateError('Falha OAuth: $error');
     }
 
+    if (_cancelled) {
+      throw StateError('Autorização OAuth cancelada.');
+    }
     throw TimeoutException('Tempo esgotado aguardando autorização OAuth.');
   }
 }

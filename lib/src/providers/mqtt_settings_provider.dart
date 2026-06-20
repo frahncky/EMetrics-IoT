@@ -93,20 +93,20 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
   final MqttCredentialsStore _credentialsStore;
 
   MqttSettingsNotifier(this._credentialsStore)
-      : super(
-          const MqttSettings(
-            profileId: 'default',
-            profileName: 'Dispositivo principal',
-            broker: 'test.mosquitto.org',
-            port: 1883,
-            clientId: 'emetrics_app',
-            username: '',
-            password: '',
-            topic: 'emetrics/pzem',
-            requestTopic: 'emetrics/pzem/history/request',
-            useTls: false,
-          ),
-        ) {
+    : super(
+        const MqttSettings(
+          profileId: 'default',
+          profileName: 'Dispositivo principal',
+          broker: 'test.mosquitto.org',
+          port: 1883,
+          clientId: 'emetrics_app',
+          username: '',
+          password: '',
+          topic: 'emetrics/pzem',
+          requestTopic: 'emetrics/pzem/history/request',
+          useTls: false,
+        ),
+      ) {
     load();
   }
 
@@ -125,17 +125,29 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
 
   Future<MqttSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
-    final profiles = await _readProfiles(prefs);
-    final activeId = prefs.getString(_activeProfileIdKey) ?? profiles.first.profileId;
+    var profiles = await _readProfiles(prefs);
+    final migratedProfiles = _migrateEspDefaultProfiles(profiles);
+    if (migratedProfiles != null) {
+      profiles = migratedProfiles;
+      await _writeProfiles(prefs, profiles);
+    }
+    final activeId =
+        prefs.getString(_activeProfileIdKey) ?? profiles.first.profileId;
     final baseState = profiles.firstWhere(
       (profile) => profile.profileId == activeId,
       orElse: () => profiles.first,
     );
 
-    String username = await _credentialsStore.readUsernameForProfile(baseState.profileId);
-    String password = await _credentialsStore.readPasswordForProfile(baseState.profileId);
+    String username = await _credentialsStore.readUsernameForProfile(
+      baseState.profileId,
+    );
+    String password = await _credentialsStore.readPasswordForProfile(
+      baseState.profileId,
+    );
 
-    if (baseState.profileId == 'default' && username.isEmpty && password.isEmpty) {
+    if (baseState.profileId == 'default' &&
+        username.isEmpty &&
+        password.isEmpty) {
       // Migração legacy: move credenciais das SharedPreferences antigas
       // (chaves 'mqtt_username'/'mqtt_password') para o MqttCredentialsStore
       // seguro e remove as chaves legadas para não serem lidas novamente.
@@ -158,7 +170,10 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
       }
     }
 
-    final loadedState = baseState.copyWith(username: username, password: password);
+    final loadedState = baseState.copyWith(
+      username: username,
+      password: password,
+    );
     await _persistActiveSnapshot(prefs, loadedState);
 
     if (mounted) {
@@ -240,9 +255,16 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
     final prefs = await SharedPreferences.getInstance();
     final profiles = await _readProfiles(prefs);
     final profile = profiles.firstWhere((item) => item.profileId == profileId);
-    final username = await _credentialsStore.readUsernameForProfile(profile.profileId);
-    final password = await _credentialsStore.readPasswordForProfile(profile.profileId);
-    final loadedProfile = profile.copyWith(username: username, password: password);
+    final username = await _credentialsStore.readUsernameForProfile(
+      profile.profileId,
+    );
+    final password = await _credentialsStore.readPasswordForProfile(
+      profile.profileId,
+    );
+    final loadedProfile = profile.copyWith(
+      username: username,
+      password: password,
+    );
     await prefs.setString(_activeProfileIdKey, profileId);
     await _persistActiveSnapshot(prefs, loadedProfile);
     state = loadedProfile;
@@ -287,7 +309,7 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
       final migratedProfile = MqttSettings(
         profileId: 'default',
         profileName: 'Dispositivo principal',
-        broker: prefs.getString(_brokerKey) ?? state.broker,
+        broker: prefs.getString(_brokerKey) ?? 'test.mosquitto.org',
         port: prefs.getInt(_portKey) ?? state.port,
         clientId: prefs.getString(_clientIdKey) ?? state.clientId,
         username: '',
@@ -305,6 +327,31 @@ class MqttSettingsNotifier extends StateNotifier<MqttSettings> {
     return decoded
         .map((item) => _settingsFromStorage(item as Map<String, dynamic>))
         .toList();
+  }
+
+  List<MqttSettings>? _migrateEspDefaultProfiles(List<MqttSettings> profiles) {
+    var changed = false;
+    final migrated = [
+      for (final profile in profiles)
+        if (_usesAccidentalTlsDefault(profile))
+          (() {
+            changed = true;
+            return profile.copyWith(port: 1883, useTls: false);
+          })()
+        else
+          profile,
+    ];
+    return changed ? migrated : null;
+  }
+
+  bool _usesAccidentalTlsDefault(MqttSettings profile) {
+    return profile.profileId == 'default' &&
+        profile.broker == 'test.mosquitto.org' &&
+        profile.port == 8883 &&
+        profile.useTls &&
+        profile.clientId == 'emetrics_app' &&
+        profile.topic == 'emetrics/pzem' &&
+        profile.requestTopic == 'emetrics/pzem/history/request';
   }
 
   Future<void> _writeProfiles(
@@ -369,5 +416,5 @@ final mqttCredentialsStoreProvider = Provider<MqttCredentialsStore>(
 
 final mqttSettingsProvider =
     StateNotifierProvider<MqttSettingsNotifier, MqttSettings>(
-  (ref) => MqttSettingsNotifier(ref.watch(mqttCredentialsStoreProvider)),
-);
+      (ref) => MqttSettingsNotifier(ref.watch(mqttCredentialsStoreProvider)),
+    );

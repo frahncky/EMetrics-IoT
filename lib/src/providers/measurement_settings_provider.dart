@@ -29,32 +29,49 @@ class MeasurementSettings {
   }
 }
 
-class MeasurementSettingsNotifier extends StateNotifier<MeasurementSettings> {
-  static const _voltageMinKey = 'measurement_voltage_min';
-  static const _voltageMaxKey = 'measurement_voltage_max';
-  static const _energyLimitKey = 'measurement_energy_limit_kwh';
-  static const _tariffKey = 'measurement_tariff_per_kwh';
+const defaultMeasurementSettings = MeasurementSettings(
+  voltageMin: 200,
+  voltageMax: 240,
+  energyLimitKwh: 10,
+  tariffPerKwh: 0,
+);
 
-  MeasurementSettingsNotifier()
-    : super(
-        const MeasurementSettings(
-          voltageMin: 200,
-          voltageMax: 240,
-          energyLimitKwh: 10,
-          tariffPerKwh: 0,
-        ),
-      ) {
+Future<MeasurementSettings> loadMeasurementSettings() async {
+  const defaults = defaultMeasurementSettings;
+  final prefs = await SharedPreferences.getInstance();
+  return MeasurementSettings(
+    voltageMin:
+        prefs.getDouble(MeasurementSettingsNotifier.voltageMinKey) ??
+        defaults.voltageMin,
+    voltageMax:
+        prefs.getDouble(MeasurementSettingsNotifier.voltageMaxKey) ??
+        defaults.voltageMax,
+    energyLimitKwh:
+        prefs.getDouble(MeasurementSettingsNotifier.energyLimitKey) ??
+        defaults.energyLimitKwh,
+    tariffPerKwh:
+        prefs.getDouble(MeasurementSettingsNotifier.tariffKey) ??
+        defaults.tariffPerKwh,
+  );
+}
+
+class MeasurementSettingsNotifier extends StateNotifier<MeasurementSettings> {
+  static const voltageMinKey = 'measurement_voltage_min';
+  static const voltageMaxKey = 'measurement_voltage_max';
+  static const energyLimitKey = 'measurement_energy_limit_kwh';
+  static const tariffKey = 'measurement_tariff_per_kwh';
+  var _revision = 0;
+
+  MeasurementSettingsNotifier() : super(defaultMeasurementSettings) {
     load();
   }
 
   Future<MeasurementSettings> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    state = state.copyWith(
-      voltageMin: prefs.getDouble(_voltageMinKey) ?? state.voltageMin,
-      voltageMax: prefs.getDouble(_voltageMaxKey) ?? state.voltageMax,
-      energyLimitKwh: prefs.getDouble(_energyLimitKey) ?? state.energyLimitKwh,
-      tariffPerKwh: prefs.getDouble(_tariffKey) ?? state.tariffPerKwh,
-    );
+    final loadRevision = _revision;
+    final nextState = await loadMeasurementSettings();
+    if (mounted && loadRevision == _revision) {
+      state = nextState;
+    }
     return state;
   }
 
@@ -64,6 +81,7 @@ class MeasurementSettingsNotifier extends StateNotifier<MeasurementSettings> {
     required double energyLimitKwh,
     required double tariffPerKwh,
   }) async {
+    _revision++;
     state = state.copyWith(
       voltageMin: voltageMin,
       voltageMax: voltageMax,
@@ -72,10 +90,10 @@ class MeasurementSettingsNotifier extends StateNotifier<MeasurementSettings> {
     );
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_voltageMinKey, state.voltageMin);
-    await prefs.setDouble(_voltageMaxKey, state.voltageMax);
-    await prefs.setDouble(_energyLimitKey, state.energyLimitKwh);
-    await prefs.setDouble(_tariffKey, state.tariffPerKwh);
+    await prefs.setDouble(voltageMinKey, state.voltageMin);
+    await prefs.setDouble(voltageMaxKey, state.voltageMax);
+    await prefs.setDouble(energyLimitKey, state.energyLimitKwh);
+    await prefs.setDouble(tariffKey, state.tariffPerKwh);
   }
 }
 

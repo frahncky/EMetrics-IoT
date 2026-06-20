@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:e_metrics_iot/src/data/integration_sync_item.dart';
 import 'package:e_metrics_iot/src/data/metric_model.dart';
@@ -50,7 +51,13 @@ class IntegrationService {
     try {
       await _postPayload(settings, payload);
       return const IntegrationSubmitResult(delivered: true, queued: false);
-    } catch (_) {
+    } catch (e, st) {
+      developer.log(
+        'Falha ao enviar métrica; enfileirando para reenvio',
+        name: 'IntegrationService',
+        error: e,
+        stackTrace: st,
+      );
       await _repository.enqueueMetricSync(metric, profileId: profileId);
       return const IntegrationSubmitResult(delivered: false, queued: true);
     }

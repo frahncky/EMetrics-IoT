@@ -1,6 +1,7 @@
 import 'package:e_metrics_iot/src/providers/mqtt_settings_provider.dart';
 import 'package:e_metrics_iot/src/providers/mqtt_status_provider.dart';
 import 'package:e_metrics_iot/src/services/mqtt_credentials_store.dart';
+import 'package:e_metrics_iot/src/services/background_mqtt_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -64,30 +65,35 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('MqttStatusNotifier', () {
-    test('configura status a partir das configurações e atualiza fases', () async {
-      SharedPreferences.setMockInitialValues({});
-      final container = ProviderContainer(
-        overrides: [
-          mqttSettingsProvider.overrideWith((ref) => _FakeMqttSettingsNotifier()),
-        ],
-      );
-      addTearDown(container.dispose);
+    test(
+      'configura status a partir das configurações e atualiza fases',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = ProviderContainer(
+          overrides: [
+            mqttSettingsProvider.overrideWith(
+              (ref) => _FakeMqttSettingsNotifier(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      final notifier = container.read(mqttStatusProvider.notifier);
-      notifier.markConnecting();
-      notifier.markConnected();
-      notifier.setBackgroundActive(true);
+        final notifier = container.read(mqttStatusProvider.notifier);
+        notifier.markConnecting();
+        notifier.markConnected();
+        notifier.setBackgroundActive(true);
 
-      final status = container.read(mqttStatusProvider);
-      expect(status.broker, 'broker.local');
-      expect(status.port, 8883);
-      expect(status.topic, 'energia/casa');
-      expect(status.useTls, isTrue);
-      expect(status.phase, MqttConnectionPhase.connected);
-      expect(status.backgroundActive, isTrue);
-      expect(status.lastMessage, 'Broker MQTT conectado.');
-      expect(status.lastConnectedAt, isNotNull);
-    });
+        final status = container.read(mqttStatusProvider);
+        expect(status.broker, 'broker.local');
+        expect(status.port, 8883);
+        expect(status.topic, 'energia/casa');
+        expect(status.useTls, isTrue);
+        expect(status.phase, MqttConnectionPhase.connected);
+        expect(status.backgroundActive, isTrue);
+        expect(status.lastMessage, 'Broker MQTT conectado.');
+        expect(status.lastConnectedAt, isNotNull);
+      },
+    );
 
     test('marca erro e desconexão com mensagem amigável', () async {
       SharedPreferences.setMockInitialValues({});
@@ -102,7 +108,10 @@ void main() {
 
       final notifier = container.read(mqttStatusProvider.notifier);
       notifier.markError('Falha ao conectar.');
-      expect(container.read(mqttStatusProvider).phase, MqttConnectionPhase.error);
+      expect(
+        container.read(mqttStatusProvider).phase,
+        MqttConnectionPhase.error,
+      );
 
       notifier.markDisconnected('Broker MQTT desconectado.');
       final status = container.read(mqttStatusProvider);
@@ -117,7 +126,9 @@ void main() {
           mqttCredentialsStoreProvider.overrideWithValue(
             _InMemoryCredentialsStore(),
           ),
-          mqttBackgroundRunningCheckProvider.overrideWithValue(() async => true),
+          mqttBackgroundRunningCheckProvider.overrideWithValue(
+            () async => true,
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -125,6 +136,35 @@ void main() {
       await container.read(mqttStatusProvider.notifier).syncBackgroundState();
 
       expect(container.read(mqttStatusProvider).backgroundActive, isTrue);
+    });
+
+    test('reflete o estado real recebido do serviço em segundo plano', () {
+      final notifier = MqttStatusNotifier(() async => true);
+
+      notifier.applyBackgroundConnectionEvent(
+        const BackgroundMqttConnectionEvent(
+          phase: BackgroundMqttConnectionPhase.connecting,
+        ),
+      );
+      expect(notifier.state.phase, MqttConnectionPhase.connecting);
+      expect(notifier.state.backgroundActive, isTrue);
+
+      notifier.applyBackgroundConnectionEvent(
+        const BackgroundMqttConnectionEvent(
+          phase: BackgroundMqttConnectionPhase.error,
+          message: 'Broker indisponível.',
+        ),
+      );
+      expect(notifier.state.phase, MqttConnectionPhase.error);
+      expect(notifier.state.lastMessage, 'Broker indisponível.');
+
+      notifier.applyBackgroundConnectionEvent(
+        const BackgroundMqttConnectionEvent(
+          phase: BackgroundMqttConnectionPhase.connected,
+        ),
+      );
+      expect(notifier.state.phase, MqttConnectionPhase.connected);
+      expect(notifier.state.backgroundActive, isTrue);
     });
   });
 }

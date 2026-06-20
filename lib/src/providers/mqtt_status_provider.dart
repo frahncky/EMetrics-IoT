@@ -82,7 +82,31 @@ class MqttStatusNotifier extends StateNotifier<MqttStatusState> {
 
   Future<void> syncBackgroundState() async {
     final isRunning = await _backgroundRunningCheck();
+    if (!isRunning && state.backgroundActive) {
+      setBackgroundActive(false);
+      markDisconnected('Monitoramento MQTT em segundo plano foi encerrado.');
+      return;
+    }
     setBackgroundActive(isRunning);
+  }
+
+  void applyBackgroundConnectionEvent(BackgroundMqttConnectionEvent event) {
+    switch (event.phase) {
+      case BackgroundMqttConnectionPhase.connecting:
+        setBackgroundActive(true);
+        markConnecting();
+      case BackgroundMqttConnectionPhase.connected:
+        setBackgroundActive(true);
+        markConnected();
+      case BackgroundMqttConnectionPhase.error:
+        setBackgroundActive(true);
+        markError(
+          event.message ?? 'Falha ao conectar ao broker MQTT em segundo plano.',
+        );
+      case BackgroundMqttConnectionPhase.stopped:
+        setBackgroundActive(false);
+        markDisconnected(event.message ?? 'Monitoramento MQTT pausado.');
+    }
   }
 
   void markConnecting() {
@@ -108,7 +132,10 @@ class MqttStatusNotifier extends StateNotifier<MqttStatusState> {
   }
 
   void markError(String message) {
-    state = state.copyWith(phase: MqttConnectionPhase.error, lastMessage: message);
+    state = state.copyWith(
+      phase: MqttConnectionPhase.error,
+      lastMessage: message,
+    );
   }
 
   void setBackgroundActive(bool isActive) {
@@ -120,6 +147,15 @@ final mqttBackgroundRunningCheckProvider = Provider<BackgroundRunningCheck>((
   ref,
 ) {
   return BackgroundMqttService.isRunning;
+});
+
+final backgroundMqttConnectionEventsProvider =
+    StreamProvider<BackgroundMqttConnectionEvent>((ref) {
+      return BackgroundMqttService.connectionEvents;
+    });
+
+final backgroundMqttMetricPersistedProvider = StreamProvider<void>((ref) {
+  return BackgroundMqttService.metricPersistedEvents;
 });
 
 final mqttStatusProvider =

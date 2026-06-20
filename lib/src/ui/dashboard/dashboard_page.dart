@@ -35,6 +35,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      ref.invalidate(metricsProvider);
       _syncBackgroundState();
     }
   }
@@ -350,7 +351,8 @@ class _MainIndicators extends StatelessWidget {
           spacing: spacing,
           runSpacing: spacing,
           children: [
-            for (final card in cards) SizedBox(width: cardWidth, child: card),
+            for (final card in cards)
+              SizedBox(key: ValueKey(card.label), width: cardWidth, child: card),
           ],
         );
       },

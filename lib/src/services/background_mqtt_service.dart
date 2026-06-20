@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -7,6 +8,8 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/metric_repository.dart';
+import 'background_metric_processor.dart';
+import 'alert_service.dart';
 import 'device_storage_status_store.dart';
 import '../providers/mqtt_metric_parser.dart';
 import 'background_mqtt_config.dart';
@@ -21,12 +24,39 @@ class BackgroundMqttService {
   static const _historyRequestResultEvent = 'requestHistoryResult';
   static const _storageConfigEvent = 'configureDeviceStorage';
   static const _storageConfigResultEvent = 'configureDeviceStorageResult';
+  static const _serviceReadyEvent = 'backgroundServiceReady';
+  static const _connectionStateEvent = 'backgroundMqttConnectionState';
+  static const _metricPersistedEvent = 'backgroundMqttMetricPersisted';
+
+  static Stream<BackgroundMqttConnectionEvent> get connectionEvents {
+    try {
+      return FlutterBackgroundService()
+          .on(_connectionStateEvent)
+          .map(BackgroundMqttConnectionEvent.fromPayload);
+    } catch (_) {
+      return const Stream.empty();
+    }
+  }
+
+  static Stream<void> get metricPersistedEvents {
+    try {
+      return FlutterBackgroundService().on(_metricPersistedEvent).map((_) {});
+    } catch (_) {
+      return const Stream.empty();
+    }
+  }
 
   static Future<bool> isRunning() async {
     try {
       final service = FlutterBackgroundService();
       return service.isRunning();
-    } catch (_) {
+    } catch (e, st) {
+      developer.log(
+        'Falha ao verificar estado do serviço background',
+        name: 'BackgroundMqttService',
+        error: e,
+        stackTrace: st,
+      );
       return false;
     }
   }
@@ -40,7 +70,8 @@ class BackgroundMqttService {
           onStart: _onStart,
           autoStart: false,
           isForegroundMode: true,
-          autoStartOnBoot: true,
+          autoStartOnBoot: false,
+          foregroundServiceTypes: [AndroidForegroundType.dataSync],
           notificationChannelId: _notificationChannelId,
           initialNotificationTitle: 'E-Metrics IoT',
           initialNotificationContent:
@@ -52,7 +83,13 @@ class BackgroundMqttService {
           onForeground: _onStart,
         ),
       );
-    } catch (_) {
+    } catch (e, st) {
+      developer.log(
+        'Falha ao configurar serviço background',
+        name: 'BackgroundMqttService',
+        error: e,
+        stackTrace: st,
+      );
       return;
     }
   }
@@ -61,11 +98,27 @@ class BackgroundMqttService {
     try {
       final service = FlutterBackgroundService();
       final isRunning = await service.isRunning();
-      if (!isRunning) {
-        await service.startService();
+      if (isRunning) {
+        return true;
       }
+
+      final ready = service
+          .on(_serviceReadyEvent)
+          .first
+          .timeout(const Duration(seconds: 5), onTimeout: () => null);
+      final started = await service.startService();
+      if (!started) {
+        return false;
+      }
+      await ready;
       return await service.isRunning();
-    } catch (_) {
+    } catch (e, st) {
+      developer.log(
+        'Falha ao iniciar serviço background',
+        name: 'BackgroundMqttService',
+        error: e,
+        stackTrace: st,
+      );
       return false;
     }
   }
@@ -74,7 +127,19 @@ class BackgroundMqttService {
     try {
       final service = FlutterBackgroundService();
       service.invoke('stopService');
-    } catch (_) {
+      for (var attempt = 0; attempt < 20; attempt++) {
+        if (!await service.isRunning()) {
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+    } catch (e, st) {
+      developer.log(
+        'Falha ao parar serviço background',
+        name: 'BackgroundMqttService',
+        error: e,
+        stackTrace: st,
+      );
       return;
     }
   }
@@ -162,12 +227,25 @@ class BackgroundMqttService {
   @pragma('vm:entry-point')
   static void _onStart(ServiceInstance service) async {
     WidgetsFlutterBinding.ensureInitialized();
+    DartPluginRegistrant.ensureInitialized();
+    try {
+      await AlertService.init();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Falha ao inicializar notificações no serviço em segundo plano',
+        name: 'BackgroundMqttService',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
 
     StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>? mqttSub;
     Timer? reconnectTimer;
     MqttService? mqtt;
     BackgroundMqttConfig? activeConfig;
     DateTime? lastRetentionCleanupAt;
+    Future<void> metricProcessing = Future.value();
+    final metricProcessor = BackgroundMetricProcessor();
 
     Future<void> pruneLocalHistoryIfNeeded(MetricRepository repo) async {
       final now = DateTime.now();
@@ -186,6 +264,7 @@ class BackgroundMqttService {
 
     Future<void> connectAndListen() async {
       try {
+        _emitConnectionEvent(service, BackgroundMqttConnectionPhase.connecting);
         final prefs = await SharedPreferences.getInstance();
         final credentialsStore = SecureMqttCredentialsStore();
         final config = await BackgroundMqttConfig.fromStorage(
@@ -223,23 +302,43 @@ class BackgroundMqttService {
           mqtt!.subscribe();
         }
 
-        mqttSub ??= mqtt!.updates.listen((messages) async {
+        _emitConnectionEvent(service, BackgroundMqttConnectionPhase.connected);
+
+        mqttSub ??= mqtt!.updates.listen((messages) {
           if (messages.isEmpty) {
             return;
           }
-          final last = messages.last;
-          final payload = (last.payload as MqttPublishMessage).payload.message;
-          final payloadString = String.fromCharCodes(payload);
-          final storageStatus = parseDeviceStorageStatusFromMqtt(payloadString);
-          if (storageStatus != null) {
-            await const DeviceStorageStatusStore().save(storageStatus);
-          }
-          final metric = parseMetricFromMqtt(payloadString);
-          if (metric != null) {
-            final repo = MetricRepository();
-            await repo.insertMetric(metric);
-            await pruneLocalHistoryIfNeeded(repo);
-          }
+          metricProcessing = metricProcessing
+              .then((_) async {
+                final last = messages.last;
+                final payload =
+                    (last.payload as MqttPublishMessage).payload.message;
+                final payloadString = String.fromCharCodes(payload);
+                final storageStatus = parseDeviceStorageStatusFromMqtt(
+                  payloadString,
+                );
+                if (storageStatus != null) {
+                  await const DeviceStorageStatusStore().save(storageStatus);
+                }
+                final metric = parseMetricFromMqtt(payloadString);
+                if (metric == null) {
+                  return;
+                }
+
+                final repo = MetricRepository();
+                await repo.insertMetric(metric);
+                await pruneLocalHistoryIfNeeded(repo);
+                await metricProcessor.process(metric, repository: repo);
+                service.invoke(_metricPersistedEvent);
+              })
+              .catchError((Object error, StackTrace stackTrace) {
+                developer.log(
+                  'Falha ao processar métrica MQTT em segundo plano',
+                  name: 'BackgroundMqttService',
+                  error: error,
+                  stackTrace: stackTrace,
+                );
+              });
         });
 
         if (service is AndroidServiceInstance) {
@@ -249,6 +348,11 @@ class BackgroundMqttService {
           );
         }
       } catch (e, stackTrace) {
+        _emitConnectionEvent(
+          service,
+          BackgroundMqttConnectionPhase.error,
+          message: _connectionErrorMessage(e),
+        );
         developer.log(
           'Falha no serviço MQTT em segundo plano',
           name: 'BackgroundMqttService',
@@ -264,6 +368,7 @@ class BackgroundMqttService {
       if (mqtt != null && mqtt!.isConnected) {
         mqtt!.disconnect();
       }
+      _emitConnectionEvent(service, BackgroundMqttConnectionPhase.stopped);
       await service.stopSelf();
     });
 
@@ -371,6 +476,8 @@ class BackgroundMqttService {
       }
     });
 
+    service.invoke(_serviceReadyEvent);
+
     reconnectTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
       if (mqtt == null || !mqtt!.isConnected) {
         await connectAndListen();
@@ -378,5 +485,49 @@ class BackgroundMqttService {
     });
 
     await connectAndListen();
+  }
+
+  static void _emitConnectionEvent(
+    ServiceInstance service,
+    BackgroundMqttConnectionPhase phase, {
+    String? message,
+  }) {
+    service.invoke(_connectionStateEvent, {
+      'phase': phase.name,
+      if (message != null && message.isNotEmpty) 'message': message,
+    });
+  }
+
+  static String _connectionErrorMessage(Object error) {
+    if (error is MqttServiceException) {
+      return error.message;
+    }
+    return 'Não foi possível conectar ao broker MQTT em segundo plano.';
+  }
+}
+
+enum BackgroundMqttConnectionPhase { connecting, connected, error, stopped }
+
+class BackgroundMqttConnectionEvent {
+  final BackgroundMqttConnectionPhase phase;
+  final String? message;
+
+  const BackgroundMqttConnectionEvent({required this.phase, this.message});
+
+  factory BackgroundMqttConnectionEvent.fromPayload(
+    Map<String, dynamic>? payload,
+  ) {
+    final rawPhase = payload?['phase'];
+    final phase = rawPhase is String
+        ? BackgroundMqttConnectionPhase.values.firstWhere(
+            (value) => value.name == rawPhase,
+            orElse: () => BackgroundMqttConnectionPhase.error,
+          )
+        : BackgroundMqttConnectionPhase.error;
+    final rawMessage = payload?['message'];
+    return BackgroundMqttConnectionEvent(
+      phase: phase,
+      message: rawMessage is String ? rawMessage : null,
+    );
   }
 }

@@ -73,16 +73,16 @@ class MqttService {
     final hasUsername = usernameTrimmed.isNotEmpty;
     final hasPassword = passwordTrimmed.isNotEmpty;
 
-    if (hasUsername != hasPassword) {
+    if (!hasUsername && hasPassword) {
       throw const MqttServiceException(
-        'Preencha usuário e senha MQTT, ou deixe ambos vazios.',
+        'Informe o usuário MQTT antes de preencher a senha.',
       );
     }
 
     final connectMessage = MqttConnectMessage()
         .withClientIdentifier(clientId)
         .startClean();
-    final hasCredentials = hasUsername && hasPassword;
+    final hasCredentials = hasUsername;
     if (hasCredentials) {
       connectMessage.authenticateAs(usernameTrimmed, passwordTrimmed);
     }
