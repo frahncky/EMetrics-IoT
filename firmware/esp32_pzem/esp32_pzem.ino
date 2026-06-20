@@ -78,7 +78,7 @@ DeviceConfig config = {
 // CONSTANTES E VARIAVEIS GLOBAIS
 // ═══════════════════════════════════════════════════════════════════════════
 constexpr unsigned long PUBLISH_INTERVAL_MS = 2000;       // intervalo entre leituras PZEM
-constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 5000;    // retentatida de reconexao WiFi
+constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 15000;   // retentatida de reconexao WiFi
 constexpr unsigned long WIFI_FALLBACK_AP_DELAY_MS = 60UL * 1000UL;
 constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;    // retentativa de reconexao MQTT
 constexpr unsigned long HISTORY_PUBLISH_DELAY_MS = 10;    // pausa entre publicacoes de replay
@@ -1104,6 +1104,42 @@ void handleWifiNetworkDelete() {
       200, "application/json", "{\"ok\":true,\"message\":\"Rede Wi-Fi excluida do ESP32.\"}");
 }
 
+void handleWifiScan() {
+  const wifi_mode_t prevMode = WiFi.getMode();
+  if (prevMode == WIFI_AP) {
+    WiFi.mode(WIFI_AP_STA);
+  }
+
+  const int n = WiFi.scanNetworks();
+
+  String body = "{\"ok\":true,\"networks\":[";
+  bool first = true;
+  for (int i = 0; i < n && i < 20; i++) {
+    const String ssid = WiFi.SSID(i);
+    if (ssid.length() == 0) {
+      continue;
+    }
+    if (!first) {
+      body += ",";
+    }
+    first = false;
+    body += "{\"ssid\":\"";
+    body += jsonEscape(ssid.c_str());
+    body += "\",\"rssi\":";
+    body += WiFi.RSSI(i);
+    body += ",\"open\":";
+    body += (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "true" : "false";
+    body += "}";
+  }
+  body += "]}";
+
+  WiFi.scanDelete();
+  if (prevMode == WIFI_AP) {
+    WiFi.mode(WIFI_AP);
+  }
+  provisionServer.send(200, "application/json", body);
+}
+
 void startProvisioningServer() {
   if (provisionServerStarted) {
     return;
@@ -1111,6 +1147,7 @@ void startProvisioningServer() {
 
   provisionServer.on("/health", HTTP_GET, handleHealth);
   provisionServer.on("/metrics", HTTP_GET, handleMetrics);
+  provisionServer.on("/wifi-scan", HTTP_GET, handleWifiScan);
   provisionServer.on("/provision", HTTP_POST, handleProvision);
   provisionServer.on("/wifi-networks", HTTP_GET, handleWifiNetworksList);
   provisionServer.on("/wifi-networks", HTTP_POST, handleWifiNetworkSave);
@@ -1162,6 +1199,10 @@ void connectWiFi() {
   if (wifiDisconnectedSinceMs == 0) {
     wifiDisconnectedSinceMs = millis();
   }
+  Serial.print("[WiFi] SSID=[");
+  Serial.print(config.wifiSsid);
+  Serial.print("] PASS_LEN=");
+  Serial.println(strlen(config.wifiPassword));
   WiFi.begin(config.wifiSsid, config.wifiPassword);
 }
 
@@ -1364,15 +1405,16 @@ String currentWifiTypeLabel() {
 }
 
 String currentNetworkNameLabel() {
-  const String prefix = "Rede: ";
-
   if (provisioningMode || fallbackApActive) {
-    return prefix + String(PROVISION_AP_SSID);
+    return "Rede: " + String(PROVISION_AP_SSID);
   }
   if (WiFi.status() == WL_CONNECTED) {
-    return prefix + WiFi.SSID();
+    return "Rede: " + WiFi.SSID();
   }
-  return "Rede: sem conexao";
+  if (strlen(config.wifiSsid) > 0) {
+    return "Tent: " + String(config.wifiSsid);
+  }
+  return "Rede: sem rede";
 }
 
 String currentNetworkLineForLcd() {
@@ -1518,10 +1560,12 @@ void setup() {
   lcd.init();
   lcd.backlight();
   lcd.clear();
-  lcd.setCursor(0, 0);
+  lcd.setCursor(4, 1);
   lcd.print("EMetrics IoT");
-  lcd.setCursor(0, 1);
-  lcd.print("Display 4x20 OK");
+  lcd.setCursor(0, 2);
+  lcd.print("IFMA - Monte Castelo");
+  lcd.setCursor(0, 3);
+  lcd.print("Dep.Eletroeletronica");
   delay(2000);  // mostra mensagem inicial por 2 segundos
   lcd.clear();
 
@@ -1537,6 +1581,26 @@ void setup() {
   mqttClient.setServer(config.mqttHost, config.mqttPort);
   mqttClient.setCallback(onMqttMessage);
   connectWiFi();
+  {
+    const unsigned long deadline = millis() + 20000UL;
+    unsigned long lastLcdMs = 0;
+    while (WiFi.status() != WL_CONNECTED && millis() < deadline) {
+      delay(100);
+      Serial.print(".");
+      const unsigned long now = millis();
+      if (now - lastLcdMs >= 500) {
+        lastLcdMs = now;
+        updateLcdDisplay();
+      }
+    }
+    Serial.println();
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("[WiFi] Conectado: " + WiFi.localIP().toString());
+    } else {
+      Serial.println("[WiFi] Timeout inicial - continuando via loop");
+    }
+  }
+  lastWifiAttemptMs = millis();
   startProvisioningServer();
 }
 

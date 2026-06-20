@@ -23,6 +23,26 @@ class EspWifiNetwork {
   }
 }
 
+class WifiScanResult {
+  final String ssid;
+  final int rssi;
+  final bool open;
+
+  const WifiScanResult({
+    required this.ssid,
+    required this.rssi,
+    required this.open,
+  });
+
+  factory WifiScanResult.fromJson(Map<String, dynamic> json) {
+    return WifiScanResult(
+      ssid: (json['ssid'] as String? ?? '').trim(),
+      rssi: (json['rssi'] as int? ?? -100),
+      open: json['open'] == true,
+    );
+  }
+}
+
 class EspProvisioningService {
   const EspProvisioningService();
 
@@ -73,6 +93,10 @@ class EspProvisioningService {
 
   static Uri buildWifiNetworkDeleteUri(String hostOrUrl, {int port = 80}) {
     return buildUri(hostOrUrl, path: '/wifi-networks/delete', port: port);
+  }
+
+  static Uri buildWifiScanUri(String hostOrUrl, {int port = 80}) {
+    return buildUri(hostOrUrl, path: '/wifi-scan', port: port);
   }
 
   static Map<String, String> buildFormData({
@@ -280,6 +304,32 @@ class EspProvisioningService {
         message:
             'Não foi possível conectar ao ESP32 para excluir a rede Wi-Fi.',
       );
+    }
+  }
+
+  Future<List<WifiScanResult>> scanWifiNetworks({
+    required String espHost,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final uri = buildWifiScanUri(espHost);
+    try {
+      final response = await http.get(uri).timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(
+          'Falha ao escanear redes (HTTP ${response.statusCode}).',
+        );
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) return const [];
+      final networks = decoded['networks'];
+      if (networks is! List) return const [];
+      return networks
+          .whereType<Map<String, dynamic>>()
+          .map(WifiScanResult.fromJson)
+          .where((n) => n.ssid.isNotEmpty)
+          .toList();
+    } catch (e) {
+      throw Exception('Não foi possível escanear redes: $e');
     }
   }
 

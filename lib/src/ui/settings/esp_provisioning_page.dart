@@ -31,6 +31,9 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   bool _isSubmitting = false;
   bool _isLoadingNetworks = false;
   bool _isSavingNetwork = false;
+  bool _isScanning = false;
+  bool _wifiPasswordVisible = false;
+  bool _mqttPasswordVisible = false;
   String? _editingNetworkSsid;
   String? _deletingNetworkSsid;
   String _appMqttClientId = '';
@@ -210,6 +213,109 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     });
   }
 
+  Future<void> _scanWifiNetworks() async {
+    if (_espHostController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe o IP do ESP32 antes de buscar redes.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _isScanning = true);
+    await _saveCurrentEspHost();
+    try {
+      final networks = await _service.scanWifiNetworks(
+        espHost: _espHostController.text,
+      );
+      if (!mounted) return;
+      setState(() => _isScanning = false);
+      if (networks.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nenhuma rede Wi-Fi encontrada.')),
+        );
+        return;
+      }
+      _showNetworkSheet(networks);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isScanning = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_message(e))),
+      );
+    }
+  }
+
+  void _showNetworkSheet(List<WifiScanResult> networks) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.5,
+          maxChildSize: 0.85,
+          builder: (context, scrollController) => Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.wifi_find),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Redes disponíveis',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: networks.length,
+                  itemBuilder: (context, i) {
+                    final n = networks[i];
+                    return ListTile(
+                      leading: Icon(_rssiIcon(n.rssi)),
+                      title: Text(n.ssid),
+                      subtitle: Text(
+                        '${_rssiLabel(n.rssi)} (${n.rssi} dBm)'
+                        '${n.open ? ' · Aberta' : ''}',
+                      ),
+                      trailing: n.open
+                          ? null
+                          : const Icon(Icons.lock_outline, size: 18),
+                      onTap: () {
+                        _wifiSsidController.text = n.ssid;
+                        Navigator.of(context).pop();
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  IconData _rssiIcon(int rssi) {
+    if (rssi >= -50) return Icons.signal_wifi_4_bar;
+    if (rssi >= -65) return Icons.wifi;
+    if (rssi >= -80) return Icons.wifi_2_bar;
+    return Icons.wifi_1_bar;
+  }
+
+  String _rssiLabel(int rssi) {
+    if (rssi >= -50) return 'Ótimo';
+    if (rssi >= -65) return 'Bom';
+    if (rssi >= -80) return 'Fraco';
+    return 'Muito fraco';
+  }
+
   String? _validateEspClientId(String? value) {
     final error = SettingsValidators.validateClientId(value);
     if (error != null) {
@@ -328,20 +434,44 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                 onDelete: _deleteWifiNetwork,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _wifiSsidController,
-                decoration: InputDecoration(
-                  labelText: _editingNetworkSsid == null
-                      ? 'SSID Wi-Fi'
-                      : 'SSID Wi-Fi em edição',
-                  border: const OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if ((value ?? '').trim().isEmpty) {
-                    return 'Informe o SSID da rede Wi-Fi.';
-                  }
-                  return null;
-                },
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _wifiSsidController,
+                      decoration: InputDecoration(
+                        labelText: _editingNetworkSsid == null
+                            ? 'SSID Wi-Fi'
+                            : 'SSID Wi-Fi em edição',
+                        border: const OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if ((value ?? '').trim().isEmpty) {
+                          return 'Informe o SSID da rede Wi-Fi.';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 56,
+                    child: OutlinedButton(
+                      onPressed: _isScanning ? null : _scanWifiNetworks,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      child: _isScanning
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.wifi_find),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -355,12 +485,22 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _wifiPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
+                obscureText: !_wifiPasswordVisible,
+                decoration: InputDecoration(
                   labelText: 'Senha Wi-Fi',
                   helperText:
                       'Ao editar, deixe em branco para manter a senha salva.',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _wifiPasswordVisible
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () => setState(
+                      () => _wifiPasswordVisible = !_wifiPasswordVisible,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -424,10 +564,20 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _mqttPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
+                obscureText: !_mqttPasswordVisible,
+                decoration: InputDecoration(
                   labelText: 'Senha MQTT',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _mqttPasswordVisible
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    onPressed: () => setState(
+                      () => _mqttPasswordVisible = !_mqttPasswordVisible,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
