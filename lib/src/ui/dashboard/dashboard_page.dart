@@ -1,10 +1,10 @@
 import '../../providers/mqtt_metric_saver.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
+import '../../data/metric_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
-import '../../providers/dashboard_preferences_provider.dart';
 import '../../providers/metric_provider.dart';
 import '../../theme/app_colors.dart';
 import 'dashboard_tabs.dart';
@@ -51,7 +51,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     ref.watch(mqttMetricSaverProvider);
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final metricsAsync = ref.watch(metricsProvider);
-    final dashboardPreferences = ref.watch(dashboardPreferencesProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -150,14 +149,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                           right: 8,
                           bottom: 0,
                         ),
-                        child: _MainIndicators(
-                          voltage: last?.voltage ?? 0,
-                          current: last?.current ?? 0,
-                          power: last?.power ?? 0,
-                          frequency: last?.frequency ?? 0,
-                          energy: last?.energy ?? 0,
-                          pf: last?.pf ?? 0,
-                        ),
+                        child: _MainIndicators(metric: last),
                       ),
                     ],
                   ),
@@ -183,8 +175,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     );
   }
 }
-
-
 String formatWithSIPrefix(num value, {int? fractionDigits}) {
   if (value == 0 || value.isNaN) return '--';
   final abs = value.abs();
@@ -215,38 +205,46 @@ String formatWithSIPrefix(num value, {int? fractionDigits}) {
   }
 }
 
+String formatIndicatorValue(
+  double? value, {
+  required int fractionDigits,
+  required bool hasMeasurement,
+}) {
+  if (!hasMeasurement || value == null || !value.isFinite) return '--';
+  return value.toStringAsFixed(fractionDigits);
+}
+
 // ── Indicadores de métricas ──────────────────────────────────────────────────
 
 /// Grade de 8 cards com as grandezas elétricas calculadas e medidas pelo PZEM004T.
 class _MainIndicators extends StatelessWidget {
-  final double voltage;
-  final double current;
-  final double power;
-  final double frequency;
-  final double energy;
-  final double pf;
-  const _MainIndicators({
-    this.voltage = 0,
-    this.current = 0,
-    this.power = 0,
-    this.frequency = 0,
-    this.energy = 0,
-    this.pf = 0,
-  });
+  final Metric? metric;
+
+  const _MainIndicators({this.metric});
 
   @override
   Widget build(BuildContext context) {
-    final double apparent = voltage * current;
-    final double active = power;
-    final double reactive = math.sqrt(
-      math.max((apparent * apparent) - (active * active), 0),
-    );
+    final hasMeasurement = metric != null;
+    final voltage = metric?.voltage;
+    final current = metric?.current;
+    final power = metric?.power;
+    final frequency = metric?.frequency;
+    final energy = metric?.energy;
+    final pf = metric?.pf;
+    final apparent = hasMeasurement ? voltage! * current! : null;
+    final reactive = hasMeasurement
+        ? math.sqrt(math.max((apparent! * apparent) - (power! * power), 0))
+        : null;
     const spacing = 8.0;
     // Cada card representa uma grandeza elétrica medida pelo PZEM004T.
     final cards = [
       _IndicatorCard(
         label: 'Aparente',
-        value: apparent > 0 ? apparent.toStringAsFixed(1) : '--',
+        value: formatIndicatorValue(
+          apparent,
+          fractionDigits: 1,
+          hasMeasurement: hasMeasurement,
+        ),
         icon: Icons.data_usage,
         color: AppColors.metricApparent,
         compact: true,
@@ -254,7 +252,11 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Ativa',
-        value: power > 0 ? power.toStringAsFixed(1) : '--',
+        value: formatIndicatorValue(
+          power,
+          fractionDigits: 1,
+          hasMeasurement: hasMeasurement,
+        ),
         icon: Icons.flash_on_outlined,
         color: AppColors.metricActive,
         compact: true,
@@ -262,7 +264,11 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Reativa',
-        value: reactive > 0 ? reactive.toStringAsFixed(1) : '--',
+        value: formatIndicatorValue(
+          reactive,
+          fractionDigits: 1,
+          hasMeasurement: hasMeasurement,
+        ),
         icon: Icons.waves,
         color: AppColors.metricReactive,
         compact: true,
@@ -270,7 +276,11 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'FP',
-        value: pf.isNaN ? '--' : pf.toStringAsFixed(2),
+        value: formatIndicatorValue(
+          pf,
+          fractionDigits: 2,
+          hasMeasurement: hasMeasurement,
+        ),
         icon: Icons.speed_outlined,
         color: AppColors.metricPf,
         compact: true,
@@ -278,7 +288,11 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Tensão',
-        value: voltage > 0 ? voltage.toStringAsFixed(1) : '--',
+        value: formatIndicatorValue(
+          voltage,
+          fractionDigits: 1,
+          hasMeasurement: hasMeasurement,
+        ),
         icon: Icons.electrical_services,
         color: AppColors.metricVoltage,
         compact: true,
@@ -286,7 +300,11 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Corrente',
-        value: current > 0 ? current.toStringAsFixed(3) : '--',
+        value: formatIndicatorValue(
+          current,
+          fractionDigits: 3,
+          hasMeasurement: hasMeasurement,
+        ),
         icon: Icons.bolt_outlined,
         color: AppColors.metricCurrent,
         compact: true,
@@ -294,7 +312,11 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Energia',
-        value: energy > 0 ? energy.toStringAsFixed(3) : '--',
+        value: formatIndicatorValue(
+          energy,
+          fractionDigits: 3,
+          hasMeasurement: hasMeasurement,
+        ),
         icon: Icons.battery_charging_full_outlined,
         color: AppColors.metricEnergy,
         compact: true,
@@ -302,7 +324,11 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Frequência',
-        value: frequency > 0 ? frequency.toStringAsFixed(2) : '--',
+        value: formatIndicatorValue(
+          frequency,
+          fractionDigits: 2,
+          hasMeasurement: hasMeasurement,
+        ),
         icon: Icons.ssid_chart,
         color: AppColors.metricFrequency,
         compact: true,
