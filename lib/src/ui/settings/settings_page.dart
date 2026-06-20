@@ -61,7 +61,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   bool _integrationEnabled = false;
   bool _oauthEnabled = false;
   int _selectedTab = 0;
-  bool _showForecastCard = true;
   List<MqttProfileSummary> _profiles = const [];
   final OAuthDeviceService _oauthDeviceService = OAuthDeviceService();
 
@@ -130,14 +129,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         integrationSettings.oauthDeviceEndpoint;
     _oauthTokenEndpointController.text = integrationSettings.oauthTokenEndpoint;
 
-    final dashboardPreferences = await ref
-        .read(dashboardPreferencesProvider.notifier)
-        .load();
+    await ref.read(dashboardPreferencesProvider.notifier).load();
     if (!mounted) {
       return;
     }
-    _showForecastCard = dashboardPreferences.showForecastCard;
-
     final measurementSettings = await ref
         .read(measurementSettingsProvider.notifier)
         .load();
@@ -204,9 +199,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           oauthDeviceEndpoint: _oauthDeviceEndpointController.text,
           oauthTokenEndpoint: _oauthTokenEndpointController.text,
         );
-    await ref
-        .read(dashboardPreferencesProvider.notifier)
-        .setShowForecastCard(_showForecastCard);
     await _saveStorageSettings(sendToDevice: false);
     if (mounted) {
       final profiles = await ref
@@ -380,7 +372,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
 
   /// Converte [value] de string (aceita vírgula ou ponto) para `double`.
   double _parseDecimal(String value) {
-    return double.parse(value.trim().replaceAll(',', '.'));
+    return double.tryParse(value.trim().replaceAll(',', '.')) ?? 0.0;
   }
 
   int _parseRetentionDays(String value) {
@@ -831,18 +823,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         padding: const EdgeInsets.only(top: 8, bottom: 8),
         child: _SettingsSection(
           children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Exibir previsão no dashboard'),
-              subtitle: const Text(
-                'Ativa o card de tendência e projeção local.',
-              ),
-              value: _showForecastCard,
-              onChanged: (value) {
-                setState(() => _showForecastCard = value);
-              },
-            ),
-            const SizedBox(height: 12),
             Semantics(
               label: 'Alternar modo escuro',
               toggled: _darkMode,

@@ -164,8 +164,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
         ref.invalidate(rangeProvider);
         final refreshed = await ref.read(rangeProvider.future);
         final hasGrowth =
-            baselineCount == null || refreshed.length > baselineCount;
-        if (hasGrowth || refreshed.isNotEmpty) {
+            baselineCount != null && refreshed.length > baselineCount;
+        if (hasGrowth || (baselineCount == null && refreshed.isNotEmpty)) {
           updated = true;
           break;
         }

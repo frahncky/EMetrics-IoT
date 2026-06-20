@@ -116,7 +116,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
       espHost: _espHostController.text,
       ssid: ssid,
       wifiUsername: _wifiUsernameController.text,
-      wifiPassword: _wifiPasswordController.text,
+      wifiPassword: _wifiPasswordController.text.trim(),
       oldSsid: editing,
       keepUsername:
           editing != null && _wifiUsernameController.text.trim().isEmpty,

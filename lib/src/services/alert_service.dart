@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 /// [runApp]. As permissões são solicitadas sob demanda por [ensurePermissionGranted].
 class AlertService {
   static final _notifications = FlutterLocalNotificationsPlugin();
+  static int _nextId = 1;
 
   /// Inicializa o plugin com ícone padrão do launcher (Android/iOS).
   static Future<void> init() async {
@@ -60,6 +61,6 @@ class AlertService {
       priority: Priority.high,
     );
     const details = NotificationDetails(android: android);
-    await _notifications.show(0, title, body, details);
+    await _notifications.show(_nextId++, title, body, details);
   }
 }

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
 import '../../providers/dashboard_preferences_provider.dart';
-import '../../providers/forecast_provider.dart';
 import '../../providers/metric_provider.dart';
 import '../../theme/app_colors.dart';
 import 'dashboard_tabs.dart';
@@ -53,7 +52,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final metricsAsync = ref.watch(metricsProvider);
     final dashboardPreferences = ref.watch(dashboardPreferencesProvider);
-    final forecastAsync = ref.watch(forecastProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -161,20 +159,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                           pf: last?.pf ?? 0,
                         ),
                       ),
-                      if (dashboardPreferences.showForecastCard)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                          child: forecastAsync.when(
-                            data: (forecast) {
-                              if (forecast == null) {
-                                return const SizedBox.shrink();
-                              }
-                              return _ForecastCard(snapshot: forecast);
-                            },
-                            loading: () => const SizedBox.shrink(),
-                            error: (_, _) => const SizedBox.shrink(),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -200,127 +184,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
   }
 }
 
-// ── Card de previsão ─────────────────────────────────────────────────────────
-
-/// Card exibido no dashboard com previsão de potência e energia baseada em regressão linear
-/// das últimas leituras. Só aparece quando habilitado nas preferências de dashboard.
-class _ForecastCard extends StatelessWidget {
-  final ForecastSnapshot snapshot;
-
-  const _ForecastCard({required this.snapshot});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final titleColor = isDarkMode ? Colors.white : AppColors.lightTextTitle;
-    final subtitleColor = isDarkMode ? Colors.white70 : AppColors.lightTextSmall;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDarkMode
-              ? [
-                  Theme.of(context).cardColor,
-                  AppColors.darkSurface.withValues(alpha: 0.9),
-                ]
-              : [
-                  AppColors.lightCard,
-                  AppColors.lightScaffold,
-                ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.forecastBorder.withValues(alpha: 0.45),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDarkMode ? 0.2 : 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.auto_graph, color: AppColors.forecastBorder),
-              const SizedBox(width: 8),
-              Text(
-                'Previsão local',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: titleColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${snapshot.trendLabel} com base em ${snapshot.sampleCount} leituras recentes.',
-            style: TextStyle(color: subtitleColor),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              _ForecastMetricChip(
-                label: 'Potência em 30 min',
-                value: '${formatWithSIPrefix(snapshot.projectedPowerWatts)} W',
-              ),
-              _ForecastMetricChip(
-                label: 'Energia em 1 h',
-                value: '${snapshot.projectedEnergyKwh.toStringAsFixed(3)} kWh',
-              ),
-              _ForecastMetricChip(
-                label: 'Inclinação',
-                value: '${snapshot.powerSlopePerMinute.toStringAsFixed(2)} W/min',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ForecastMetricChip extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _ForecastMetricChip({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDarkMode ? AppColors.forecastChipDark : AppColors.lightScaffold,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 String formatWithSIPrefix(num value, {int? fractionDigits}) {
   if (value == 0 || value.isNaN) return '--';
@@ -332,22 +195,22 @@ String formatWithSIPrefix(num value, {int? fractionDigits}) {
   }
 
   if (abs >= 1e9) {
-    final d = fractionDigits ?? digits(value / 1e9);
+    final d = fractionDigits ?? digits(abs / 1e9);
     return '${(value / 1e9).toStringAsFixed(d)} G';
   } else if (abs >= 1e6) {
-    final d = fractionDigits ?? digits(value / 1e6);
+    final d = fractionDigits ?? digits(abs / 1e6);
     return '${(value / 1e6).toStringAsFixed(d)} M';
   } else if (abs >= 1e3) {
-    final d = fractionDigits ?? digits(value / 1e3);
+    final d = fractionDigits ?? digits(abs / 1e3);
     return '${(value / 1e3).toStringAsFixed(d)} K';
   } else if (abs < 1e-3 && abs > 0) {
-    final d = fractionDigits ?? digits(value * 1e6);
+    final d = fractionDigits ?? digits(abs * 1e6);
     return '${(value * 1e6).toStringAsFixed(d)} μ';
   } else if (abs < 1 && abs >= 1e-3) {
-    final d = fractionDigits ?? digits(value * 1e3);
+    final d = fractionDigits ?? digits(abs * 1e3);
     return '${(value * 1e3).toStringAsFixed(d)} m';
   } else {
-    final d = fractionDigits ?? digits(value.toDouble());
+    final d = fractionDigits ?? digits(abs.toDouble());
     return value.toStringAsFixed(d);
   }
 }
@@ -383,7 +246,7 @@ class _MainIndicators extends StatelessWidget {
     final cards = [
       _IndicatorCard(
         label: 'Aparente',
-        value: formatWithSIPrefix(apparent),
+        value: apparent > 0 ? apparent.toStringAsFixed(1) : '--',
         icon: Icons.data_usage,
         color: AppColors.metricApparent,
         compact: true,
@@ -391,7 +254,7 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Ativa',
-        value: formatWithSIPrefix(power),
+        value: power > 0 ? power.toStringAsFixed(1) : '--',
         icon: Icons.flash_on_outlined,
         color: AppColors.metricActive,
         compact: true,
@@ -399,7 +262,7 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Reativa',
-        value: formatWithSIPrefix(reactive),
+        value: reactive > 0 ? reactive.toStringAsFixed(1) : '--',
         icon: Icons.waves,
         color: AppColors.metricReactive,
         compact: true,
@@ -415,7 +278,7 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Tensão',
-        value: formatWithSIPrefix(voltage, fractionDigits: 1),
+        value: voltage > 0 ? voltage.toStringAsFixed(1) : '--',
         icon: Icons.electrical_services,
         color: AppColors.metricVoltage,
         compact: true,
@@ -423,7 +286,7 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Corrente',
-        value: formatWithSIPrefix(current),
+        value: current > 0 ? current.toStringAsFixed(3) : '--',
         icon: Icons.bolt_outlined,
         color: AppColors.metricCurrent,
         compact: true,
@@ -431,7 +294,7 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Energia',
-        value: formatWithSIPrefix(energy, fractionDigits: 3),
+        value: energy > 0 ? energy.toStringAsFixed(3) : '--',
         icon: Icons.battery_charging_full_outlined,
         color: AppColors.metricEnergy,
         compact: true,

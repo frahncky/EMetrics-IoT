@@ -1073,8 +1073,17 @@ void handleWifiNetworkSave() {
   }
 
   saveConfig();
-  provisionServer.send(
-      200, "application/json", "{\"ok\":true,\"message\":\"Rede Wi-Fi salva no ESP32.\"}");
+
+  if (provisioningMode) {
+    provisionServer.send(
+        200,
+        "application/json",
+        "{\"ok\":true,\"message\":\"Rede Wi-Fi salva. ESP32 vai reconectar.\"}");
+    scheduleRestart();
+  } else {
+    provisionServer.send(
+        200, "application/json", "{\"ok\":true,\"message\":\"Rede Wi-Fi salva no ESP32.\"}");
+  }
 }
 
 void handleWifiNetworkDelete() {
@@ -1394,6 +1403,10 @@ String currentNetworkLineForLcd() {
   return line;
 }
 
+String formatMetricLine(const String& label, const String& value) {
+  return label + ": " + value;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // LCD 4x20 I2C - ATUALIZACAO DE DISPLAY
 // Rotacao entre diferentes dados de medicao em intervalos fixos
@@ -1410,7 +1423,7 @@ void updateLcdDisplay() {
     lastMetricRotateMs = now;
   } else if (now - lastMetricRotateMs >= LCD_METRIC_ROTATE_INTERVAL_MS) {
     lastMetricRotateMs = now;
-    lcdDisplayIndex = (lcdDisplayIndex + 1) % 6;
+    lcdDisplayIndex = (lcdDisplayIndex + 1) % 4;
   }
 
   // Le os dados atuais do PZEM
@@ -1420,64 +1433,71 @@ void updateLcdDisplay() {
   float energy = pzem.energy();
   float frequency = pzem.frequency();
   float pf = pzem.pf();
+  float apparentPower = voltage * current;
+  float reactivePowerSquared = apparentPower * apparentPower - power * power;
+  float reactivePower = reactivePowerSquared > 0.0f ? sqrtf(reactivePowerSquared) : 0.0f;
+  static unsigned long lastEnergyUpdateMs = 0;
+  static float apparentEnergyKvah = 0.0f;
+  static float reactiveEnergyKvarh = 0.0f;
+
+  if (lcdDisplayIndex == 3) {
+    String wifiStatus = WiFi.status() == WL_CONNECTED ? "STA OK" :
+                        (provisioningMode || fallbackApActive ? "AP ativo" : "sem conexao");
+    printLcdLine(0, String("WiFi: ") + wifiStatus);
+    printLcdLine(1, currentNetworkLineForLcd());
+    printLcdLine(2, String("MQTT:") + (mqttClient.connected() ? "OK" : "OFF") + " Fila:" + queueCount);
+    printLcdLine(3, String("Broker:") + String(config.mqttHost).substring(0, 13));
+    return;
+  }
 
   // Verifica se leitura foi bem-sucedida
   if (isnan(voltage) || isnan(current) || isnan(power)) {
     printLcdLine(0, "Erro ao ler PZEM");
     printLcdLine(1, "Verifique conexao");
-    printLcdLine(2, currentNetworkLineForLcd());
-    printLcdLine(
-        3,
-        String("Tipo:") + currentWifiTypeLabel() +
-            " MQTT:" +
-            (mqttClient.connected() ? "ON" : "OFF"));
+    printLcdLine(2, "");
+    printLcdLine(3, String("MQTT: ") + (mqttClient.connected() ? "ON" : "OFF"));
     return;
   }
 
-  // Mostra diferentes dados conforme lcdDisplayIndex
-  switch (lcdDisplayIndex % 6) {
-    case 0:  // Tensao
-      printLcdLine(0, "Tensao (V)");
-      printLcdLine(1, String(voltage, 1) + " V");
-      break;
+  if (lastEnergyUpdateMs != 0 && now > lastEnergyUpdateMs) {
+    const float elapsedHours = static_cast<float>(now - lastEnergyUpdateMs) / 3600000.0f;
+    apparentEnergyKvah += apparentPower * elapsedHours;
+    reactiveEnergyKvarh += reactivePower * elapsedHours;
+  }
+  lastEnergyUpdateMs = now;
 
-    case 1:  // Corrente
-      printLcdLine(0, "Corrente (A)");
-      printLcdLine(1, String(current, 3) + " A");
-      break;
-
-    case 2:  // Potencia
-      printLcdLine(0, "Potencia (W)");
-      printLcdLine(1, String(power, 2) + " W");
-      break;
-
-    case 3:  // Frequencia
-      printLcdLine(0, "Frequencia (Hz)");
-      printLcdLine(1, String(frequency, 2) + " Hz");
-      break;
-
-    case 4:  // Fator de Potencia
-      printLcdLine(0, "Fator Potencia");
-      if (!isnan(pf)) {
-        printLcdLine(1, String(pf, 2));
-      } else {
-        printLcdLine(1, "N/A");
-      }
-      break;
-
-    case 5:  // Energia Total
-      printLcdLine(0, "Energia (kWh)");
-      printLcdLine(1, String(energy, 3) + " kWh");
-      break;
+  if (lcdDisplayIndex == 0) {
+    printLcdLine(0, formatMetricLine("Tensao", String(voltage, 1) + " V"));
+    printLcdLine(1, formatMetricLine("Corrente", String(current, 3) + " A"));
+    printLcdLine(2, formatMetricLine("Frequencia", String(frequency, 2) + " Hz"));
+    printLcdLine(3, "");
+    return;
   }
 
-  // Mostra rede/tipo e status de conectividade nas linhas 2 e 3.
-  printLcdLine(2, currentNetworkLineForLcd());
-  printLcdLine(
-      3,
-      String("Tipo:") + currentWifiTypeLabel() +
-          " MQTT:" +
-          (mqttClient.connected() ? "ON" : "OFF"));
+  if (lcdDisplayIndex == 1) {
+    printLcdLine(0, formatMetricLine("P.Ativa", String(power, 2) + " W"));
+    printLcdLine(1, formatMetricLine("P.Apte.", String(apparentPower, 2) + " VA"));
+    printLcdLine(2, formatMetricLine("P.Reat.", String(reactivePower, 2) + " VAr"));
+    printLcdLine(3, formatMetricLine("FP", isnan(pf) ? String("N/A") : String(pf, 3)));
+    return;
+  }
+
+  if (lcdDisplayIndex == 2) {
+    printLcdLine(0, formatMetricLine("E.Ativa", String(energy, 2) + " kWh"));
+    printLcdLine(1, formatMetricLine("E.Apte.", String(apparentEnergyKvah, 2) + " kVAh"));
+    printLcdLine(2, formatMetricLine("E.Reat.", String(reactiveEnergyKvarh, 2) + " kVArh"));
+    printLcdLine(3, "");
+    return;
+  }
+
+  {
+    String wifiStatus = WiFi.status() == WL_CONNECTED ? "STA OK" :
+                        (provisioningMode || fallbackApActive ? "AP ativo" : "sem conexao");
+    printLcdLine(0, String("WiFi: ") + wifiStatus);
+    printLcdLine(1, currentNetworkLineForLcd());
+    printLcdLine(2, String("MQTT:") + (mqttClient.connected() ? "OK" : "OFF") + " Fila:" + queueCount);
+    printLcdLine(3, String("Broker:") + String(config.mqttHost).substring(0, 13));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

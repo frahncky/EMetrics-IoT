@@ -60,15 +60,16 @@ class BackgroundMqttConfig {
       }
     }
 
+    final topic = prefs.getString('mqtt_topic') ?? 'emetrics/pzem';
     return BackgroundMqttConfig(
       broker: prefs.getString('mqtt_broker') ?? 'test.mosquitto.org',
       port: prefs.getInt('mqtt_port') ?? 1883,
       clientId: prefs.getString('mqtt_client_id') ?? 'emetrics_app',
       username: username,
       password: password,
-      topic: prefs.getString('mqtt_topic') ?? 'emetrics/pzem',
+      topic: topic,
       requestTopic:
-          prefs.getString('mqtt_request_topic') ?? 'emetrics/pzem/history/request',
+          prefs.getString('mqtt_request_topic') ?? '$topic/history/request',
       useTls: prefs.getBool('mqtt_use_tls') ?? false,
     );
   }

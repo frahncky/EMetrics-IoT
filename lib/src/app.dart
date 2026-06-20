@@ -32,6 +32,7 @@ class _AppInitializer extends ConsumerWidget {
     ref.listen(deviceStorageTrackerProvider, (previous, next) {});
     ref.listen(localMetricCollectorProvider, (previous, next) {});
     ref.listen(integrationAutoSyncProvider, (previous, next) {});
+    ref.listen(mqttMetricSaverProvider, (previous, next) {});
     final isDarkMode = ref.watch(themeProvider);
 
     // Escolhe tema com base na preferência salva pelo usuário.

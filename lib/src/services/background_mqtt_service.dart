@@ -223,8 +223,7 @@ class BackgroundMqttService {
           mqtt!.subscribe();
         }
 
-        await mqttSub?.cancel();
-        mqttSub = mqtt!.updates.listen((messages) async {
+        mqttSub ??= mqtt!.updates.listen((messages) async {
           if (messages.isEmpty) {
             return;
           }

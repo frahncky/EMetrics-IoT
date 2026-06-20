@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'metric_provider.dart';
@@ -70,9 +71,7 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
       final metric = parseMetricFromMqtt(payloadString);
       if (metric != null) {
         final repo = ref.read(metricRepositoryProvider);
-        final activeProfile = await ref
-            .read(mqttSettingsProvider.notifier)
-            .load();
+        final activeProfile = ref.read(mqttSettingsProvider);
         await repo.insertMetric(metric);
         final now = DateTime.now();
         if (lastRetentionCleanupAt == null ||
@@ -96,6 +95,13 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
           ref.invalidate(metricsByRangeProvider);
         });
       }
+    }).catchError((Object e, StackTrace st) {
+      developer.log(
+        'Falha ao persistir métrica MQTT',
+        name: 'mqttMetricSaverProvider',
+        error: e,
+        stackTrace: st,
+      );
     });
   });
 });

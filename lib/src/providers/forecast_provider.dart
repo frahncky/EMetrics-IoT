@@ -52,7 +52,7 @@ ForecastSnapshot? buildForecastForMetrics(List<Metric> metrics) {
   final averagePower = y.reduce((left, right) => left + right) / y.length;
   final lastMetric = recent.last;
   final projectedPower = math.max(lastMetric.power + (slope * 30), 0).toDouble();
-  final projectedEnergy = lastMetric.energy + ((averagePower / 1000) * 1);
+  final projectedEnergy = (averagePower / 1000) * 1;
 
   return ForecastSnapshot(
     projectedPowerWatts: projectedPower,

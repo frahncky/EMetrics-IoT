@@ -224,66 +224,52 @@ class RealtimeChart extends ConsumerWidget {
                               leftTitles: AxisTitles(
                                 sideTitles: SideTitles(
                                   showTitles: true,
-                                  reservedSize: 44,
+                                  reservedSize: 38,
                                   interval: scale.horizontalInterval,
-                                  getTitlesWidget: (value, metaData) => Text(
-                                    _formatScaledValue(
-                                      value,
-                                      unitScale,
-                                      field == 'pf',
-                                    ),
-                                    style: TextStyle(
-                                      color: axisTextColor,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              bottomTitles: AxisTitles(
-                                axisNameWidget: Transform.translate(
-                                  offset: const Offset(0, 0),
-                                  child: Text(
-                                    'Amostras',
-                                    style: TextStyle(
-                                      color: axisTextColor.withValues(
-                                        alpha: 0.85,
-                                      ),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                axisNameSize: 16,
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  reservedSize: 26,
-                                  interval: verticalInterval,
-                                  getTitlesWidget: (value, metaData) {
-                                    if (!hasData) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 0),
+                                  getTitlesWidget: (value, meta) =>
+                                      SideTitleWidget(
+                                        axisSide: meta.axisSide,
+                                        fitInside:
+                                            SideTitleFitInsideData.fromTitleMeta(
+                                              meta,
+                                              distanceFromEdge: 4,
+                                            ),
                                         child: Text(
-                                          value.toInt().toString(),
+                                          _formatScaledValue(
+                                            value,
+                                            unitScale,
+                                            field == 'pf',
+                                          ),
                                           style: TextStyle(
                                             color: axisTextColor,
-                                            fontSize: 12,
+                                            fontSize: 10,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                      );
-                                    }
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 0),
+                                      ),
+                                ),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 22,
+                                  interval: verticalInterval,
+                                  getTitlesWidget: (value, meta) {
+                                    final label = hasData
+                                        ? _buildBottomLabel(value, data, labelStep)
+                                        : value.toInt().toString();
+                                    return SideTitleWidget(
+                                      axisSide: meta.axisSide,
+                                      fitInside:
+                                          SideTitleFitInsideData.fromTitleMeta(
+                                            meta,
+                                            distanceFromEdge: 4,
+                                          ),
                                       child: Text(
-                                        _buildBottomLabel(
-                                          value,
-                                          data,
-                                          labelStep,
-                                        ),
+                                        label,
                                         style: TextStyle(
                                           color: axisTextColor,
-                                          fontSize: 12,
+                                          fontSize: 10,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -507,7 +493,7 @@ class RealtimeChart extends ConsumerWidget {
     final paddedMin = minY - padding;
     final paddedMax = maxY + padding;
     final safeMax = paddedMax <= paddedMin ? paddedMin + 1 : paddedMax;
-    final interval = (safeMax - paddedMin) / 4;
+    final interval = (safeMax - paddedMin) / 3;
 
     return _AxisScale(paddedMin, safeMax, interval > 0 ? interval : 1);
   }
