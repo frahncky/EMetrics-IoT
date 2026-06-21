@@ -374,12 +374,12 @@ function MonitorDashboard({
 
       <div className="metric-grid" style={{ marginBottom: 20 }}>
         <MetricCard label="Tensão" value={format(telemetry?.voltage)} unit="V" accent={telemetry && (telemetry.voltage < alertSettings.voltageMin || telemetry.voltage > alertSettings.voltageMax) ? C.red : C.cyan} />
-        <MetricCard label="Corrente" value={format(telemetry?.current)} unit="A" accent={C.purple} />
-        <MetricCard label="Frequência" value={format(telemetry?.frequency, 1)} unit="Hz" accent={C.cyan} />
+        <MetricCard label="Corrente" value={format(telemetry?.current, 3)} unit="A" accent={C.purple} />
+        <MetricCard label="Frequência" value={format(telemetry?.frequency, 2)} unit="Hz" accent={C.cyan} />
         <MetricCard label="Energia acumulada" value={format(telemetry?.energy, 3)} unit="kWh" accent={telemetry && telemetry.energy > alertSettings.energyLimit ? C.red : C.green} />
-        <MetricCard label="Potência aparente" value={format(telemetry?.apparentPower, 0)} unit="VA" accent={C.cyan} />
-        <MetricCard label="Potência ativa" value={format(telemetry?.power, 0)} unit="W" accent={C.amber} />
-        <MetricCard label="Potência reativa*" value={format(telemetry?.reactivePower, 0)} unit="VAr" accent={C.purple} />
+        <MetricCard label="Potência aparente" value={format(telemetry?.apparentPower, 2)} unit="VA" accent={C.cyan} />
+        <MetricCard label="Potência ativa" value={format(telemetry?.power, 2)} unit="W" accent={C.amber} />
+        <MetricCard label="Potência reativa*" value={format(telemetry?.reactivePower, 2)} unit="VAr" accent={C.purple} />
         <MetricCard label="Fator de potência" value={format(telemetry?.pf)} unit="" accent={C.green} />
       </div>
 
