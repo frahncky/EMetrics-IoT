@@ -1,33 +1,33 @@
-# E-Metrics IoT
+# E-Metrics IoT 📊⚡
 
-Plataforma para monitoramento de energia com duas frentes:
+Plataforma de monitoramento elétrico com foco em IoT, composta por:
 
-- App Flutter para operação local, histórico e alertas.
-- Dashboard web para telemetria MQTT em tempo real.
+- App Flutter para operação local, histórico, alertas e exportação.
+- Dashboard web em tempo real para telemetria MQTT.
 
-## Status
+## 🚀 Links rápidos
 
 - Repositório: https://github.com/frahncky/EMetrics-IoT
-- Dashboard publicado (Cloudflare Pages): https://emetricsiot.pages.dev
+- Dashboard em produção: https://emetricsiot.pages.dev
 
-## Principais recursos
+## 🎯 Visão geral
 
-- Leitura em tempo real de tensão, corrente, frequência, energia e potências.
-- Visualização gráfica de tendência (potências, corrente e fator de potência).
-- Configuração de conexão MQTT (broker WebSocket, tópico, credenciais).
-- Persistência local no app Flutter via SQLite.
-- Exportação de histórico no app (CSV/PDF) e alertas locais.
+- Monitoramento em tempo real de tensão, corrente, frequência, energia e potências.
+- Dashboard com tendências ao vivo e status de conexão/dispositivo.
+- Persistência local com SQLite no app Flutter.
+- Exportação de histórico para CSV/PDF e alertas locais.
+- Deploy web no Cloudflare Pages com integração GitHub.
 
-## Stack
+## 🧰 Stack tecnológica
 
 - Flutter + Dart
 - Riverpod
 - MQTT client
 - SQLite (sqflite)
 - Vite + React (dashboard web)
-- Cloudflare Pages (hosting web)
+- Cloudflare Pages
 
-## Estrutura do repositório
+## 🏗️ Estrutura do projeto
 
 ```text
 lib/                         # app Flutter
@@ -49,14 +49,14 @@ firmware/                    # firmware ESP32 (exemplos)
 docs/                        # documentação de apoio
 ```
 
-## Como executar (app Flutter)
+## 📱 Como rodar o app Flutter
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-## Como executar (dashboard web)
+## 🌐 Como rodar o dashboard web
 
 ```bash
 cd dashboard_e_metrics_iot
@@ -64,9 +64,9 @@ npm install
 npm run dev
 ```
 
-## Build e qualidade
+## ✅ Qualidade e build
 
-App Flutter:
+Flutter:
 
 ```bash
 flutter analyze
@@ -74,16 +74,16 @@ flutter test
 flutter build apk
 ```
 
-Dashboard web:
+Dashboard:
 
 ```bash
 cd dashboard_e_metrics_iot
 npm run build
 ```
 
-## Deploy do dashboard no Cloudflare
+## ☁️ Deploy no Cloudflare Pages
 
-Deploy manual por CLI:
+Manual (CLI):
 
 ```bash
 cd dashboard_e_metrics_iot
@@ -91,7 +91,7 @@ npm run build:cloudflare
 npm run deploy:cloudflare
 ```
 
-Deploy automático via GitHub/Cloudflare Pages:
+Automático (GitHub + Pages):
 
 - Project: emetricsiot
 - Production branch: main
@@ -99,7 +99,7 @@ Deploy automático via GitHub/Cloudflare Pages:
 - Build command: npm run build
 - Build output directory: dist
 
-## Payload MQTT esperado
+## 🔌 Payload MQTT esperado
 
 ```json
 {
@@ -107,13 +107,13 @@ Deploy automático via GitHub/Cloudflare Pages:
   "current": 5.234,
   "frequency": 60.02,
   "power": 1146.25,
-  "apparentPower": 1210.40,
+  "apparentPower": 1210.4,
   "reactivePower": 386.77,
   "energy": 45.601,
   "pf": 0.98
 }
 ```
 
-## Licença
+## 🔒 Licença
 
 Projeto privado.
