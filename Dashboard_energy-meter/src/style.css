@@ -1,0 +1,133 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #121719;
+}
+
+button, input {
+  font-family: inherit;
+}
+
+button {
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid #79aeb9;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.primary-button,
+.secondary-button {
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 9px 12px;
+}
+
+.primary-button {
+  background: #c5a16c;
+  border: 1px solid #c5a16c;
+  color: #121719;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #d1b27f;
+}
+
+.secondary-button {
+  background: transparent;
+  border: 1px solid #3b474a;
+  color: #d7dfdd;
+}
+
+.secondary-button:hover {
+  border-color: #879593;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.connection-row {
+  display: grid;
+  align-items: end;
+  gap: 10px;
+  grid-template-columns: minmax(230px, 2fr) minmax(140px, 1fr) minmax(100px, 0.7fr) minmax(100px, 0.7fr) auto;
+}
+
+.connection-actions {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.alert-settings-row {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+}
+
+.validation-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.analysis-grid,
+.live-chart-grid,
+.diagnosis-grid,
+.settings-pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.status-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .connection-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alert-settings-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .metric-grid,
+  .validation-kpis,
+  .analysis-grid,
+  .live-chart-grid,
+  .diagnosis-grid,
+  .settings-pair,
+  .connection-row,
+  .alert-settings-row {
+    grid-template-columns: 1fr;
+  }
+
+  .status-row > span:last-child {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+}
