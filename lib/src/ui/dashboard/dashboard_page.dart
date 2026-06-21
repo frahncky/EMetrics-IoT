@@ -4,7 +4,6 @@ import '../../providers/mqtt_status_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
-import '../../providers/dashboard_preferences_provider.dart';
 import '../../providers/metric_provider.dart';
 import '../../theme/app_colors.dart';
 import 'dashboard_tabs.dart';
@@ -51,7 +50,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     ref.watch(mqttMetricSaverProvider);
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final metricsAsync = ref.watch(metricsProvider);
-    final dashboardPreferences = ref.watch(dashboardPreferencesProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
