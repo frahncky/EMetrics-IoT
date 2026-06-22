@@ -7,6 +7,7 @@ import 'package:path/path.dart';
 /// - v1 → v2: criou índice único em `metrics` para evitar leituras duplicadas.
 /// - v2 → v3: adicionou tabela `integration_sync_queue` para fila de exportação.
 /// - v3 → v4: adicionou colunas `temperature` (E3) e `crc_errors` (E8) em `metrics`.
+/// - v4 → v5: adicionou `received_at` para diferenciar hora de medição e chegada.
 class LocalDatabase {
   static Database? _db;
 
@@ -21,12 +22,13 @@ class LocalDatabase {
     final path = join(dbPath, 'emetrics.db');
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE IF NOT EXISTS metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp INTEGER,
+            received_at INTEGER,
             voltage REAL,
             current REAL,
             power REAL,
@@ -48,11 +50,12 @@ class LocalDatabase {
           await _createIntegrationSyncQueueTable(db);
         }
         if (oldVersion < 4) {
+          await db.execute('ALTER TABLE metrics ADD COLUMN temperature REAL');
+          await db.execute('ALTER TABLE metrics ADD COLUMN crc_errors INTEGER');
+        }
+        if (oldVersion < 5) {
           await db.execute(
-            'ALTER TABLE metrics ADD COLUMN temperature REAL',
-          );
-          await db.execute(
-            'ALTER TABLE metrics ADD COLUMN crc_errors INTEGER',
+            'ALTER TABLE metrics ADD COLUMN received_at INTEGER',
           );
         }
       },

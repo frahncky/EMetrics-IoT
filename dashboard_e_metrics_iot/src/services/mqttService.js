@@ -18,6 +18,22 @@ const REQUIRED_FIELDS = [
   "energy",
 ];
 
+function optionalFiniteNumber(value) {
+  if (value == null) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function measuredAtFromPayload(decoded) {
+  if (decoded.timeSynced === false) return null;
+
+  const timestamp = optionalFiniteNumber(decoded.timestamp);
+  if (timestamp == null || timestamp <= 0) return null;
+
+  const measuredAt = new Date(timestamp);
+  return Number.isNaN(measuredAt.getTime()) ? null : measuredAt;
+}
+
 export function parseTelemetry(payload) {
   const decoded = JSON.parse(payload.toString());
 
@@ -33,6 +49,8 @@ export function parseTelemetry(payload) {
   const power = Number(decoded.power);
   const apparentPower = voltage * current;
   const reactivePower = Math.sqrt(Math.max(0, apparentPower ** 2 - power ** 2));
+  const receivedAt = new Date();
+  const measuredAt = measuredAtFromPayload(decoded);
 
   return {
     voltage,
@@ -44,10 +62,12 @@ export function parseTelemetry(payload) {
     pf: Number(decoded.pf),
     frequency: Number(decoded.frequency),
     energy: Number(decoded.energy),
-    temperature: decoded.temperature != null ? Number(decoded.temperature) : null,
-    crcErrors: decoded.crcErrors != null ? Number(decoded.crcErrors) : null,
+    temperature: optionalFiniteNumber(decoded.temperature),
+    crcErrors: optionalFiniteNumber(decoded.crcErrors),
+    sequence: optionalFiniteNumber(decoded.sequence),
+    measuredAt,
     storage: decoded.storage ?? null,
-    receivedAt: new Date(),
+    receivedAt,
   };
 }
 

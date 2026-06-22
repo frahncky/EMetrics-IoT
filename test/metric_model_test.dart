@@ -51,6 +51,7 @@ void main() {
 
     test('Metric properties should be preserved after round-trip', () {
       final timestamp = DateTime(2024, 5, 1, 12, 30);
+      final receivedAt = timestamp.add(const Duration(seconds: 2));
       final metric = Metric(
         id: 1,
         voltage: 220.5,
@@ -60,12 +61,14 @@ void main() {
         pf: 0.98,
         frequency: 60.0,
         timestamp: timestamp,
+        receivedAt: receivedAt,
       );
 
       final map = metric.toMap();
       final metric2 = Metric.fromMap(map);
 
       expect(metric2.id, metric.id);
+      expect(metric2.receivedAt, metric.receivedAt);
       expect(metric2.voltage, metric.voltage);
       expect(metric2.current, metric.current);
       expect(metric2.power, metric.power);

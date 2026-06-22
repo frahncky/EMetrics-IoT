@@ -8,8 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FixedMqttStatusNotifier extends MqttStatusNotifier {
-  _FixedMqttStatusNotifier(MqttStatusState initial)
-    : super(() async => false) {
+  _FixedMqttStatusNotifier(MqttStatusState initial) : super(() async => false) {
     state = initial;
   }
 }
@@ -28,9 +27,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            appBar: AppBar(
-              actions: const [MqttConnectionStatusIcon()],
-            ),
+            appBar: AppBar(actions: const [MqttConnectionStatusIcon()]),
           ),
         ),
       ),
@@ -45,9 +42,7 @@ void main() {
     expect(find.text('Desconectar'), findsOneWidget);
   });
 
-  testWidgets('mostra conexão MQTT do app com ícone de nuvem', (
-    tester,
-  ) async {
+  testWidgets('mostra conexão MQTT do app com ícone de nuvem', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -69,9 +64,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            appBar: AppBar(
-              actions: const [MqttConnectionStatusIcon()],
-            ),
+            appBar: AppBar(actions: const [MqttConnectionStatusIcon()]),
           ),
         ),
       ),
@@ -92,7 +85,7 @@ void main() {
     'mostra medidor ativo quando há leitura recente mesmo anterior ao connect MQTT',
     (tester) async {
       final connectedAt = DateTime.now();
-      final oldReading = connectedAt.subtract(const Duration(minutes: 1));
+      final oldReading = connectedAt.subtract(const Duration(seconds: 10));
 
       await tester.pumpWidget(
         ProviderScope(
@@ -127,9 +120,7 @@ void main() {
           ],
           child: MaterialApp(
             home: Scaffold(
-              appBar: AppBar(
-                actions: const [MqttConnectionStatusIcon()],
-              ),
+              appBar: AppBar(actions: const [MqttConnectionStatusIcon()]),
             ),
           ),
         ),
@@ -137,9 +128,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final deviceIcon = tester.widget<Icon>(
-        find.byIcon(Icons.electric_meter),
-      );
+      final deviceIcon = tester.widget<Icon>(find.byIcon(Icons.electric_meter));
       expect(deviceIcon.color, AppColors.statusSuccess);
 
       await tester.tap(find.byIcon(Icons.electric_meter));
@@ -152,73 +141,186 @@ void main() {
     },
   );
 
-  testWidgets(
-    'mostra medidor ativo por leitura local quando MQTT está desconectado',
-    (tester) async {
-      final recentReading = DateTime.now();
+  testWidgets('mostra medidor indisponível logo após desconexão do MQTT', (
+    tester,
+  ) async {
+    final recentReading = DateTime.now();
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            metricsProvider.overrideWith(
-              (ref) async => [
-                Metric(
-                  timestamp: recentReading,
-                  voltage: 220,
-                  current: 1,
-                  power: 220,
-                  pf: 0.95,
-                  frequency: 60,
-                  energy: 1,
-                ),
-              ],
-            ),
-            mqttStatusProvider.overrideWith(
-              (ref) => _FixedMqttStatusNotifier(
-                const MqttStatusState(
-                  broker: 'test.mosquitto.org',
-                  port: 1883,
-                  topic: 'emetrics/pzem',
-                  useTls: false,
-                  phase: MqttConnectionPhase.disconnected,
-                  backgroundActive: false,
-                  lastMessage: 'Broker MQTT desconectado.',
-                ),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          metricsProvider.overrideWith(
+            (ref) async => [
+              Metric(
+                timestamp: recentReading,
+                voltage: 220,
+                current: 1,
+                power: 220,
+                pf: 0.95,
+                frequency: 60,
+                energy: 1,
               ),
-            ),
-          ],
-          child: MaterialApp(
-            home: Scaffold(
-              appBar: AppBar(
-                actions: const [MqttConnectionStatusIcon()],
+            ],
+          ),
+          mqttStatusProvider.overrideWith(
+            (ref) => _FixedMqttStatusNotifier(
+              MqttStatusState(
+                broker: 'test.mosquitto.org',
+                port: 1883,
+                topic: 'emetrics/pzem',
+                useTls: false,
+                phase: MqttConnectionPhase.disconnected,
+                backgroundActive: false,
+                lastConnectedAt: recentReading,
+                lastMessage: 'Broker MQTT desconectado.',
               ),
             ),
           ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(actions: const [MqttConnectionStatusIcon()]),
+          ),
         ),
-      );
+      ),
+    );
 
-      await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
 
-      final deviceIcon = tester.widget<Icon>(
-        find.byIcon(Icons.electric_meter),
-      );
-      expect(deviceIcon.color, AppColors.statusSuccess);
+    final deviceIcon = tester.widget<Icon>(find.byIcon(Icons.electric_meter));
+    expect(deviceIcon.color, AppColors.statusIdle);
 
-      await tester.tap(find.byIcon(Icons.electric_meter));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.electric_meter));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.textContaining('Medidor com leitura local ativa.'),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(
+      find.text('Monitoramento MQTT desconectado. Medidor sem telemetria.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('mostra medidor com alerta quando a telemetria está atrasada', (
+    tester,
+  ) async {
+    final connectedAt = DateTime.now().subtract(const Duration(seconds: 30));
+    final staleReading = DateTime.now().subtract(const Duration(seconds: 30));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          metricsProvider.overrideWith(
+            (ref) async => [
+              Metric(
+                timestamp: staleReading,
+                voltage: 220,
+                current: 1,
+                power: 220,
+                pf: 0.95,
+                frequency: 60,
+                energy: 1,
+              ),
+            ],
+          ),
+          mqttStatusProvider.overrideWith(
+            (ref) => _FixedMqttStatusNotifier(
+              MqttStatusState(
+                broker: 'test.mosquitto.org',
+                port: 1883,
+                topic: 'emetrics/pzem',
+                useTls: false,
+                phase: MqttConnectionPhase.connected,
+                backgroundActive: false,
+                lastConnectedAt: connectedAt,
+                lastMessage: 'Broker MQTT conectado.',
+              ),
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(actions: const [MqttConnectionStatusIcon()]),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final deviceIcon = tester.widget<Icon>(find.byIcon(Icons.electric_meter));
+    expect(deviceIcon.color, AppColors.statusWarning);
+
+    await tester.tap(find.byIcon(Icons.electric_meter));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Medidor com telemetria atrasada.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Medidor conectado com envio/recebimento de dados.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('mostra medidor com erro após um minuto sem telemetria', (
+    tester,
+  ) async {
+    final staleReading = DateTime.now().subtract(const Duration(minutes: 1));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          metricsProvider.overrideWith(
+            (ref) async => [
+              Metric(
+                timestamp: staleReading,
+                voltage: 220,
+                current: 1,
+                power: 220,
+                pf: 0.95,
+                frequency: 60,
+                energy: 1,
+              ),
+            ],
+          ),
+          mqttStatusProvider.overrideWith(
+            (ref) => _FixedMqttStatusNotifier(
+              MqttStatusState(
+                broker: 'test.mosquitto.org',
+                port: 1883,
+                topic: 'emetrics/pzem',
+                useTls: false,
+                phase: MqttConnectionPhase.connected,
+                backgroundActive: false,
+                lastConnectedAt: staleReading,
+                lastMessage: 'Broker MQTT conectado.',
+              ),
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(actions: const [MqttConnectionStatusIcon()]),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final deviceIcon = tester.widget<Icon>(find.byIcon(Icons.electric_meter));
+    expect(deviceIcon.color, AppColors.statusError);
+
+    await tester.tap(find.byIcon(Icons.electric_meter));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Medidor sem telemetria'), findsOneWidget);
+  });
 
   testWidgets(
-    'mostra medidor conectado quando a leitura existe mas está antiga',
+    'usa a hora de recebimento para a cor quando a medição foi feita antes',
     (tester) async {
-      final connectedAt = DateTime.now().subtract(const Duration(minutes: 10));
-      final staleReading = DateTime.now().subtract(const Duration(minutes: 6));
+      final receivedAt = DateTime.now();
+      final measuredAt = receivedAt.subtract(const Duration(minutes: 10));
 
       await tester.pumpWidget(
         ProviderScope(
@@ -226,7 +328,8 @@ void main() {
             metricsProvider.overrideWith(
               (ref) async => [
                 Metric(
-                  timestamp: staleReading,
+                  timestamp: measuredAt,
+                  receivedAt: receivedAt,
                   voltage: 220,
                   current: 1,
                   power: 220,
@@ -245,7 +348,7 @@ void main() {
                   useTls: false,
                   phase: MqttConnectionPhase.connected,
                   backgroundActive: false,
-                  lastConnectedAt: connectedAt,
+                  lastConnectedAt: receivedAt,
                   lastMessage: 'Broker MQTT conectado.',
                 ),
               ),
@@ -253,9 +356,7 @@ void main() {
           ],
           child: MaterialApp(
             home: Scaffold(
-              appBar: AppBar(
-                actions: const [MqttConnectionStatusIcon()],
-              ),
+              appBar: AppBar(actions: const [MqttConnectionStatusIcon()]),
             ),
           ),
         ),
@@ -263,83 +364,65 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      final deviceIcon = tester.widget<Icon>(
-        find.byIcon(Icons.electric_meter),
-      );
-      expect(deviceIcon.color, AppColors.statusWarning);
-
-      await tester.tap(find.byIcon(Icons.electric_meter));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('Medidor conectado. Última leitura'), findsOneWidget);
-      expect(
-        find.text('Medidor conectado com envio/recebimento de dados.'),
-        findsNothing,
-      );
-    },
-  );
-
-  testWidgets(
-    'mostra medidor ativo quando há leitura recente',
-    (tester) async {
-      final connectedAt = DateTime.now().subtract(const Duration(minutes: 1));
-      final recentReading = DateTime.now();
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            metricsProvider.overrideWith(
-              (ref) async => [
-                Metric(
-                  timestamp: recentReading,
-                  voltage: 220,
-                  current: 1,
-                  power: 220,
-                  pf: 0.95,
-                  frequency: 60,
-                  energy: 1,
-                ),
-              ],
-            ),
-            mqttStatusProvider.overrideWith(
-              (ref) => _FixedMqttStatusNotifier(
-                MqttStatusState(
-                  broker: 'test.mosquitto.org',
-                  port: 1883,
-                  topic: 'emetrics/pzem',
-                  useTls: false,
-                  phase: MqttConnectionPhase.connected,
-                  backgroundActive: false,
-                  lastConnectedAt: connectedAt,
-                  lastMessage: 'Broker MQTT conectado.',
-                ),
-              ),
-            ),
-          ],
-          child: MaterialApp(
-            home: Scaffold(
-              appBar: AppBar(
-                actions: const [MqttConnectionStatusIcon()],
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.pumpAndSettle();
-
-      final deviceIcon = tester.widget<Icon>(
-        find.byIcon(Icons.electric_meter),
-      );
+      final deviceIcon = tester.widget<Icon>(find.byIcon(Icons.electric_meter));
       expect(deviceIcon.color, AppColors.statusSuccess);
-
-      await tester.tap(find.byIcon(Icons.electric_meter));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.text('Medidor conectado com envio/recebimento de dados.'),
-        findsOneWidget,
-      );
     },
   );
+
+  testWidgets('mostra medidor ativo quando há leitura recente', (tester) async {
+    final connectedAt = DateTime.now().subtract(const Duration(minutes: 1));
+    final recentReading = DateTime.now();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          metricsProvider.overrideWith(
+            (ref) async => [
+              Metric(
+                timestamp: recentReading,
+                voltage: 220,
+                current: 1,
+                power: 220,
+                pf: 0.95,
+                frequency: 60,
+                energy: 1,
+              ),
+            ],
+          ),
+          mqttStatusProvider.overrideWith(
+            (ref) => _FixedMqttStatusNotifier(
+              MqttStatusState(
+                broker: 'test.mosquitto.org',
+                port: 1883,
+                topic: 'emetrics/pzem',
+                useTls: false,
+                phase: MqttConnectionPhase.connected,
+                backgroundActive: false,
+                lastConnectedAt: connectedAt,
+                lastMessage: 'Broker MQTT conectado.',
+              ),
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(actions: const [MqttConnectionStatusIcon()]),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final deviceIcon = tester.widget<Icon>(find.byIcon(Icons.electric_meter));
+    expect(deviceIcon.color, AppColors.statusSuccess);
+
+    await tester.tap(find.byIcon(Icons.electric_meter));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Medidor conectado com envio/recebimento de dados.'),
+      findsOneWidget,
+    );
+  });
 }

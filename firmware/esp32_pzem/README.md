@@ -16,6 +16,11 @@ Exemplo de firmware com provisionamento via AP local para receber Wi-Fi e MQTT d
   "pf": 0.98,
   "frequency": 60.0,
   "energy": 1.23,
+  "temperature": 42.1,
+  "crcErrors": 0,
+  "timestamp": 1746316850000,
+  "sequence": 7,
+  "timeSynced": true,
   "storage": {
     "usingSd": true,
     "sdAvailable": true,
@@ -25,6 +30,11 @@ Exemplo de firmware com provisionamento via AP local para receber Wi-Fi e MQTT d
   }
 }
 ```
+
+- `timestamp` é o instante da medição em epoch de milissegundos. Vale `0`
+  enquanto o NTP ainda não sincronizou; nesse caso `timeSynced` é `false`.
+- `sequence` cresce a cada leitura e reinicia quando o ESP é reiniciado.
+- `temperature` vale `null` quando a variante da placa não oferece sensor interno.
 
 ## Provisionamento pelo app
 
@@ -110,6 +120,7 @@ O app tambem exibe o percentual de uso do SD a partir do campo `storage.sdUsageP
 - TELEMETRY_QUEUE_CAPACITY: quantidade maxima de amostras na fila
 - FLUSH_BATCH_LIMIT: quantas amostras enviar por iteracao do loop
 - TELEMETRY_PAYLOAD_SIZE: tamanho maximo do JSON em bytes
+- MQTT_BUFFER_SIZE: buffer do PubSubClient, incluindo JSON, tópico e cabeçalhos MQTT
 
 Quando a fila lota, a amostra mais antiga e descartada para abrir espaco.
 
