@@ -83,7 +83,11 @@ constexpr unsigned long WIFI_FALLBACK_AP_DELAY_MS = 60UL * 1000UL;
 constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;    // retentativa de reconexao MQTT
 constexpr unsigned long HISTORY_PUBLISH_DELAY_MS = 10;    // pausa entre publicacoes de replay
 constexpr bool MQTT_RETAINED = true;
-constexpr size_t TELEMETRY_PAYLOAD_SIZE = 360;            // bytes por payload JSON
+// O payload inclui metadados de rastreabilidade (E13) e estado do SD. O
+// PubSubClient conta tópico e cabeçalhos dentro do próprio buffer, por isso o
+// buffer MQTT precisa ser maior que o JSON isolado.
+constexpr size_t TELEMETRY_PAYLOAD_SIZE = 512;            // bytes por payload JSON
+constexpr size_t MQTT_BUFFER_SIZE = 768;                  // payload + tópico MQTT + cabeçalhos
 constexpr size_t TELEMETRY_QUEUE_CAPACITY = 30;           // capacidade do buffer circular offline
 constexpr uint8_t FLUSH_BATCH_LIMIT = 5;                  // publicacoes por iteracao do loop
 constexpr uint16_t HISTORY_REPLAY_LIMIT = 300;            // linhas maximas por resposta de historico
@@ -295,6 +299,7 @@ unsigned long lastHistoryRetentionPruneMs = 0;
 
 // E8: Contador de erros de comunicacao PZEM
 uint32_t pzemCrcErrors = 0;
+uint32_t telemetrySequence = 0;  // E13: sequência reinicia a cada boot do ESP
 
 // E10: Compensacao de consumo proprio
 float selfConsumptionWatts = 0.0f; // configuravel via MQTT
@@ -1327,6 +1332,7 @@ void ensureMqttConnected() {
 
   lastMqttAttemptMs = now;
   configureMqttTransport();
+  mqttClient.setBufferSize(MQTT_BUFFER_SIZE);
   mqttClient.setServer(config.mqttHost, config.mqttPort);
   mqttClient.setCallback(onMqttMessage);
 
@@ -1361,8 +1367,8 @@ bool readPzem(float& voltage, float& current, float& power, float& energy, float
   frequency = pzem.frequency();
   pf = pzem.pf();
 
-  if (isnan(voltage) || isnan(current) || isnan(power) || isnan(energy) || isnan(frequency) ||
-      isnan(pf)) {
+  if (!isfinite(voltage) || !isfinite(current) || !isfinite(power) || !isfinite(energy) ||
+      !isfinite(frequency) || !isfinite(pf)) {
     pzemCrcErrors++;  // E8: conta erros de leitura/CRC
     return false;
   }
@@ -1399,30 +1405,42 @@ bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize) {
     power -= selfConsumptionWatts;
   }
 
-  // E3: temperatura interna do ESP32 (sensor built-in)
+  // E3: temperatura interna do ESP32 (sensor built-in). Nem toda variante
+  // do ESP32 oferece esse sensor; nunca publique NaN, pois isso invalida o JSON.
   const float espTemperature = temperatureRead();
+  const bool hasTemperature = isfinite(espTemperature);
+  char temperatureJson[16] = "null";
+  if (hasTemperature) {
+    snprintf(temperatureJson, sizeof(temperatureJson), "%.1f", espTemperature);
+  }
+  const uint64_t timestampMs = currentEpochMs();
+  const uint32_t sequence = ++telemetrySequence;
 
   const DeviceStorageUsage storage = readDeviceStorageUsage();
-  snprintf(payloadBuffer,
-           payloadBufferSize,
-           "{\"voltage\":%.2f,\"current\":%.3f,\"power\":%.2f,\"pf\":%.3f,\"frequency\":%.2f,\"energy\":%.3f,"
-           "\"temperature\":%.1f,\"crcErrors\":%lu,"
-           "\"storage\":{\"usingSd\":%s,\"sdAvailable\":%s,\"sdUsedBytes\":%llu,\"sdTotalBytes\":%llu,\"sdUsagePercent\":%.2f}}",
-           voltage,
-           current,
-           power,
-           pf,
-           frequency,
-           energy,
-           espTemperature,
-           static_cast<unsigned long>(pzemCrcErrors),
-           storage.usingSd ? "true" : "false",
-           storage.sdAvailable ? "true" : "false",
-           static_cast<unsigned long long>(storage.usedBytes),
-           static_cast<unsigned long long>(storage.totalBytes),
-           storage.usagePercent);
+  const int payloadLength = snprintf(
+      payloadBuffer,
+      payloadBufferSize,
+      "{\"voltage\":%.2f,\"current\":%.3f,\"power\":%.2f,\"pf\":%.3f,\"frequency\":%.2f,\"energy\":%.3f,"
+      "\"temperature\":%s,\"crcErrors\":%lu,\"timestamp\":%llu,\"sequence\":%lu,\"timeSynced\":%s,"
+      "\"storage\":{\"usingSd\":%s,\"sdAvailable\":%s,\"sdUsedBytes\":%llu,\"sdTotalBytes\":%llu,\"sdUsagePercent\":%.2f}}",
+      voltage,
+      current,
+      power,
+      pf,
+      frequency,
+      energy,
+      temperatureJson,
+      static_cast<unsigned long>(pzemCrcErrors),
+      static_cast<unsigned long long>(timestampMs),
+      static_cast<unsigned long>(sequence),
+      timestampMs > 0 ? "true" : "false",
+      storage.usingSd ? "true" : "false",
+      storage.sdAvailable ? "true" : "false",
+      static_cast<unsigned long long>(storage.usedBytes),
+      static_cast<unsigned long long>(storage.totalBytes),
+      storage.usagePercent);
 
-  return true;
+  return payloadLength > 0 && static_cast<size_t>(payloadLength) < payloadBufferSize;
 }
 
 void queueLatestMetrics() {

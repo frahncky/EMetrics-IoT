@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/metric_model.dart';
 import '../../providers/metric_provider.dart';
 import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
@@ -13,21 +14,18 @@ import '../../theme/app_colors.dart';
 /// O primeiro ícone representa a conexão MQTT.
 /// O segundo ícone representa se há comunicação recente com o dispositivo.
 class MqttConnectionStatusIcon extends ConsumerWidget {
+  static const _warningAfter = Duration(seconds: 15);
+  static const _errorAfter = Duration(minutes: 1);
+
   final double rightPadding;
 
-  const MqttConnectionStatusIcon({
-    super.key,
-    this.rightPadding = 14,
-  });
+  const MqttConnectionStatusIcon({super.key, this.rightPadding = 14});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(mqttStatusProvider);
     final metricsData = ref.watch(metricsProvider).asData;
-    final lastMetricTime =
-        metricsData != null && metricsData.value.isNotEmpty
-            ? metricsData.value.first.timestamp
-            : null;
+    final lastMetricTime = _lastMetricReceivedAt(metricsData?.value);
 
     final mqttVisual = _mqttVisual(status);
     final deviceVisual = _deviceVisual(status, lastMetricTime);
@@ -40,11 +38,7 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
           Tooltip(
             triggerMode: TooltipTriggerMode.tap,
             message: deviceVisual.message,
-            child: Icon(
-              deviceVisual.icon,
-              color: deviceVisual.color,
-              size: 24,
-            ),
+            child: Icon(deviceVisual.icon, color: deviceVisual.color, size: 24),
           ),
           const SizedBox(width: 8),
           GestureDetector(
@@ -53,11 +47,7 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
             child: Tooltip(
               triggerMode: TooltipTriggerMode.tap,
               message: mqttVisual.message,
-              child: Icon(
-                mqttVisual.icon,
-                color: mqttVisual.color,
-                size: 24,
-              ),
+              child: Icon(mqttVisual.icon, color: mqttVisual.color, size: 24),
             ),
           ),
         ],
@@ -101,7 +91,10 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
     );
   }
 
-  Future<void> _connectFromQuickActions(BuildContext context, WidgetRef ref) async {
+  Future<void> _connectFromQuickActions(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final statusNotifier = ref.read(mqttStatusProvider.notifier);
     try {
       statusNotifier.markConnecting();
@@ -195,6 +188,17 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
     MqttStatusState status,
     DateTime? lastMetricTime,
   ) {
+    // Após uma conexão estabelecida, a desconexão interrompe o recebimento de
+    // telemetria. Sinaliza isso imediatamente, sem esperar o prazo de atraso.
+    if (status.phase == MqttConnectionPhase.disconnected &&
+        status.lastConnectedAt != null) {
+      return const _StatusVisual(
+        icon: Icons.electric_meter,
+        color: AppColors.statusIdle,
+        message: 'Monitoramento MQTT desconectado. Medidor sem telemetria.',
+      );
+    }
+
     if (lastMetricTime == null) {
       return const _StatusVisual(
         icon: Icons.electric_meter_outlined,
@@ -203,12 +207,21 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
       );
     }
 
-    final stale = DateTime.now().difference(lastMetricTime).inMinutes >= 5;
-    if (stale) {
+    final elapsed = DateTime.now().difference(lastMetricTime);
+    if (elapsed >= _errorAfter) {
+      return _StatusVisual(
+        icon: Icons.electric_meter,
+        color: AppColors.statusError,
+        message: 'Medidor sem telemetria há ${_relativeTime(lastMetricTime)}.',
+      );
+    }
+
+    if (elapsed >= _warningAfter) {
       return _StatusVisual(
         icon: Icons.electric_meter,
         color: AppColors.statusWarning,
-        message: 'Medidor conectado. Última leitura ${_relativeTime(lastMetricTime)}.',
+        message:
+            'Medidor com telemetria atrasada. Última leitura ${_relativeTime(lastMetricTime)}.',
       );
     }
 
@@ -235,6 +248,18 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
       message:
           'Medidor com leitura local ativa. Última leitura ${_relativeTime(lastMetricTime)}.',
     );
+  }
+
+  DateTime? _lastMetricReceivedAt(List<Metric>? metrics) {
+    if (metrics == null || metrics.isEmpty) {
+      return null;
+    }
+
+    return metrics
+        .map((metric) => metric.receivedAt ?? metric.timestamp)
+        .reduce(
+          (latest, current) => current.isAfter(latest) ? current : latest,
+        );
   }
 
   String _relativeTime(DateTime value) {

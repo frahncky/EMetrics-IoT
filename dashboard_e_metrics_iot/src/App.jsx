@@ -418,8 +418,9 @@ function MonitorDashboard({
   onRequestNotifications,
 }) {
   const format = (value, digits = 2) => Number.isFinite(value) ? value.toFixed(digits) : "—";
-  const lastUpdate = telemetry?.receivedAt
-    ? telemetry.receivedAt.toLocaleTimeString("pt-BR")
+  const latestMeasurement = telemetry?.measuredAt ?? telemetry?.receivedAt;
+  const lastUpdate = latestMeasurement
+    ? latestMeasurement.toLocaleTimeString("pt-BR")
     : "Aguardando a primeira leitura";
   const mqttTone = connection.phase === "connected" ? "good" : connection.phase === "connecting" ? "warning" : connection.phase === "error" ? "bad" : "muted";
 
@@ -449,15 +450,15 @@ function MonitorDashboard({
         <MetricCard label="Corrente" value={format(telemetry?.current, 3)} unit="A" accent={C.purple} />
         <MetricCard label="Frequência" value={format(telemetry?.frequency, 2)} unit="Hz" accent={C.cyan} />
         <MetricCard label="Energia acumulada" value={format(telemetry?.energy, 3)} unit="kWh" accent={telemetry && telemetry.energy > alertSettings.energyLimit ? C.red : C.green} />
+        {telemetry?.temperature != null && (
+          <MetricCard label="Temp. ESP32" value={format(telemetry.temperature, 1)} unit="°C" accent={C.amber} />
+        )}
         <MetricCard label="Potência aparente" value={format(telemetry?.apparentPower, 2)} unit="VA" accent={C.cyan} />
         <MetricCard label="Potência ativa" value={format(telemetry?.power, 2)} unit="W" accent={C.amber} />
         <MetricCard label="Potência reativa*" value={format(telemetry?.reactivePower, 2)} unit="VAr" accent={C.purple} />
         <MetricCard label="Fator de potência" value={format(telemetry?.pf)} unit="" accent={C.green} />
-        {telemetry?.temperature != null && (
-          <MetricCard label="Temp. ESP32 (E3)" value={format(telemetry.temperature, 1)} unit="°C" accent={C.amber} />
-        )}
         {telemetry?.crcErrors != null && (
-          <MetricCard label="Erros CRC (E8)" value={String(telemetry.crcErrors)} unit="" accent={telemetry.crcErrors > 0 ? C.red : C.green} />
+          <MetricCard label="Erros CRC" value={String(telemetry.crcErrors)} unit="" accent={telemetry.crcErrors > 0 ? C.red : C.green} />
         )}
       </div>
 
@@ -511,7 +512,7 @@ function MonitorDashboard({
         </Card>
 
         {history.some(h => h.temperature != null) && (
-          <Card title="Temperatura ESP32 — deriva térmica (E3)">
+          <Card title="Temperatura ESP32 — deriva térmica">
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
@@ -614,7 +615,15 @@ export default function App() {
   }, []);
 
   const deviceOnline = useMemo(
-    () => Boolean(telemetry && connection.phase === "connected" && clock - telemetry.receivedAt.getTime() <= DEVICE_TIMEOUT_MS),
+    () => {
+      const measurementTime = telemetry?.measuredAt ?? telemetry?.receivedAt;
+      return Boolean(
+        telemetry
+        && connection.phase === "connected"
+        && measurementTime
+        && clock - measurementTime.getTime() <= DEVICE_TIMEOUT_MS,
+      );
+    },
     [clock, connection.phase, telemetry],
   );
 
@@ -670,8 +679,9 @@ export default function App() {
         onConnected: () => setConnection({ phase: "connected", label: "MQTT conectado", message: `Assinando ${mqttConfig.topic.trim()}` }),
         onTelemetry: (nextTelemetry) => {
           setTelemetry(nextTelemetry);
+          const measurementTime = nextTelemetry.measuredAt ?? nextTelemetry.receivedAt;
           setLiveHistory(current => [...current, {
-            time: nextTelemetry.receivedAt.toLocaleTimeString("pt-BR"),
+            time: measurementTime.toLocaleTimeString("pt-BR"),
             power: nextTelemetry.power,
             apparentPower: nextTelemetry.apparentPower,
             reactivePower: nextTelemetry.reactivePower,
