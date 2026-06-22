@@ -451,7 +451,7 @@ function MonitorDashboard({
         <MetricCard label="Frequência" value={format(telemetry?.frequency, 2)} unit="Hz" accent={C.cyan} />
         <MetricCard label="Energia acumulada" value={format(telemetry?.energy, 3)} unit="kWh" accent={telemetry && telemetry.energy > alertSettings.energyLimit ? C.red : C.green} />
         {telemetry?.temperature != null && (
-          <MetricCard label="Temp. ESP32" value={format(telemetry.temperature, 1)} unit="°C" accent={C.amber} />
+          <MetricCard label="Temperatura ESP32" value={format(telemetry.temperature, 1)} unit="°C" accent={C.amber} />
         )}
         <MetricCard label="Potência aparente" value={format(telemetry?.apparentPower, 2)} unit="VA" accent={C.cyan} />
         <MetricCard label="Potência ativa" value={format(telemetry?.power, 2)} unit="W" accent={C.amber} />

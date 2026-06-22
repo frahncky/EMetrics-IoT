@@ -101,10 +101,6 @@ button:disabled {
 }
 
 @media (max-width: 900px) {
-  .metric-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .connection-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -115,7 +111,6 @@ button:disabled {
 }
 
 @media (max-width: 640px) {
-  .metric-grid,
   .validation-kpis,
   .analysis-grid,
   .live-chart-grid,
