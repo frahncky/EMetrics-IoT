@@ -52,6 +52,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     ref.watch(mqttMetricSaverProvider);
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final metricsAsync = ref.watch(metricsProvider);
+    final metrics = metricsAsync.asData?.value;
+    final lastMetric = metrics != null && metrics.isNotEmpty
+        ? metrics.first
+        : null;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -68,10 +72,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                       AppColors.darkSurface,
                       AppColors.darkScaffold.withValues(alpha: 0.9),
                     ]
-                  : [
-                      AppColors.lightCard,
-                      AppColors.lightScaffold,
-                    ],
+                  : [AppColors.lightCard, AppColors.lightScaffold],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -135,47 +136,32 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
       ),
       // Drawer removido
       body: SafeArea(
-        child: metricsAsync.when(
-          data: (metrics) {
-            final last = metrics.isNotEmpty ? metrics.first : null;
-            return CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: 8,
-                          left: 8,
-                          right: 8,
-                          bottom: 0,
-                        ),
-                        child: _MainIndicators(metric: last),
-                      ),
-                    ],
-                  ),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  top: 8,
+                  left: 8,
+                  right: 8,
+                  bottom: 0,
                 ),
-                SliverFillRemaining(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    child: DashboardTabs(),
-                  ),
-                ),
-              ],
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Text(
-              'Erro ao carregar dados: $e',
-              style: const TextStyle(color: AppColors.errorDataText),
+                child: _MainIndicators(metric: lastMetric),
+              ),
             ),
-          ),
+            SliverFillRemaining(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: DashboardTabs(),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
 String formatWithSIPrefix(num value, {int? fractionDigits}) {
   if (value == 0 || value.isNaN) return '--';
   final abs = value.abs();
@@ -352,7 +338,11 @@ class _MainIndicators extends StatelessWidget {
           runSpacing: spacing,
           children: [
             for (final card in cards)
-              SizedBox(key: ValueKey(card.label), width: cardWidth, child: card),
+              SizedBox(
+                key: ValueKey(card.label),
+                width: cardWidth,
+                child: card,
+              ),
           ],
         );
       },
@@ -447,7 +437,9 @@ class _IndicatorCardState extends State<_IndicatorCard>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: widget.color.withValues(alpha: isDarkMode ? 0.14 : 0.16),
+                  color: widget.color.withValues(
+                    alpha: isDarkMode ? 0.14 : 0.16,
+                  ),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -497,7 +489,9 @@ class _IndicatorCardState extends State<_IndicatorCard>
                         const SizedBox(width: 3),
                         Padding(
                           padding: EdgeInsets.only(
-                            bottom: isExtraCompact ? 0 : (widget.compact ? 1 : 2),
+                            bottom: isExtraCompact
+                                ? 0
+                                : (widget.compact ? 1 : 2),
                           ),
                           child: Text(
                             widget.unit!,
