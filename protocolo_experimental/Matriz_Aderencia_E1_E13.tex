@@ -1,0 +1,81 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{geometry}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\geometry{margin=2cm}
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{Matriz de Aderencia do Projeto ao Protocolo Experimental (E1-E13)}
+\author{E-Metrics IoT}
+\date{21/06/2026}
+
+\begin{document}
+\maketitle
+
+\section*{Escopo}
+Este relatorio avalia, sem implementar novas funcionalidades, se o projeto atual
+(codigo do app Flutter, firmware ESP32 e dashboard web) permite executar os ensaios
+definidos no documento \textit{Protocolo Experimental Completo --- ESP32 + PZEM-004T (IEC 62053-21)}.
+
+Classificacao usada:
+\begin{itemize}
+  \item \textbf{Pronto}: cobertura funcional suficiente para executar o ensaio com os recursos atuais.
+  \item \textbf{Parcial}: permite executar parte relevante, mas requer procedimento/manual extra ou lacunas tecnicas.
+  \item \textbf{Nao coberto}: ausente no estado atual.
+\end{itemize}
+
+\section*{Matriz E1-E13}
+\renewcommand{\arraystretch}{1.2}
+\begin{longtable}{L{1cm} L{2.8cm} L{2.1cm} L{6.9cm} L{2.7cm}}
+\hline
+\textbf{Ensaio} & \textbf{Tema} & \textbf{Status} & \textbf{Evidencia no projeto} & \textbf{Observacao} \\
+\hline
+E1 & Varredura de tipos de carga & Parcial & Dashboard de validacao com tabela de erros, dispersoes e Bland-Altman; edicao manual de dados em \texttt{dashboard\_e\_metrics\_iot/src/App.jsx}. & Falta pipeline automatizado de importacao da referencia. \\
+\hline
+E2 & Linearidade e faixa de operacao & Parcial & Graficos e analise suportados no dashboard de validacao (Recharts, KPIs, tabela). & Execucao depende de bancada externa e roteiro manual. \\
+\hline
+E3 & Repetibilidade e deriva termica & Parcial & App/firmware armazenam historico e timestamps; dashboard calcula estatisticas de erro. & Nao ha captura nativa de temperatura do modulo para correlacao termica. \\
+\hline
+E4 & Variacao de tensao de rede & Parcial & Medicoes de V, I, P, FP, f e energia disponiveis no payload e no app. & Controle de tensao e procedimento do ensaio estao fora do software (bancada). \\
+\hline
+E5 & Curva completa de fator de potencia & Parcial & FP, potencia ativa e graficos de correlacao no dashboard. & Cobertura analitica boa; coleta por pontos FP ainda manual. \\
+\hline
+E6 & Variacao de frequencia de rede & Parcial & Frequencia medida no payload e exibida no app/dashboard. & Controle da frequencia exige hardware de bancada externo. \\
+\hline
+E7 & Transitorio e partida de motor & Parcial & Coleta continua e historico permitem observar mudancas de regime. & Nao ha recurso dedicado a captura de inrush com alta resolucao temporal. \\
+\hline
+E8 & EMI & Parcial & Firmware possui robustez de comunicacao e operacao continua. & Sem modulo especifico de injecao/medicao EMI no software. \\
+\hline
+E9 & Carga flutuante e ciclos curtos & Parcial & Historico local + solicitacao de historico via MQTT no app. & Sem automacao de sequencias de carga no software; depende da bancada. \\
+\hline
+E10 & Consumo proprio do sistema & Parcial & Firmware expoe estado de storage e operacao; app exibe status do dispositivo. & Medicao do consumo proprio requer instrumentacao externa; compensacao automatica nao evidenciada como pronta fim-a-fim. \\
+\hline
+E11 & Wi-Fi desligado vs ativo vs hibrido & Parcial & Firmware suporta modos Wi-Fi/AP-STA e fallback AP; app possui monitoramento foreground/background. & Nao foi identificado modo hibrido formal com janela aquisicao (WIFI\_OFF) x transmissao conforme protocolo. \\
+\hline
+E12 & Continuidade e integridade SD card & Pronto & Firmware com SD + fallback SPIFFS, retencao por dias, replay por intervalo e comando \texttt{configureStorage}; app configura retencao e mostra status. & Cobertura forte para ensaio de continuidade/integridade. \\
+\hline
+E13 & Latencia e confiabilidade MQTT & Parcial & App usa QoS atLeastOnce para request/history; firmware tem reconexao, fila em RAM e replay. & Publicacao principal do firmware esta em QoS 0 (limita parte dos criterios comparativos QoS 0/1/2). \\
+\hline
+\end{longtable}
+
+\section*{Conclusao}
+\textbf{Veredito geral}: o projeto \textbf{permite as experiencias}, com melhor cobertura nas frentes
+IoT/armazenamento/historico e analise visual, e cobertura \textbf{parcial} nos ensaios metrologicos
+que dependem de automacao de bancada e instrumentacao externa.
+
+\textbf{Sintese por grupo}:
+\begin{itemize}
+  \item Grupo M (E1-E7): Parcial-alta para analise; execucao experimental depende da bancada.
+  \item Grupo O (E8-E10): Parcial.
+  \item Grupo I (E11-E13): E12 forte/pronto; E11 e E13 parciais.
+\end{itemize}
+
+\end{document}

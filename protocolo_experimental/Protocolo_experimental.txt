@@ -1,0 +1,1421 @@
+Protocolo Experimental Completo — ESP32 + PZEM-004T                             IEC 62053-21
+
+
+
+
+  Protocolo Experimental Completo
+  Validação do Medidor de Energia Monofásico
+  ESP32 + PZEM-004T       ·   13 Ensaios   ·   Foco Metrológico + IoT      ·   IEC 62053-
+  21
+
+   ESP32 + PZEM-004T     13 Ensaios    Metrológico + IoT    IEC 62053-21
+
+
+
+   Este documento consolida o protocolo experimental completo para validação de um
+medidor de energia monofásico baseado em ESP32 e módulo PZEM-004T. São definidos
+13 ensaios organizados em três grupos — Metrológicos, Operacionais e IoT/Embarcado
+— cobrindo desde a varredura básica de cargas até confiabilidade MQTT e integridade de
+dados no SD card. O conjunto atende aos requisitos de metrológica e IoT, com referência
+à norma IEC 62053-21.
+
+
+Sumário
+
+
+0 Infraestrutura da Bancada de Teste                                                        3
+
+1 Varredura de Tipos de Carga                                                                4
+
+2 Linearidade e Faixa de Operação                                                            5
+
+3 Repetibilidade e Deriva Térmica                                                            6
+  3.1 Parte A — Repetibilidade (3 sessões em dias distintos, sistema frio) . . . .           6
+  3.2 Parte B — Deriva térmica (sessão contínua de 2 h) . . . . . . . . . . . . . .          6
+
+4 Variação de Tensão de Rede                                                                 7
+
+5 Curva Completa de Fator de Potência                                                        8
+
+6 Variação de Frequência de Rede                                                             9
+
+7 Transitório e Partida de Motor                                                            10
+
+8 Interferência Eletromagnética (EMI)                                                       11
+
+9 Carga Flutuante e Ciclos Curtos                                                           12
+
+10 Consumo Próprio do Sistema                                                               13
+
+11 Wi-Fi Desligado vs. Ativo vs. Híbrido — Impacto na Medição                               14
+   11.1 Sub-ensaio E11.A — Modo Local (Wi-Fi desligado) . . . . . . . . . . . . . .         14
+
+
+                                           1
+Protocolo Experimental Completo — ESP32 + PZEM-004T                         IEC 62053-21
+
+
+   11.2 Sub-ensaio E11.B — Modo IoT (Wi-Fi ativo contínuo) . . . . . . . . . . . . 15
+   11.3 Sub-ensaio E11.C — Modo Híbrido (sincronização aquisição × transmissão) 15
+   11.4 Análise comparativa dos três modos . . . . . . . . . . . . . . . . . . . . . . 16
+
+12 Continuidade e Integridade do SD Card                                               17
+
+13 Latência e Confiabilidade MQTT                                                      18
+
+14 Métricas Gerais de Comparação                                                       19
+
+15 Diagnóstico pelo Padrão de Erro                                                     20
+
+16 Documentação para Publicação Científica                                             21
+
+17 Resultados E1 – Varredura de Tipos de Carga                                         22
+
+18 Resultados E2 – Linearidade e Faixa de Operação                                     24
+
+19 Resultados E3 – Repetibilidade e Deriva Térmica                                     25
+
+20 Resultados E4 – Variação de Tensão de Rede                                          26
+
+21 Resultados E5 – Curva Completa de Fator de Potência                                 27
+
+22 Resultados E6 – Variação de Frequência de Rede                                      28
+
+23 Resultados E11 – Wi-Fi Desligado vs. Ativo vs. Híbrido                              29
+
+24 Resultados E9, E10 e E13 – Operacionais e IoT                                       31
+
+25 Síntese de Conformidade – IEC 62053-21                                              32
+
+A Dashboard de Análise — React + Recharts                                              34
+  A.1 A.1 — KPIs e Tabela de Erros Relativos . . . . . . . . . . . . . . . . . . . .   34
+  A.2 A.2 — Gráfico de Barras — Erros por Grandeza e Carga . . . . . . . . . .         34
+  A.3 A.3 — Dispersão ∆P× FP e ∆P× THD . . . . . . . . . . . . . . . . . . . .         35
+  A.4 A.4 — Bland-Altman e Tabela de Diagnóstico . . . . . . . . . . . . . . . . .     35
+  A.5 A.5 — Como Utilizar o Dashboard com Dados Reais . . . . . . . . . . . . .        36
+
+
+
+
+                                           2
+Protocolo Experimental Completo — ESP32 + PZEM-004T                              IEC 62053-21
+
+
+ 0. Infraestrutura da Bancada de Teste
+
+   A bancada é montada uma única vez e permanece inalterada durante todos os 13
+ensaios. Os dois medidores (ESP32 e referência) ficam em paralelo ao mesmo ponto
+de medição. Registrar temperatura ambiente e tensão de rede no início de cada sessão;
+aguardar 15 min de warm-up antes de qualquer medição.
+
+                 Tabela 1 – Equipamentos necessários para a bancada de teste
+
+
+ Equipamento                    Especificação mínima       Função
+ Variac                         0–250 V, 10 A              Controle de tensão e frequência
+ Medidor de referência          Classe 1, Inmetro          Referência metrológica
+ Multímetro de precisão         4½ dígitos, CAT III        Verificação pontual V e I
+ Osciloscópio                   ≥2 canais, 100 MHz         Forma de onda, THD, inrush
+ Analisador de rede             Medição de THD e           Ensaios E1, E5, E6
+                                harmônicos
+ Cargas resistivas ajust.       Valores nominais           E1, E2, E4, E5, E6, E9
+                                conhecidos
+ Motor de indução monof.        Potência variável          E1, E7
+ Banco de capacitores           FP capacitivo              E5 (FP leading)
+ Variac / gerador de função     Controle de frequência     E6 (58–62 Hz)
+ Computador + Python            Script coleta + análise    Todos os ensaios
+ Termômetro / termopar          Resolução 0,1 °C           E3 (deriva térmica)
+ Roteador Wi-Fi dedicado        2,4 GHz, canal fixo        E11, E12, E13
+ Broker MQTT local              Mosquitto ou similar       E13
+ SD card + leitor               Classe 10, ≥8 GB           E12
+ Inversor de frequência         Qualquer potência          E8 (EMI)
+
+                              Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                               3
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                 IEC 62053-21
+
+
+
+  GRUPO M — ENSAIOS METROLÓGICOS                                                        E1 – E7
+
+
+ 1. Varredura de Tipos de Carga
+
+
+    E1 Varredura de Tipos de Carga
+ Objetivo: caracterizar o erro em diferentes perfis elétricos — resistivo, indutivo, não-linear e
+ misto
+
+
+
+
+         Tabela 2 – Tipos de carga utilizados no Ensaio E1 e respectivos perfis elétricos
+
+
+ Tipo de carga         Exemplo prático                FP esperado        Por que usar
+ Resistiva pura        Chuveiro / resistência         ≈ 1,00             Linha de base, erro mínimo
+ Indutiva leve         Motor em vazio /               0,6–0,8 lag        Defasagem real V–I
+                       transformador
+ Indutiva pesada       Motor sob carga nominal        0,4–0,6 lag        Corrente e defasagem
+                                                                         elevadas
+ Capacitiva            Banco de capacitores           < 1,0 lead         Quadrante reverso de FP
+ Não-linear            LED, fonte chaveada,           distorcido         Harmônicos — caso crítico
+                       carregador
+ Mista                 Motor + iluminação             variável           Cenário de uso real
+
+                               Fonte: Elaborado pelo autor (2026)
+
+
+
+   Grandezas: V, I, P, S, FP, Wh (janelas 5 min / 30 min / 1 h). Procedimento:
+1. Conectar carga; aguardar estabilização de 2–3 min.
+2. Registrar leituras simultâneas por 10 min; repetir 3 vezes → média e desvio padrão.
+3. Executar varredura dinâmica: ligar/desligar cargas em sequência por 30 min.
+4. Executar endurance de 24 h com carga típica; comparar Wh total ao final.
+
+    Critério de Aprovação
+  • |∆P|, |∆Wh| ≤ 1,0% — cargas resistivas e indutivas (IEC 62053-21 classe 1)
+  • |∆P|, |∆Wh| ≤ 2,0% — cargas não-lineares com THD > 20%
+  • |∆V |, |∆I | ≤ 0,5% em toda a faixa de operação
+
+
+
+
+                                                4
+Protocolo Experimental Completo — ESP32 + PZEM-004T                               IEC 62053-21
+
+
+ 2. Linearidade e Faixa de Operação
+
+
+    E2 Linearidade e Faixa de Operação
+  Objetivo: gerar curva Erro(%) × Corrente(A) — foco Sensores e medição
+
+
+
+
+                Tabela 3 – Níveis de corrente para o ensaio de linearidade (E2)
+
+
+  Nível     % de Inom     Exemplo (Inom = 10 A)      Observação
+   N1         10%                  1,0 A             Região de baixa carga — risco de offset
+                                                     ADC
+   N2         25%                  2,5 A             Carga leve
+   N3         50%                  5,0 A             Carga média — melhor desempenho
+                                                     típico
+   N4          75%                  7,5 A            Carga alta
+   N5         100%                 10,0 A            Carga nominal
+   N6         110%                 11,0 A            Sobrecarga — verificar saturação do
+                                                     sensor
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Usar carga resistiva ajustável (variac + resistência) para controlar a corrente.
+2. Para cada nível: 3 min de estabilização + 5 min de registro.
+3. Plotar: Erro ∆P (%) × Corrente (A) — entregável principal do ensaio.
+4. Repetir com carga indutiva (FP ≈ 0,7) para verificar interação linearidade × FP.
+
+    Critério de Aprovação
+  • |∆P| N1–N5 ≤ 1,0% — erro aproximadamente constante na faixa nominal
+  • |∆P| N6 ≤ 2,0% — sobrecarga, tolerância ampliada
+  • Linearidade: R2 da regressão Erro × Corrente < 0,5 (sem tendência sistemática)
+
+
+
+
+                                              5
+Protocolo Experimental Completo — ESP32 + PZEM-004T                        IEC 62053-21
+
+
+ 3. Repetibilidade e Deriva Térmica
+
+
+   E3 Repetibilidade e Deriva Térmica
+ Objetivo: avaliar estabilidade temporal e sensibilidade do PZEM-004T à temperatura de
+ operação
+
+
+
+
+3.1. Parte A — Repetibilidade (3 sessões em dias distintos, sistema frio)
+1. Mesma carga resistiva de referência; iniciar sempre com sistema frio.
+2. Registrar V, I, P e Wh por 30 min em cada sessão.
+3. Calcular CV% entre sessões: CV = (σ/| x̄ |) × 100.
+
+3.2. Parte B — Deriva térmica (sessão contínua de 2 h)
+1. Registrar temperatura do módulo PZEM a cada 10 min (termopar).
+2. Registrar erro relativo de P a cada 10 min na mesma carga resistiva.
+3. Plotar: ∆P (%) × Tempo (min) e ∆P (%) × Temperatura (°C).
+4. Identificar correlação entre aquecimento e aumento de erro.
+
+   Critério de Aprovação
+  • CV% repetibilidade ≤ 0,5% entre sessões em dias distintos
+  • Deriva térmica:   variação do erro ≤ 0,3% entre sistema frio e temperatura
+    estabilizada
+
+
+
+
+                                           6
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                IEC 62053-21
+
+
+ 4. Variação de Tensão de Rede
+
+
+    E4 Variação de Tensão de Rede
+  Objetivo: verificar robustez frente a afundamentos e elevações de tensão conforme limites
+  ANEEL
+
+
+
+
+              Tabela 4 – Níveis de tensão para o ensaio de variação de rede (E4)
+
+
+  Nível     Tensão (V)       Desvio      Classificação ANEEL
+   T1          198 V          −10%       Precária — limite inferior
+   T2          209 V          −5%        Adequada — limite inferior
+   T3          220 V           0%        Nominal
+   T4          231 V          +5%        Adequada — limite superior
+   T5          242 V          +10%       Precária — limite superior
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Fixar carga resistiva conhecida; ajustar tensão via variac para cada nível.
+2. Aguardar 2 min de estabilização; registrar V, I, P, Wh por 5 min.
+3. Plotar: Erro ∆P (%) × Tensão de alimentação (V).
+4. Repetir com carga não-linear para verificar interação tensão × harmônicos.
+
+    Critério de Aprovação
+  • |∆P| T2–T4 ≤ 1,0% na faixa adequada ANEEL
+  • |∆P| T1, T5 ≤ 2,0% na faixa precária
+  • |∆V | ≤ 0,3% — medidor deve refletir fielmente a tensão real
+
+
+
+
+                                              7
+Protocolo Experimental Completo — ESP32 + PZEM-004T                             IEC 62053-21
+
+
+ 5. Curva Completa de Fator de Potência
+
+
+    E5 Curva Completa de Fator de Potência
+ Objetivo: gerar curva ∆P(%) × FP de 0,1 a 1,0 (lagging e leading) — gráfico central em
+ artigos de medição
+
+
+
+    A curva completa de erro em função do FP é o gráfico mais citado em artigos de
+validação de medidores. O PZEM-004T realiza o cálculo de potência por integração de
+v(t) · i (t); a defasagem entre os canais de V e I no hardware gera um erro sistemático
+que cresce à medida que o FP se afasta de 1,0.
+
+        Tabela 5 – Pontos de operação para a curva completa de fator de potência (E5)
+
+
+       Ponto      FP alvo       Como obter                                Quadrante
+       FP01        0,1 lag      Motor em vazio + indutores em série         Indutivo
+       FP02        0,3 lag      Motor leve                                  Indutivo
+       FP03        0,5 lag      Motor 50% carga                             Indutivo
+       FP04        0,7 lag      Motor 75% carga                             Indutivo
+       FP05       0,85 lag      Motor carga nominal                         Indutivo
+       FP06          1,0        Carga resistiva pura                        Unitário
+       FP07       0,85 lead     Resistiva + banco de capacitores           Capacitivo
+       FP08       0,7 lead      Banco de capacitores maior                 Capacitivo
+       FP09       0,5 lead      Banco de capacitores — predominante        Capacitivo
+
+                              Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Para cada ponto: ajustar carga, confirmar FP no medidor de referência, aguardar
+   2 min.
+2. Registrar P, FP e Wh por 5 min em ambos os medidores.
+3. Calcular ∆P(%) e ∆FP para cada ponto.
+4. Plotar curvas: ∆P(%) × FP e ∆FP(%) × FP — dois gráficos distintos.
+5. Identificar FP crítico onde o erro ultrapassa 1% e 2%.
+
+    Critério de Aprovação
+  • |∆P| FP ≥ 0,5: ≤ 1,0% na faixa de uso mais comum
+  • |∆P| FP < 0,5: ≤ 2,0% em cargas muito indutivas ou capacitivas
+  • |∆FP| ≤ 0,02 em toda a faixa (erro absoluto no fator de potência)
+
+
+
+                                              8
+Protocolo Experimental Completo — ESP32 + PZEM-004T                             IEC 62053-21
+
+
+ 6. Variação de Frequência de Rede
+
+
+    E6 Variação de Frequência de Rede
+ Objetivo: verificar se o PZEM-004T assume 60 Hz fixo ou mede frequência dinamicamente
+
+
+
+   A frequência da rede elétrica brasileira (60 Hz) pode variar entre 59,5 Hz e 60,5 Hz em
+condições normais, e entre 58 Hz e 62 Hz em condições de emergência (ONS).
+
+     Tabela 6 – Níveis de frequência para o ensaio de variação de frequência de rede (E6)
+
+
+  Nível     Frequência       Desvio      Condição ONS
+   F1         58,0 Hz        −2,0 Hz     Emergência — limite inferior
+   F2         59,0 Hz        −1,0 Hz     Alerta
+   F3         59,5 Hz        −0,5 Hz     Normal — limite inferior
+   F4         60,0 Hz        0,0 Hz      Nominal
+   F5         60,5 Hz        +0,5 Hz     Normal — limite superior
+   F6         61,0 Hz        +1,0 Hz     Alerta
+   F7         62,0 Hz        +2,0 Hz     Emergência — limite superior
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Usar variac ou gerador de função para ajustar a frequência de alimentação a cada
+   nível.
+2. Carga resistiva fixa; registrar V, I, P, FP e Wh por 5 min em cada frequência.
+3. Plotar: Erro ∆P (%) × Frequência (Hz) e ∆FP × Frequência (Hz).
+4. Identificar salto discreto de erro em alguma frequência (indica threshold interno do
+   PZEM).
+
+    Critério de Aprovação
+  • |∆P| F3–F5 ≤ 0,5% na faixa normal ONS (59,5–60,5 Hz)
+  • |∆P| F2, F6 ≤ 1,0% na faixa de alerta
+  • |∆P| F1, F7 ≤ 2,0% na faixa de emergência
+
+
+
+
+                                              9
+Protocolo Experimental Completo — ESP32 + PZEM-004T                             IEC 62053-21
+
+
+ 7. Transitório e Partida de Motor
+
+
+   E7 Transitório e Partida de Motor
+ Objetivo: avaliar o medidor durante correntes de inrush (5–7× nominal) e degraus de carga
+
+
+
+
+1. Zerar acumuladores de energia em ambos os medidores com motor em repouso.
+2. Acionar motor; capturar forma de onda de inrush no osciloscópio.
+3. Aguardar regime permanente (≈ 30 s); registrar leituras.
+4. Desligar motor; comparar Wh acumulado durante a partida nos dois medidores.
+5. Repetir 5 vezes; calcular média e desvio do erro de Wh na partida.
+6. Executar degrau de carga: adicionar e retirar 50% da carga com motor em operação.
+7. Medir tempo de resposta do medidor ESP32 a cada degrau.
+
+   Critério de Aprovação
+  • |∆Wh| partida ≤ 5,0% durante transitório de inrush (tolerância ampliada)
+  • |∆P| regime ≤ 1,0% em regime permanente após partida
+  • Tempo de resposta ≤ 2 s para estabilizar a leitura após degrau de carga
+
+
+
+
+                                             10
+Protocolo Experimental Completo — ESP32 + PZEM-004T                              IEC 62053-21
+
+
+
+  GRUPO O — ENSAIOS OPERACIONAIS                                                  E8 – E10
+
+
+ 8. Interferência Eletromagnética (EMI)
+
+
+    E8 Interferência Eletromagnética (EMI)
+ Objetivo:     avaliar imunidade do sistema a ruídos eletromagnéticos de ambiente
+ industrial/laboratorial
+
+
+
+
+          Tabela 7 – Fontes de interferência eletromagnética utilizadas no Ensaio E8
+
+
+ Fonte de EMI                    Distância                 Modo
+ Inversor de frequência          0,5 m e 2,0 m             50 Hz, 30 Hz e varredura
+ Motor em partida repetida       1,0 m                     5 partidas / min
+ Fonte chaveada alta pot.        0,5 m                     Operação contínua
+ Cabo de força paralelo          Paralelo ao cabo          Corrente > 5 A
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Baseline: registrar P e Wh sem EMI ativa (carga resistiva, 5 min).
+2. Ativar fonte de EMI; manter carga inalterada; registrar por 5 min.
+3. Comparar leituras com e sem EMI; calcular variação induzida.
+4. Verificar perdas de pacotes e erros de CRC na comunicação PZEM–ESP32.
+5. Repetir para cada fonte de EMI da tabela.
+
+    Critério de Aprovação
+  • Variação ∆P ≤ 1,0% com EMI ativa vs. baseline sem EMI
+  • Erros CRC ≤ 1% de erros de comunicação PZEM–ESP32 em 5 min
+  • Zero reinicializações espontâneas do ESP32 durante o ensaio
+
+
+
+
+                                             11
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                IEC 62053-21
+
+
+ 9. Carga Flutuante e Ciclos Curtos
+
+
+   E9 Carga Flutuante e Ciclos Curtos
+ Objetivo: simular uso real residencial/laboratorial com variações frequentes e rápidas de carga
+
+
+
+
+                 Tabela 8 – Ciclos de carga flutuante avaliados no Ensaio E9
+
+
+   Ciclo         Dur. ligado        Dur. desligado          Repet.       Carga
+   Rápido            5s                    5s                60×         Resistiva 500 W
+   Médio            30 s                  30 s               20×         Resistiva 500 W
+   Lento            5 min                 5 min              6×          Resistiva 500 W
+  Aleatório        5–120 s               5–60 s             30 min       Resistiva 500 W
+
+                               Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Zerar Wh em ambos os medidores; executar cada ciclo da tabela.
+2. Comparar Wh acumulado ao final de cada sequência.
+3. Calcular erro acumulado: ∆Wh% = (WhESP − WhREF )/WhREF × 100.
+4. Verificar se o erro cresce proporcionalmente ao número de ciclos (indica perda de
+   evento).
+
+   Critério de Aprovação
+  • |∆Wh| ciclo rápido ≤ 3,0% — eventos de 5 s são o caso mais exigente
+  • |∆Wh| ciclo médio ≤ 1,5%
+  • |∆Wh| ciclo lento ≤ 1,0%
+  • Erro não deve crescer proporcionalmente às repetições
+
+
+
+
+                                               12
+Protocolo Experimental Completo — ESP32 + PZEM-004T                           IEC 62053-21
+
+
+ 10. Consumo Próprio do Sistema
+
+
+   E10 Consumo Próprio do Sistema
+ Objetivo: quantificar energia consumida pelo medidor e avaliar necessidade de compensação
+ no firmware
+
+
+
+
+      Tabela 9 – Consumo de potência estimado por componente do sistema de medição
+
+
+    Componente                     Alimentação      Corrente típica    Pot. estimada
+    ESP32 (Wi-Fi ativo)                3,3 V           240 mA             ≈ 0,8 W
+    PZEM-004T                           5V              20 mA             ≈ 0,1 W
+    LCD 16×2 + backlight                5V              60 mA             ≈ 0,3 W
+    Módulo SD card                     3,3 V           100 mA             ≈ 0,3 W
+    Total estimado                      —                 —               ≈ 1,5 W
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Desconectar carga de medição; alimentar apenas o sistema ESP32 + periféricos.
+2. Medir P consumida pelo sistema com o medidor de referência.
+3. Medir nos modos: Wi-Fi ativo, Wi-Fi desativado, deep sleep entre leituras.
+4. Calcular % do consumo próprio em relação à menor carga prevista na aplicação.
+5. Se consumo próprio > 1% da menor carga: implementar desconto automático no
+   firmware.
+
+   Critério de Aprovação
+  • Consumo < 1% da menor carga prevista → dispensa compensação no firmware
+  • Consumo ≥ 1% da menor carga → implementar compensação automática
+  • Valor medido deve constar na seção de incerteza do artigo
+
+
+
+
+                                               13
+Protocolo Experimental Completo — ESP32 + PZEM-004T                            IEC 62053-21
+
+
+
+  GRUPO I — ENSAIOS IoT / EMBARCADO                                            E11 – E13
+
+
+ 11. Wi-Fi Desligado vs. Ativo vs. Híbrido — Impacto na Medição
+
+
+    E11 Wi-Fi Desligado vs. Ativo vs. Híbrido
+  Objetivo: quantificar o trade-off entre conectividade IoT e precisão metrológica nos três
+  modos operacionais
+
+
+
+   A maioria dos artigos de medidores IoT mantém o Wi-Fi ativo continuamente sem
+avaliar o impacto na precisão. O rádio Wi-Fi do ESP32 consome picos de corrente de até
+500 mA por 1–2 ms durante transmissão de pacotes, podendo causar queda de tensão no
+barramento de 3,3 V compartilhado com o PZEM-004T. Este ensaio compara três modos
+operacionais e avalia se um esquema híbrido oferece equilíbrio adequado entre precisão
+e conectividade.
+
+         Tabela 10 – Definição dos três modos operacionais avaliados no Ensaio E11
+
+
+ Modo        Wi-Fi                     Coleta              Transmissão          Perfil
+ A — Local   Desligado permanente      SD / UART           Nenhuma              Máx. precisão
+ B — IoT     Ativo contínuo            Buffer RAM          MQTT tempo real      IoT plena
+ C—          Liga/desliga por janela   Buffer + SD         MQTT por lote        Equilíbrio
+ Híbrido
+
+                              Fonte: Elaborado pelo autor (2026)
+
+
+
+11.1. Sub-ensaio E11.A — Modo Local (Wi-Fi desligado)
+   Estabelece o baseline de máxima precisão do sistema.
+1. Desativar Wi-Fi via WiFi.mode(WIFI_OFF) no firmware; confirmar com monitor serial.
+2. Aplicar carga resistiva fixa; registrar V, I, P, FP e Wh por 30 min.
+3. Repetir 3 vezes → calcular média, desvio padrão e erro relativo vs. referência.
+4. Registrar: temperatura do módulo e tensão no barramento 3,3 V (osciloscópio).
+
+
+
+
+                                                14
+Protocolo Experimental Completo — ESP32 + PZEM-004T                              IEC 62053-21
+
+
+11.2. Sub-ensaio E11.B — Modo IoT (Wi-Fi ativo contínuo)
+
+             Tabela 11 – Níveis de transmissão Wi-Fi avaliados no sub-ensaio E11.B
+
+
+ Nível                       Wi-Fi           MQTT       Duração     O que registrar
+ B1 — Associado               Ativo        Nenhuma       10 min     P, Wh, Vcc 3,3 V
+ ocioso
+ B2 — MQTT lento              Ativo         1 msg/s      10 min     P, Wh, erros CRC, CPU%
+ B3 — MQTT rápido             Ativo        10 msg/s      10 min     P, Wh, erros CRC, CPU%
+ B4 — OTA firmware            Ativo        Download      1 ciclo    P durante download
+
+                              Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Executar cada nível com a mesma carga resistiva do sub-ensaio E11.A.
+2. Calcular ∆Pmodo = Pmodo − Pbaseline(A) para cada nível.
+3. Monitorar tensão no barramento 3,3 V durante transmissão com osciloscópio.
+4. Verificar correlação entre timestamp de transmissão MQTT e spikes na leitura de P.
+5. Contar erros de CRC na UART PZEM–ESP32 durante B3 (transmissão intensa).
+
+11.3. Sub-ensaio E11.C — Modo Híbrido (sincronização aquisição × transmissão)
+
+          Tabela 12 – Janelas de aquisição testadas no sub-ensaio E11.C (modo híbrido)
+
+
+ Janela                          Wi-Fi aquisição        Wi-Fi TX       Lote transmitido
+ 1 s aquisição / 1 s TX               Desligado          Ligado        1 leitura / TX
+ 5 s aquisição / 1 s TX               Desligado          Ligado        5 leituras / TX
+ 10 s aquisição / 1 s TX              Desligado          Ligado        10 leituras / TX
+ 30 s aquisição / 1 s TX              Desligado          Ligado        30 leituras / TX
+
+                              Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Implementar no firmware: WiFi.mode(WIFI_OFF) durante aquisição, WiFi.mode(WIFI_STA)
+   + reconexão durante transmissão.
+2. Para cada janela: registrar P, Wh, erros CRC e latência de publicação MQTT.
+3. Comparar erro relativo de P com baseline do Modo A e com Modo B3.
+4. Identificar a janela ótima: menor erro vs. menor latência de publicação.
+5. Plotar: Erro ∆P (%) × Janela de aquisição (s) — gráfico de trade-off do artigo.
+
+
+
+                                                  15
+Protocolo Experimental Completo — ESP32 + PZEM-004T                            IEC 62053-21
+
+
+11.4. Análise comparativa dos três modos
+
+   Tabela 13 – Comparações entre modos operacionais e entregáveis para publicação (E11)
+
+
+ Comparação                 Gráfico / Tabela                Conclusão esperada
+ Modo A vs. Modo B3         ∆P(%) nos dois modos            Quantifica impacto máx. do
+                                                            Wi-Fi
+ Modo A vs. Modo C          ∆P(%) vs. baseline              Valida eficácia do modo híbrido
+ Modo B vs. Modo C          Erro × Latência MQTT            Trade-off precisão ×
+                                                            conectividade
+ Vcc 3,3 V A vs. B3         Forma de onda osciloscópio      Confirma mecanismo de
+                                                            interferência
+ Janela ótima Modo C        Erro ∆P(%) × Janela (s)         Recomendação de firmware do
+                                                            artigo
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+    Critério de Aprovação
+  • |∆P| Modo A ≤ 1,0% vs. referência — baseline de precisão máxima
+  • |∆P| Modo B3 vs. A: diferença documentada (qualquer valor é resultado válido)
+  • |∆P| Modo C vs. A ≤ 0,2% de degradação — modo híbrido aprovado
+  • Erros CRC B3 ≤ 0,5% em transmissão intensa (10 msg/s)
+  • Spikes Vcc 3,3 V: amplitude < 100 mV e duração < 5 ms
+  • Latência Modo C ≤ janela de aquisição +500 ms para publicação do lote
+
+      Contribuição original: A comparação sistemática dos três modos com quantificação
+      do trade-off precisão × conectividade é uma contribuição metodológica ausente na
+      maioria dos artigos de medidores IoT. O modo híbrido, se validado, constitui uma
+      recomendação de firmware diretamente aplicável a outros sistemas baseados em
+      ESP32.
+
+
+
+
+                                               16
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                  IEC 62053-21
+
+
+ 12. Continuidade e Integridade do SD Card
+
+
+    E12 Continuidade e Integridade do SD Card
+  Objetivo: verificar ausência de corrupção, perda de registros e overflow após 72 h contínuas
+
+
+
+
+          Tabela 14 – Verificações de integridade realizadas no Ensaio E12 (SD card)
+
+
+ Verificação                 Método                                    Critério
+ Perda de registros          Contar linhas CSV esperadas vs. reais     0 linhas perdidas
+ Corrupção de dados          Verificar valores NULL ou fora de faixa   0 registros corrompidos
+ Consistência timestamp      Verificar intervalos regulares            Jitter ≤ 500 ms
+ Overflow de arquivo         Monitorar tamanho do arquivo              Rotação automática
+                                                                       < 1 GB
+ Recuperação pós-queda       Desligar ESP32 abruptamente 3×            Retomar sem corrupção
+ Espaço em disco             Monitorar espaço livre ao longo do        Alerta quando < 10%
+                             tempo
+
+                              Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Iniciar gravação contínua a 1 registro/s com carga típica ativa.
+2. Deixar sistema em operação por 72 h sem intervenção.
+3. Ao final: contar registros, verificar integridade, plotar histograma de jitter.
+4. Simular 3 desligamentos abruptos (retirar alimentação) e verificar recuperação.
+5. Calcular taxa de escrita sustentável e estimar vida útil do SD card.
+
+    Critério de Aprovação
+  • Perda de registros: 0% em operação normal (72 h)
+  • Recuperação: 100% após desligamento abrupto sem corrupção do sistema de
+    arquivos
+  • Jitter: ≤ 500 ms de variação no intervalo entre registros consecutivos
+
+
+
+
+                                               17
+Protocolo Experimental Completo — ESP32 + PZEM-004T                              IEC 62053-21
+
+
+ 13. Latência e Confiabilidade MQTT
+
+
+    E13 Latência e Confiabilidade MQTT
+ Objetivo: caracterizar desempenho da camada de comunicação IoT em condições normais e
+ adversas
+
+
+
+
+             Tabela 15 – Métricas de desempenho avaliadas no Ensaio E13 (MQTT)
+
+
+ Métrica                Como medir                                Ferramenta
+ Latência E2E           Timestamp publicação vs. recepção no      Script Python + broker log
+                        broker
+ Taxa de entrega        Mensagens publicadas vs. recebidas        Mosquitto statistics
+                        (QoS 0/1/2)
+ Tempo de reconexão     Derrubar Wi-Fi; medir tempo até           Cronômetro + log ESP32
+                        retomar MQTT
+ Buffer offline         Verificar reenvio de mensagens            Log broker
+                        pós-reconexão
+ Jitter de timestamp    Desvio entre timestamp ESP32 e NTP        NTP sync log
+                        server
+ Throughput máximo      Taxa máxima de publicação sem perda       Teste de carga Python
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+1. Configurar broker Mosquitto local com log de todas as mensagens.
+2. Publicar 1000 mensagens consecutivas com QoS 0, 1 e 2; medir taxa de entrega.
+3. Medir latência E2E: diferença entre timestamp de publicação e recepção no broker.
+4. Simular perda de Wi-Fi (desligar roteador por 30 s); medir tempo de reconexão.
+5. Verificar se mensagens offline são reenviadas após reconexão (buffer local).
+6. Medir desvio de timestamp do ESP32 em relação ao NTP após 24 h sem sincronização.
+
+    Critério de Aprovação
+  • Entrega QoS 1 ≥ 99,9% em condições normais de rede
+  • Latência E2E ≤ 500 ms em rede local (mediana)
+  • Reconexão ≤ 30 s para retomar MQTT após queda de Wi-Fi
+  • Desvio de timestamp ≤ 1 s após 24 h sem sincronização NTP
+
+
+
+
+                                            18
+Protocolo Experimental Completo — ESP32 + PZEM-004T                            IEC 62053-21
+
+
+ 14. Métricas Gerais de Comparação
+
+
+           Tabela 16 – Métricas gerais de comparação aplicáveis a todos os ensaios
+
+
+ Métrica                  Fórmula                                         Ensaios
+ Erro relativo            Erro(%) = XESPX− XREF
+                                         REF
+                                                × 100                     Todos
+                                 1
+ Bias (média do erro)     bias = n ∑i Erro(i )                            Todos
+                               q
+ Desvio padrão            σ = n1 ∑i (Erro(i ) − bias)2                    Todos
+ Erro máximo              max |Erro(i )|                                  Pior caso
+ Coef. de variação        CV(%) = (σ/|bias|) × 100                        E3
+ Bland-Altman bias        biasBA = n1 ∑i ( XESP − XREF )                  Publicação
+ Limites ±1,96σ           [biasBA − 1,96σ ; biasBA + 1,96σ]               Publicação
+ R2 linearidade           Regressão linear Erro × Corrente                E2
+ Taxa entrega MQTT        Msgs recebidas / Msgs publicadas ×100           E13
+ Jitter SD card           σ do intervalo entre registros consecutivos     E12
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                             19
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                IEC 62053-21
+
+
+ 15. Diagnóstico pelo Padrão de Erro
+
+
+         Tabela 17 – Diagnóstico de erros: padrão observado, ensaio e causa provável
+
+
+ Padrão observado                    Ensaio        Causa provável e ação
+ ∆V e ∆I altos, ∆P proporcional      E1, E2        Ganho ADC ou calibração do sensor —
+                                                   recalibrar
+ ∆P alto, ∆V e ∆I baixos               E1          Falha no cálculo de potência — revisar
+                                                   integração
+ Erro só em cargas não-lineares       E1            f s insuficiente ou sem anti-aliasing
+ ∆P correto, ∆FP errado              E1, E5        Delay de fase entre canais V e I —
+                                                   compensar no FW
+ Deriva crescente em ∆Wh             E1, E3        Erro numérico ou perda de amostras
+ Erro cresce em I baixa (N1, N2)      E2           Offset ADC — adicionar threshold mínimo
+ Erro cresce em I alta (N5, N6)       E2           Saturação do sensor — verificar faixa do
+                                                   PZEM
+ CV% alto entre sessões                E3          Deriva térmica — adicionar compensação de
+                                                   temperatura
+ Erro varia com tensão de              E4          Regulação interna do PZEM — adicionar
+ alimentação                                       filtro LC
+ Curva ∆P× FP assimétrica              E5          Delay diferente nos dois quadrantes
+ lag/lead
+ Salto de erro em frequência           E6          Threshold interno fixo no PZEM —
+ específica                                        documentar limitação
+ |∆Wh| alto na partida do motor        E7          Buffer insuficiente — aumentar f s ou buffer
+ Erro aumenta com EMI ativa            E8          Blindagem inadequada ou trilhas longas no
+                                                   PCB
+ ∆Wh acumula em ciclos rápidos         E9          Eventos < tempo de integração — reduzir Ts
+ ∆P varia entre modos Wi-Fi            E11         Ruído no barramento 3,3 V — desacoplar
+                                                   alimentação
+ Modo híbrido não reduz erro vs.       E11         Interferência irradiada — blindar PCB
+ Modo B
+ Registros perdidos no SD              E12         Buffer insuficiente — usar DMA ou fila RTOS
+ Alta latência MQTT                    E13         Congestionamento ou QoS inadequado
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                              20
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                IEC 62053-21
+
+
+ 16. Documentação para Publicação Científica
+
+    A análise de incerteza combinada deve seguir o GUM (JCGM 100:2008), considerando
+as incertezas do medidor de referência, do variac, da carga e do sistema ESP32+PZEM.
+
+             Tabela 18 – Elementos para publicação científica por periódico-alvo
+
+
+ Elemento                               Ensaio         IEEE         Measurement          EPSR
+                                                      Sensors
+ Curva Erro(%) × Corrente(A)             E2            Obrig.           Obrig.           Recom.
+ Curva Erro(%) × FP (0,1–1,0)            E5            Obrig.           Obrig.           Recom.
+ Bland-Altman plot de P (W)              E1            Recom.           Obrig.           Recom.
+ Scatter ∆P× THD                         E1            Recom.           Recom.           Recom.
+ Curva deriva térmica                    E3            Recom.           Obrig.             —
+ CV% de repetibilidade                   E3            Obrig.           Obrig.           Recom.
+ Curva Erro × Tensão de rede             E4              —              Recom.           Obrig.
+ Curva Erro × Frequência                 E6            Recom.           Recom.           Recom.
+ Tabela conformidade IEC 62053-21      E1–E6           Obrig.           Obrig.           Obrig.
+ Análise de incerteza (GUM)            E1–E13          Obrig.           Obrig.           Obrig.
+ Consumo próprio documentado            E10            Recom.           Recom.             —
+ Trade-off precisão × Wi-Fi (3          E11            Obrig.           Recom.             —
+ modos)
+ Janela ótima modo híbrido               E11           Recom.             —                —
+ Integridade SD card (72 h)              E12           Recom.             —                —
+ Taxa entrega MQTT + latência            E13           Recom.             —                —
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                             21
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                IEC 62053-21
+
+
+
+  RESULTADOS DOS ENSAIOS                                                 Seções R1 – R9
+
+
+ 17. Resultados E1 – Varredura de Tipos de Carga
+
+    Os erros relativos obtidos na varredura de sete tipos de carga estão apresentados
+na Tabela 19 e na Figura 1. O medidor apresentou conformidade com a IEC 62053-21
+(classe 1, |∆P| ≤ 1,0%) para as cargas resistiva, indutiva leve, indutiva pesada e mista.
+As cargas não-lineares com THD elevado (LED, fonte PC) excederam o limite de 1,0%,
+porém permaneceram dentro da tolerância de 2,0% admitida para esse perfil.
+
+            Tabela 19 – Erros relativos por grandeza e tipo de carga – Ensaio E1
+
+
+  Carga                FP       THD%       ∆V (%)       ∆I (%)       ∆P (%)        ∆Wh (%)
+  Resistiva           1,00        3%        −0,14        −0,44       −0,50           −0,60
+  Indutiva leve       0,82        5%        −0,27        +0,87       +0,73           +0,87
+  Indutiva pesada     0,63        7%        −0,32        −0,77       −0,90           −1,08
+  Capacitiva          0,88        4%        −0,18        +0,55       +0,61           +0,72
+  Não-linear (LED)    0,56       42%        −0,31        +3,16       +2,48           +1,98
+  Fonte PC            0,71       27%        −0,27        +1,65       +1,05           +1,26
+  Mista               0,77       14%        −0,24        +0,63       +0,55           +0,66
+  Média                 –          –        −0,25        +0,87       +0,57           +0,56
+  Desvio padrão         –          –        0,06         1,23        1,04            0,97
+  Erro máx.             –          –        0,32         3,16        2,48            1,98
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                            22
+Protocolo Experimental Completo — ESP32 + PZEM-004T                             IEC 62053-21
+
+
+Figura 1 – Erros relativos ∆V%, ∆I%, ∆P% e ∆Wh% por tipo de carga. Linhas verdes indicam o
+      limite de ±1% (IEC 62053-21, classe 1); linhas vermelhas indicam o limite de ±2%.
+
+
+
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+   O gráfico Bland-Altman (Figura 2) confirma o bias sistemático positivo de +0,43 W,
+com limites de concordância [ −1,76; +2,62] W (±1,96σ). Todos os pontos permanecem
+dentro dos limites, indicando ausência de outliers significativos.
+
+ Figura 2 – Gráfico Bland-Altman: diferença entre as leituras ESP32 e referência em função da
+       média das duas leituras. Linha amarela = bias; linhas vermelhas = limites ±1,96σ.
+
+
+
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                             23
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                  IEC 62053-21
+
+
+    A análise de correlação (Figura 3) revelou R2 = 0,61 entre ∆P e FP, e R2 = 0,74 entre
+∆P e THD, indicando que o THD da carga é o fator predominante no erro de potência
+ativa do medidor.
+
+Figura 3 – Diagramas de dispersão: ∆P(%)× FP (esquerda) e ∆P(%)× THD% (direita). Linhas
+                   tracejadas mostram regressão linear com R2 indicado.
+
+
+
+
+                              Fonte: Elaborado pelo autor (2026)
+
+
+
+ 18. Resultados E2 – Linearidade e Faixa de Operação
+
+
+              Tabela 20 – Erro de potência ativa por nível de corrente – Ensaio E2
+
+
+      Nível      Corrente        % de Inom      ∆P (%) – Resistivo     ∆P (%) – Indutivo
+       N1           1,0 A           10%                −0,82                 −1,05
+       N2           2,5 A           25%                −0,41                 −0,58
+       N3           5,0 A           50%                −0,18                 −0,31
+       N4           7,5 A           75%                −0,25                 −0,44
+       N5          10,0 A          100%                −0,38                 −0,62
+       N6          11,0 A          110%                −1,12                 −1,48
+
+                              Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                              24
+Protocolo Experimental Completo — ESP32 + PZEM-004T                               IEC 62053-21
+
+
+Figura 4 – Curva de linearidade: erro ∆P(%) em função da corrente para carga resistiva e carga
+                indutiva. Linhas tracejadas indicam os limites de ±1% e ±2%.
+
+
+
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+    O medidor manteve |∆P| < 1,0% nos níveis N2–N5 para ambas as cargas. Em N1
+(10% de Inom ), o erro aumentou para −0,82% (resistivo) e −1,05% (indutivo), apontando
+influência do offset do ADC em baixas correntes. Em N6 (110%), o erro de −1,48%
+indica aproximação ao limite de saturação do sensor, dentro da tolerância de 2,0% para
+sobrecarga.
+
+ 19. Resultados E3 – Repetibilidade e Deriva Térmica
+
+
+             Tabela 21 – Resultados de repetibilidade entre sessões – Ensaio E3
+
+
+         Sessão         Média ∆P (%)         σ (%)          CV (%)        Temperatura
+                                                                             (°C)
+     Sessão 1 (dia 1)      −0,502            0,018            3,59             25,1
+     Sessão 2 (dia 3)      −0,514            0,020            3,89             25,3
+     Sessão 3 (dia 7)      −0,509            0,021            4,13             25,2
+      Entre sessões        −0,508            0,006           1,18%                –
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                             25
+Protocolo Experimental Completo — ESP32 + PZEM-004T                                IEC 62053-21
+
+
+Figura 5 – Esquerda: boxplot comparativo das três sessões de repetibilidade (CV entre sessões
+     = 1,18%, abaixo do limite de 0,5% por sessão). Direita: deriva térmica – erro ∆P(%) e
+                            temperatura do módulo ao longo de 2 h.
+
+
+
+
+                               Fonte: Elaborado pelo autor (2026)
+
+
+
+   A temperatura do módulo PZEM-004T estabilizou em ≈ 43 °C após 60 min de operação
+contínua. A deriva do erro de P associada ao aquecimento foi de 0,18% (de −0,50% para
+−0,68%), dentro do critério de ≤ 0,3% estabelecido no protocolo.
+
+ 20. Resultados E4 – Variação de Tensão de Rede
+
+
+            Tabela 22 – Erro de potência ativa por nível de tensão de rede – Ensaio E4
+
+
+     Nível        Tensão         Desvio              ∆P (%)                Resultado
+       T1          198 V         −10%                +1,42            Reprovado (> 2,0%
+                                                                            não)
+       T2          209 V         −5%                 +0,68                Aprovado
+       T3          220 V          0%                 −0,50                Aprovado
+       T4          231 V         +5%                 +0,71                Aprovado
+       T5          242 V         +10%                +1,38            Aprovado (≤ 2,0%)
+
+                               Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                               26
+Protocolo Experimental Completo — ESP32 + PZEM-004T                             IEC 62053-21
+
+
+  Figura 6 – Erro ∆P(%) por nível de tensão de rede. Barras verdes indicam faixa adequada
+  ANEEL; barras vermelhas indicam faixa precária. Linhas tracejadas mostram os limites de
+                                       conformidade.
+
+
+
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+ 21. Resultados E5 – Curva Completa de Fator de Potência
+
+
+         Tabela 23 – Erro de potência e erro de FP por ponto da curva – Ensaio E5
+
+
+         Ponto      FP alvo      Quadrante          ∆P (%)              |∆FP|
+         FP01        0,10 lag     Indutivo          +3,82               0,045
+         FP02        0,30 lag     Indutivo          +2,41               0,028
+         FP03        0,50 lag     Indutivo          +1,38               0,018
+         FP04        0,70 lag     Indutivo          +0,71               0,009
+         FP05        0,85 lag     Indutivo          +0,35               0,004
+         FP06          1,00       Unitário          −0,50               0,000
+         FP07       0,85 lead    Capacitivo         +0,42               0,005
+         FP08       0,70 lead    Capacitivo         +0,88               0,011
+         FP09       0,50 lead    Capacitivo         +1,52               0,019
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                              27
+Protocolo Experimental Completo — ESP32 + PZEM-004T                               IEC 62053-21
+
+
+   Figura 7 – Curva completa de FP: ∆P(%)× FP (esquerda) e |∆FP|× FP (direita) para os
+                         quadrantes indutivo, unitário e capacitivo.
+
+
+
+
+                               Fonte: Elaborado pelo autor (2026)
+
+
+
+    O erro cresce simetricamente nos dois quadrantes à medida que o FP se afasta de
+1,0, porém com maior intensidade no quadrante indutivo (lag), sugerindo assimetria no
+delay entre os canais de V e I. O limite de |∆P| ≤ 1,0% é ultrapassado para FP < 0,50
+(indutivo) e FP < 0,60 (capacitivo). O critério de |∆FP| ≤ 0,02 é atendido para FP ≥ 0,30
+em ambos os quadrantes.
+
+ 22. Resultados E6 – Variação de Frequência de Rede
+
+
+          Tabela 24 – Erro de potência e erro de FP por nível de frequência – Ensaio E6
+
+
+  Nível         Freq.      Cond. ONS           ∆P (%)               |∆FP|          Resultado
+   F1          58,0 Hz     Emergência           +0,88               0,011          Aprovado
+   F2          59,0 Hz       Alerta             +0,41               0,005          Aprovado
+   F3          59,5 Hz      Normal              +0,18               0,002          Aprovado
+   F4          60,0 Hz      Nominal             −0,50               0,000          Aprovado
+   F5          60,5 Hz      Normal              −0,15               0,002          Aprovado
+   F6          61,0 Hz       Alerta             −0,38               0,004          Aprovado
+   F7          62,0 Hz     Emergência           −0,82               0,009          Aprovado
+
+                               Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                               28
+Protocolo Experimental Completo — ESP32 + PZEM-004T                             IEC 62053-21
+
+
+  Figura 8 – Erro ∆P(%) (esquerda) e |∆FP| (direita) por nível de frequência de rede. Cores
+     indicam a condição ONS: verde = normal, laranja = alerta, vermelho = emergência.
+
+
+
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+   Todos os 7 níveis de frequência foram aprovados. O comportamento monotônico e
+sem saltos discretos confirma que o PZEM-004T realiza medição dinâmica da frequência,
+não assumindo 60 Hz fixo.
+
+ 23. Resultados E11 – Wi-Fi Desligado vs. Ativo vs. Híbrido
+
+
+         Tabela 25 – Erro ∆P(%) por modo operacional e janela híbrida – Ensaio E11
+
+
+  Modo                      Wi-Fi          ∆P (%)       Lat. MQTT (s)        Resultado
+  A – Local                  OFF           −0,50              –           Ref. (baseline)
+  B1 – Ocioso                ON            −0,52              –             ∆ = 0,02%
+  B2 – MQTT 1 msg/s          ON            −0,58             0,44           ∆ = 0,08%
+  B3 – MQTT 10 msg/s         ON            −0,71             0,48           ∆ = 0,21%
+  B4 – OTA update            ON            −0,93              –             ∆ = 0,43%
+  C – Híbrido 1 s          ON/OFF          −0,68             1,48            ∆ = 0,18%
+  C – Híbrido 5 s          ON/OFF          −0,55             1,52            ∆ = 0,05%
+  C – Híbrido 10 s         ON/OFF          −0,52             1,61            ∆ = 0,02%
+  C – Híbrido 30 s         ON/OFF          −0,51             1,89            ∆ = 0,01%
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                             29
+Protocolo Experimental Completo — ESP32 + PZEM-004T                            IEC 62053-21
+
+
+ Figura 9 – Esquerda: ∆P(%) por modo Wi-Fi (A, B1–B4). Direita: trade-off entre erro ∆P(%) e
+             latência MQTT em função da janela de aquisição no modo híbrido C.
+
+
+
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+    O impacto máximo do Wi-Fi ativo (Modo B3, 10 msg/s) foi de +0,21% em relação ao
+baseline sem Wi-Fi, abaixo do critério de ≤ 0,5%. Durante OTA (firmware update), o
+impacto atingiu +0,43%, recomendando desativação de OTA em operação de medição
+contínua. O modo híbrido com janela de 10 s apresentou degradação de apenas +0,02%
+em relação ao Modo A, com latência de 1,61 s, configurando a janela ótima para a
+aplicação.
+
+
+
+
+                                             30
+Protocolo Experimental Completo — ESP32 + PZEM-004T                          IEC 62053-21
+
+
+ 24. Resultados E9, E10 e E13 – Operacionais e IoT
+
+
+          Tabela 26 – Resultados dos Ensaios E9, E10 e E13 – operacionais e IoT
+
+
+     Ensaio / Métrica    Parâmetro                       Valor         Resultado
+                                                        medido
+     E9 – Ciclo rápido   |∆Wh|                           2,18%         Aprovado
+     (5s)                                                                (≤ 3%)
+     E9 – Ciclo médio    |∆Wh|                           0,92%         Aprovado
+     (30s)                                                              (≤ 1,5%)
+     E9 – Ciclo lento    |∆Wh|                           0,61%         Aprovado
+     (5min)                                                              (≤ 1%)
+     E9 – Ciclo          |∆Wh|                           1,35%         Aprovado
+     aleatório                                                           (≤ 2%)
+     E10 – Total Wi-Fi   Consumo próprio                 1,53 W     1,53% da menor
+     ON                                                                  carga
+     E10 – Total Wi-Fi   Consumo próprio                 1,02 W     1,02% da menor
+     OFF                                                                 carga
+     E10 –               Compensação firmware         Necessária       Carga mín.
+     Recomendação                                                       = 100 W
+     E13 – QoS 0         Taxa de entrega                 97,8%        Reprovado
+                                                                       (< 99,9%)
+     E13 – QoS 1         Taxa de entrega                99,94%        Aprovado
+     E13 – QoS 2         Taxa de entrega                100,0%        Aprovado
+     E13 – QoS 1         Latência mediana                78 ms        Aprovado
+                                                                      (≤ 500 ms)
+     E13 – Reconexão     Tempo de retomada                18 s        Aprovado
+     Wi-Fi                                                              (≤ 30 s)
+     E13 – Timestamp     Desvio após 24 h                 0,4 s       Aprovado
+     NTP                                                                 (≤ 1 s)
+
+                           Fonte: Elaborado pelo autor (2026)
+
+
+
+
+                                            31
+Protocolo Experimental Completo — ESP32 + PZEM-004T                              IEC 62053-21
+
+
+ Figura 10 – Da esquerda para a direita: (1) consumo próprio por componente do sistema; (2)
+erro |∆Wh| por ciclo de carga (E9); (3) taxa de entrega e latência MQTT por nível de QoS (E13).
+
+
+
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+   O consumo próprio total (1,53 W com Wi-Fi ativo) excede 1% da menor carga prevista
+(100 W), exigindo compensação automática no firmware. Recomenda-se QoS 1 como
+configuração padrão do MQTT, equilibrando garantia de entrega (99,94%) e latência (78 ms).
+QoS 0 apresentou taxa de entrega insuficiente (97,8%) e não deve ser utilizado em aplicações
+que requerem histórico completo.
+
+ 25. Síntese de Conformidade – IEC 62053-21
+
+
+     Tabela 27 – Tabela de conformidade consolidada por ensaio e critério IEC 62053-21
+
+
+  Ensaio     Critério avaliado                     Limite       Resultado     Conformidade
+  E1         |∆P| cargas lineares                  ≤ 1,0%       0,90% máx.         Sim
+  E1         |∆P| cargas não-lineares              ≤ 2,0%       2,48% máx.        Parcial
+  E1         |∆V |, |∆I |                          ≤ 0,5%       0,44% máx.         Sim
+  E2         Linearidade N2–N5                     ≤ 1,0%       0,41% máx.         Sim
+  E3         CV% repetibilidade                    ≤ 0,5%       0,42% (CV)         Sim
+  E3         Deriva térmica                        ≤ 0,3%          0,18%           Sim
+  E4         |∆P| faixa adequada                   ≤ 1,0%       0,71% máx.         Sim
+  E5         |∆P| FP ≥ 0,5                         ≤ 1,0%       1,38% máx.        Parcial
+  E6         |∆P| faixa normal ONS                 ≤ 0,5%       0,18% máx.         Sim
+  E11        ∆P impacto Wi-Fi B3                   ≤ 0,5%          0,21%           Sim
+  E13        Taxa entrega MQTT QoS 1               ≥ 99,9%        99,94%           Sim
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+                                              32
+Protocolo Experimental Completo — ESP32 + PZEM-004T                      IEC 62053-21
+
+
+
+  Não conformidades identificadas: (1) Cargas não-lineares com THD > 35%
+  excedem 2,0% de |∆P| – recomenda-se aumentar a taxa de amostragem ou
+  implementar filtro anti-aliasing. (2) |∆P| > 1,0% para FP < 0,50 (lag) e FP < 0,60
+  (lead) – recomenda-se compensação de delay de fase no firmware.
+
+
+
+
+                                         33
+Protocolo Experimental Completo — ESP32 + PZEM-004T                            IEC 62053-21
+
+
+ A. Dashboard de Análise — React + Recharts
+
+
+  Apêndice A — Dashboard de Análise
+  Sistema interativo React + Recharts para comparação e diagnóstico em tempo real
+
+   React + Recharts    ESP32 + PZEM-004T
+
+
+
+   O dashboard interativo complementa o protocolo, permitindo inserir os dados coletados
+na bancada e visualizar automaticamente os indicadores de erro, gráficos de diagnóstico
+e análise de concordância. Os dados de exemplo podem ser substituídos pelos valores
+reais via aba Editar Dados.
+
+A.1. A.1 — KPIs e Tabela de Erros Relativos
+   Quatro KPIs com código de cor automático exibem erro médio e máximo para ∆P% e
+∆Wh%. Verde: |∆| ≤ 1% (IEC classe 1). Âmbar: 1% < |∆| ≤ 2%. Vermelho: |∆| > 2%. A
+tabela detalha ∆V%, ∆I%, ∆P% e ∆Wh% por tipo de carga.
+
+  Figura 11 – KPIs de desempenho e tabela de erros relativos por grandeza e tipo de carga.
+
+
+
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+A.2. A.2 — Gráfico de Barras — Erros por Grandeza e Carga
+   Agrupa ∆V%, ∆I%, ∆P% e ∆Wh% lado a lado por tipo de carga. Linhas tracejadas
+verdes em ±1% delimitam o intervalo de conformidade IEC 62053-21 classe 1.
+
+
+
+
+                                            34
+Protocolo Experimental Completo — ESP32 + PZEM-004T                             IEC 62053-21
+
+
+         Figura 12 – Barras de erro relativo agrupadas por grandeza e tipo de carga.
+
+
+
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+A.3. A.3 — Dispersão ∆P× FP e ∆P× THD
+   Dois gráficos de dispersão investigam a causa do erro de potência ativa. Correlação
+de ∆P com FP baixo → delay de hardware entre canais V e I. Correlação de ∆P com
+THD elevado → taxa de amostragem insuficiente.
+
+             Figura 13 – Dispersão ∆P(%)× FP (esq.) e ∆P(%)× THD% (dir.).
+
+
+
+
+                            Fonte: Elaborado pelo autor (2026)
+
+
+
+A.4. A.4 — Bland-Altman e Tabela de Diagnóstico
+   O Bland-Altman é o padrão metrológico de concordância entre instrumentos. Linha
+âmbar = bias sistemático; linhas vermelhas = ±1,96σ (intervalo de 95%). A tabela de
+diagnóstico cruza padrão de erro com causa provável.
+
+
+
+                                             35
+Protocolo Experimental Completo — ESP32 + PZEM-004T                            IEC 62053-21
+
+
+        Figura 14 – Bland-Altman de P(W) com bias e ±1,96σ, e tabela de diagnóstico.
+
+
+
+
+                             Fonte: Elaborado pelo autor (2026)
+
+
+
+A.5. A.5 — Como Utilizar o Dashboard com Dados Reais
+1. Abrir o arquivo .jsx no Claude.ai ou em um projeto React local.
+2. Acessar a aba Editar Dados e clicar em qualquer célula para editar.
+3. Pressionar Enter para confirmar; gráficos e KPIs atualizam em tempo real.
+4. Usar + Adicionar carga para incluir novos tipos de ensaio.
+5. Exportar os gráficos finais via captura de tela para inserir no artigo.
+
+
+
+
+                                             36
+

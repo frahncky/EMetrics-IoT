@@ -7,6 +7,8 @@
 /// - [pf]: adimensional — fator de potência (0..1)
 /// - [frequency]: Hertz (Hz)
 /// - [energy]: Quilowatt-hora (kWh)
+/// - [temperature]: Celsius (°C) — temperatura interna do ESP32 (E3)
+/// - [crcErrors]: contagem acumulada de erros de CRC na UART PZEM (E8)
 class Metric {
   final int? id;
   final DateTime timestamp;
@@ -16,6 +18,8 @@ class Metric {
   final double pf;
   final double frequency;
   final double energy;
+  final double? temperature;
+  final int? crcErrors;
 
   Metric({
     this.id,
@@ -26,6 +30,8 @@ class Metric {
     required this.pf,
     required this.frequency,
     required this.energy,
+    this.temperature,
+    this.crcErrors,
   });
 
   factory Metric.fromMap(Map<String, dynamic> map) => Metric(
@@ -37,6 +43,8 @@ class Metric {
         pf: map['pf'],
         frequency: map['frequency'],
         energy: map['energy'],
+        temperature: map['temperature'] != null ? (map['temperature'] as num).toDouble() : null,
+        crcErrors: map['crc_errors'] as int?,
       );
 
   Map<String, dynamic> toMap() => {
@@ -48,5 +56,7 @@ class Metric {
         'pf': pf,
         'frequency': frequency,
         'energy': energy,
+        'temperature': temperature,
+        'crc_errors': crcErrors,
       };
 }

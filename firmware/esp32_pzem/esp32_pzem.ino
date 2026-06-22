@@ -77,7 +77,7 @@ DeviceConfig config = {
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTES E VARIAVEIS GLOBAIS
 // ═══════════════════════════════════════════════════════════════════════════
-constexpr unsigned long PUBLISH_INTERVAL_MS = 2000;       // intervalo entre leituras PZEM
+constexpr unsigned long PUBLISH_INTERVAL_MS_DEFAULT = 2000; // intervalo padrao entre leituras PZEM
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 15000;   // retentatida de reconexao WiFi
 constexpr unsigned long WIFI_FALLBACK_AP_DELAY_MS = 60UL * 1000UL;
 constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;    // retentativa de reconexao MQTT
@@ -270,6 +270,7 @@ constexpr unsigned long LCD_UPDATE_INTERVAL_MS = 700;   // atualizacao visual do
 constexpr unsigned long LCD_METRIC_ROTATE_INTERVAL_MS = 4000;  // troca de informacao a cada 4 segundos
 
 unsigned long lastPublishMs = 0;
+unsigned long publishIntervalMs = PUBLISH_INTERVAL_MS_DEFAULT; // E7: configuravel via MQTT
 unsigned long lastWifiAttemptMs = 0;
 unsigned long wifiDisconnectedSinceMs = 0;
 unsigned long lastMqttAttemptMs = 0;
@@ -291,6 +292,20 @@ bool bootEpochOffsetValid = false;
 bool historyStorageReady = false;
 bool historyStorageUsesSd = false;
 unsigned long lastHistoryRetentionPruneMs = 0;
+
+// E8: Contador de erros de comunicacao PZEM
+uint32_t pzemCrcErrors = 0;
+
+// E10: Compensacao de consumo proprio
+float selfConsumptionWatts = 0.0f; // configuravel via MQTT
+bool selfConsumptionEnabled = false;
+
+// E11: Modo hibrido Wi-Fi
+bool hybridWifiEnabled = false;       // ativado via comando MQTT
+uint32_t hybridAcquireWindowMs = 10000; // janela de aquisicao sem Wi-Fi (ms)
+uint32_t hybridTxWindowMs = 3000;       // janela de transmissao com Wi-Fi (ms)
+unsigned long hybridPhaseStartMs = 0;
+bool hybridAcquiringPhase = true;       // true = PZEM ativo, Wi-Fi OFF
 
 struct HistoryRequest {
   uint64_t from = 0;
@@ -683,6 +698,60 @@ void replayHistoryRange(uint64_t fromMs, uint64_t toMs) {
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
   if (strcmp(topic, config.mqttRequestTopic) != 0) {
     return;
+  }
+
+  // E10: configura compensacao de consumo proprio
+  // payload: {"command":"setSelfConsumption","watts":1.5,"enabled":true}
+  {
+    String raw;
+    raw.reserve(length + 1);
+    for (unsigned int i = 0; i < length; i++) raw += static_cast<char>(payload[i]);
+    if (raw.indexOf("\"setSelfConsumption\"") >= 0) {
+      uint64_t enabledVal = 0;
+      const bool hasEnabled = extractUInt64Field(raw, "enabled", enabledVal);
+      selfConsumptionEnabled = hasEnabled ? (enabledVal != 0) : selfConsumptionEnabled;
+      // watts pode ser float; parse manual simples
+      const int wIdx = raw.indexOf("\"watts\"");
+      if (wIdx >= 0) {
+        const int colonIdx = raw.indexOf(':', wIdx);
+        if (colonIdx >= 0) {
+          selfConsumptionWatts = atof(raw.c_str() + colonIdx + 1);
+        }
+      }
+      return;
+    }
+
+    // E7: configura intervalo de publicacao
+    // payload: {"command":"setPublishInterval","intervalMs":500}
+    if (raw.indexOf("\"setPublishInterval\"") >= 0) {
+      uint64_t intervalVal = 0;
+      if (extractUInt64Field(raw, "intervalMs", intervalVal) && intervalVal >= 100 && intervalVal <= 60000) {
+        publishIntervalMs = static_cast<unsigned long>(intervalVal);
+      }
+      return;
+    }
+
+    // E11: configura modo hibrido Wi-Fi
+    // payload: {"command":"setHybridWifi","enabled":true,"acquireMs":10000,"txMs":3000}
+    if (raw.indexOf("\"setHybridWifi\"") >= 0) {
+      uint64_t enabledVal = 0;
+      extractUInt64Field(raw, "enabled", enabledVal);
+      hybridWifiEnabled = (enabledVal != 0);
+      uint64_t acqMs = 0, txMs = 0;
+      if (extractUInt64Field(raw, "acquireMs", acqMs) && acqMs >= 1000 && acqMs <= 120000) {
+        hybridAcquireWindowMs = static_cast<uint32_t>(acqMs);
+      }
+      if (extractUInt64Field(raw, "txMs", txMs) && txMs >= 500 && txMs <= 30000) {
+        hybridTxWindowMs = static_cast<uint32_t>(txMs);
+      }
+      if (!hybridWifiEnabled) {
+        // reativa Wi-Fi ao desligar modo hibrido
+        WiFi.mode(fallbackApActive ? WIFI_AP_STA : WIFI_STA);
+        hybridAcquiringPhase = true;
+      }
+      hybridPhaseStartMs = millis();
+      return;
+    }
   }
 
   uint16_t sdRetentionDays = 0;
@@ -1294,6 +1363,7 @@ bool readPzem(float& voltage, float& current, float& power, float& energy, float
 
   if (isnan(voltage) || isnan(current) || isnan(power) || isnan(energy) || isnan(frequency) ||
       isnan(pf)) {
+    pzemCrcErrors++;  // E8: conta erros de leitura/CRC
     return false;
   }
 
@@ -1324,10 +1394,19 @@ bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize) {
     return false;
   }
 
+  // E10: subtrai consumo proprio do sistema se habilitado
+  if (selfConsumptionEnabled && selfConsumptionWatts > 0.0f && power >= selfConsumptionWatts) {
+    power -= selfConsumptionWatts;
+  }
+
+  // E3: temperatura interna do ESP32 (sensor built-in)
+  const float espTemperature = temperatureRead();
+
   const DeviceStorageUsage storage = readDeviceStorageUsage();
   snprintf(payloadBuffer,
            payloadBufferSize,
            "{\"voltage\":%.2f,\"current\":%.3f,\"power\":%.2f,\"pf\":%.3f,\"frequency\":%.2f,\"energy\":%.3f,"
+           "\"temperature\":%.1f,\"crcErrors\":%lu,"
            "\"storage\":{\"usingSd\":%s,\"sdAvailable\":%s,\"sdUsedBytes\":%llu,\"sdTotalBytes\":%llu,\"sdUsagePercent\":%.2f}}",
            voltage,
            current,
@@ -1335,6 +1414,8 @@ bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize) {
            pf,
            frequency,
            energy,
+           espTemperature,
+           static_cast<unsigned long>(pzemCrcErrors),
            storage.usingSd ? "true" : "false",
            storage.sdAvailable ? "true" : "false",
            static_cast<unsigned long long>(storage.usedBytes),
@@ -1359,6 +1440,11 @@ bool publishFrontPayload() {
     return false;
   }
 
+  // E13: PubSubClient suporta apenas QoS 0 para publish.
+  // Para QoS 1/2 real (ensaio E13 comparativo), substituir PubSubClient por
+  // AsyncMqttClient (https://github.com/marvinroger/async-mqtt-client) e usar
+  // client.publish(topic, qos, retain, payload).
+  // O retain=true garante que o broker preserve a ultima leitura (proxy de persistencia).
   if (!mqttClient.publish(config.mqttTopic, telemetryQueue[queueHead], MQTT_RETAINED)) {
     return false;
   }
@@ -1618,24 +1704,55 @@ void loop() {
     return;
   }
 
-  ensureFallbackAccessPoint();
-  ensureWiFiConnected();
-  if (WiFi.status() == WL_CONNECTED) {
-    refreshEpochOffsetIfNeeded();
-  }
-  ensureMqttConnected();
+  // E11: Modo hibrido Wi-Fi — alterna entre fase de aquisicao (Wi-Fi OFF) e TX (Wi-Fi ON)
+  if (hybridWifiEnabled) {
+    const unsigned long now = millis();
+    if (hybridAcquiringPhase) {
+      if (now - hybridPhaseStartMs >= hybridAcquireWindowMs) {
+        // transicao para fase TX: liga Wi-Fi
+        hybridAcquiringPhase = false;
+        hybridPhaseStartMs = now;
+        WiFi.mode(fallbackApActive ? WIFI_AP_STA : WIFI_STA);
+        WiFi.begin(config.wifiSsid, config.wifiPassword);
+      }
+    } else {
+      // fase TX: aguarda conexao e publica lote
+      if (WiFi.status() == WL_CONNECTED) {
+        refreshEpochOffsetIfNeeded();
+        ensureMqttConnected();
+        if (mqttClient.connected()) {
+          mqttClient.loop();
+          flushQueuedMetrics();
+        }
+      }
+      if (now - hybridPhaseStartMs >= hybridTxWindowMs) {
+        // transicao para fase aquisicao: desliga Wi-Fi
+        hybridAcquiringPhase = true;
+        hybridPhaseStartMs = now;
+        mqttClient.disconnect();
+        WiFi.mode(WIFI_OFF);
+      }
+    }
+  } else {
+    ensureFallbackAccessPoint();
+    ensureWiFiConnected();
+    if (WiFi.status() == WL_CONNECTED) {
+      refreshEpochOffsetIfNeeded();
+    }
+    ensureMqttConnected();
 
-  if (mqttClient.connected()) {
-    mqttClient.loop();
+    if (mqttClient.connected()) {
+      mqttClient.loop();
+    }
   }
 
   const unsigned long now = millis();
-  if (now - lastPublishMs >= PUBLISH_INTERVAL_MS) {
+  if (now - lastPublishMs >= publishIntervalMs) {  // E7: usa intervalo configuravel
     lastPublishMs = now;
     queueLatestMetrics();
   }
 
-  if (WiFi.status() == WL_CONNECTED && mqttClient.connected()) {
+  if (WiFi.status() == WL_CONNECTED && mqttClient.connected() && !hybridWifiEnabled) {
     flushQueuedMetrics();
   }
 

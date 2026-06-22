@@ -53,6 +53,78 @@ function computeStats(values) {
   return { mean, std, max };
 }
 
+// E1/E2/E5/E6: importação de CSV da bancada
+// Formato esperado: load,fp,thd,v_esp,v_ref,i_esp,i_ref,p_esp,p_ref,wh_esp,wh_ref
+function parseCsvToData(csvText) {
+  const lines = csvText.trim().split(/\r?\n/);
+  if (lines.length < 2) throw new Error("CSV precisa ter cabeçalho e ao menos uma linha de dados.");
+  const header = lines[0].split(",").map(h => h.trim().toLowerCase());
+  const required = ["load", "fp", "thd", "v_esp", "v_ref", "i_esp", "i_ref", "p_esp", "p_ref", "wh_esp", "wh_ref"];
+  const missing = required.filter(k => !header.includes(k));
+  if (missing.length > 0) throw new Error(`Colunas faltando no CSV: ${missing.join(", ")}`);
+  return lines.slice(1).map((line, idx) => {
+    const cols = line.split(",").map(c => c.trim());
+    const row = {};
+    header.forEach((h, i) => { row[h] = cols[i]; });
+    const num = (k) => {
+      const v = parseFloat(row[k]);
+      if (isNaN(v)) throw new Error(`Linha ${idx + 2}: valor inválido em "${k}": "${row[k]}"`);
+      return v;
+    };
+    return {
+      load: row["load"] || `Carga ${idx + 1}`,
+      fp: num("fp"), thd: num("thd"),
+      v_esp: num("v_esp"), v_ref: num("v_ref"),
+      i_esp: num("i_esp"), i_ref: num("i_ref"),
+      p_esp: num("p_esp"), p_ref: num("p_ref"),
+      wh_esp: num("wh_esp"), wh_ref: num("wh_ref"),
+    };
+  });
+}
+
+// Botão de importação CSV para o editor de dados
+function CsvImportButton({ onImport }) {
+  const [error, setError] = useState(null);
+  const inputRef = useRef(null);
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const rows = parseCsvToData(ev.target.result);
+        onImport(rows);
+        setError(null);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <input ref={inputRef} type="file" accept=".csv,text/csv" onChange={handleFile}
+        style={{ display: "none" }} />
+      <button onClick={() => inputRef.current.click()} style={{
+        background: "none", border: `1px solid ${C.cyan}`, color: C.cyan,
+        borderRadius: 6, padding: "7px 18px", cursor: "pointer", fontSize: 12,
+        transition: "background 0.15s",
+      }}
+        onMouseEnter={e => e.currentTarget.style.background = "#79aeb922"}
+        onMouseLeave={e => e.currentTarget.style.background = "none"}>
+        Importar CSV da bancada
+      </button>
+      {error && <div style={{ color: C.red, fontSize: 11, marginTop: 6 }}>{error}</div>}
+      <span style={{ color: C.muted, fontSize: 10, marginLeft: 12 }}>
+        Formato: load,fp,thd,v_esp,v_ref,i_esp,i_ref,p_esp,p_ref,wh_esp,wh_ref
+      </span>
+    </div>
+  );
+}
+
 // ─── Componentes de UI ────────────────────────────────────────────────────────
 function Card({ title, children, accent }) {
   return (
@@ -381,6 +453,12 @@ function MonitorDashboard({
         <MetricCard label="Potência ativa" value={format(telemetry?.power, 2)} unit="W" accent={C.amber} />
         <MetricCard label="Potência reativa*" value={format(telemetry?.reactivePower, 2)} unit="VAr" accent={C.purple} />
         <MetricCard label="Fator de potência" value={format(telemetry?.pf)} unit="" accent={C.green} />
+        {telemetry?.temperature != null && (
+          <MetricCard label="Temp. ESP32 (E3)" value={format(telemetry.temperature, 1)} unit="°C" accent={C.amber} />
+        )}
+        {telemetry?.crcErrors != null && (
+          <MetricCard label="Erros CRC (E8)" value={String(telemetry.crcErrors)} unit="" accent={telemetry.crcErrors > 0 ? C.red : C.green} />
+        )}
       </div>
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
@@ -431,6 +509,20 @@ function MonitorDashboard({
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de fator de potência." />}
         </Card>
+
+        {history.some(h => h.temperature != null) && (
+          <Card title="Temperatura ESP32 — deriva térmica (E3)">
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
+                <YAxis tick={{ fill: C.amber, fontSize: 11 }} tickFormatter={v => `${v}°C`} />
+                <Tooltip content={<TT />} />
+                <Line type="monotone" dataKey="temperature" name="Temp. (°C)" stroke={C.amber} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
+        )}
 
         <Card title="Energia acumulada (kWh)">
           {history.length ? (
@@ -588,6 +680,7 @@ export default function App() {
             frequency: nextTelemetry.frequency,
             pf: nextTelemetry.pf,
             energy: nextTelemetry.energy,
+            temperature: nextTelemetry.temperature,
           }].slice(-60));
           clearAlertGate("offline");
           evaluateTelemetryAlerts(nextTelemetry);
@@ -720,6 +813,7 @@ export default function App() {
 
       {tab === "editor" && (
         <Card title="Dados de medição (clique para editar)">
+          <CsvImportButton onImport={setData} />
           <DataEditor data={data} onChange={setData} />
         </Card>
       )}

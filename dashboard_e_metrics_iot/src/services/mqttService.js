@@ -44,6 +44,8 @@ export function parseTelemetry(payload) {
     pf: Number(decoded.pf),
     frequency: Number(decoded.frequency),
     energy: Number(decoded.energy),
+    temperature: decoded.temperature != null ? Number(decoded.temperature) : null,
+    crcErrors: decoded.crcErrors != null ? Number(decoded.crcErrors) : null,
     storage: decoded.storage ?? null,
     receivedAt: new Date(),
   };

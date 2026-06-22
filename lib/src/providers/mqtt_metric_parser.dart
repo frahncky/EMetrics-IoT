@@ -5,6 +5,7 @@ import '../data/metric_model.dart';
 ///
 /// Espera um objeto JSON com os campos:
 /// `voltage`, `current`, `power`, `pf`, `frequency`, `energy`.
+/// Campos opcionais: `temperature` (E3), `crcErrors` (E8).
 /// Retorna `null` se o payload for inválido ou estiver incompleto.
 Metric? parseMetricFromMqtt(String payload) {
   try {
@@ -18,6 +19,8 @@ Metric? parseMetricFromMqtt(String payload) {
       pf: (map['pf'] as num).toDouble(),
       frequency: (map['frequency'] as num).toDouble(),
       energy: (map['energy'] as num).toDouble(),
+      temperature: map['temperature'] != null ? (map['temperature'] as num).toDouble() : null,
+      crcErrors: map['crcErrors'] != null ? (map['crcErrors'] as num).toInt() : null,
     );
   } catch (_) {
     return null;
