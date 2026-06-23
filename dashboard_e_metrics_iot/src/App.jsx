@@ -4,8 +4,11 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ReferenceLine
 } from "recharts";
-import { connectMqtt, DEFAULT_MQTT_CONFIG } from "./services/mqttService";
-import { resetEspEnergy } from "./services/espService";
+import {
+  connectMqtt,
+  DEFAULT_MQTT_CONFIG,
+  publishResetEnergy,
+} from "./services/mqttService";
 
 // ─── Paleta de cores (tema instrumento técnico) ───────────────────────────────
 const C = {
@@ -22,7 +25,6 @@ const C = {
 };
 
 const MQTT_SETTINGS_KEY = "emetrics.mqtt-settings";
-const ESP_SETTINGS_KEY = "emetrics.esp-settings";
 const ALERT_SETTINGS_KEY = "emetrics.alert-settings";
 const DEVICE_TIMEOUT_MS = 15000;
 const MAX_ACQUISITION_DURATION_SECONDS = 24 * 60 * 60;
@@ -31,7 +33,6 @@ const DEFAULT_ALERT_SETTINGS = {
   voltageMax: 240,
   energyLimit: 10,
 };
-const DEFAULT_ESP_SETTINGS = { host: "" };
 
 // ─── Dados de exemplo (substituir pelos dados reais do ESP32 / medidor) ───────
 const INITIAL_DATA = [
@@ -413,10 +414,6 @@ function formatDuration(milliseconds) {
 }
 
 function AcquisitionControls({
-  espHost,
-  onEspHostChange,
-  isResettingEnergy,
-  onResetEnergy,
   acquisition,
   elapsedMs,
   connectionPhase,
@@ -438,22 +435,7 @@ function AcquisitionControls({
   }[acquisition.phase];
 
   return (
-    <Card title="Controle de coleta e do dispositivo">
-      <div className="device-control-row">
-        <SettingsField
-          label="Endereço do ESP32"
-          value={espHost}
-          onChange={event => onEspHostChange(event.target.value)}
-          placeholder="192.168.1.50 ou http://192.168.1.50"
-          help="Usado apenas para zerar os contadores acumulados do PZEM."
-        />
-        <div className="connection-actions">
-          <button className="danger-button" onClick={onResetEnergy} disabled={isResettingEnergy}>
-            {isResettingEnergy ? "Zerando…" : "Zerar energia acumulada"}
-          </button>
-        </div>
-      </div>
-
+    <Card title="Controle de coleta">
       <div className="acquisition-row">
         <SettingsField
           label="Período da coleta (segundos)"
@@ -511,8 +493,6 @@ function MonitorDashboard({
   onConnect,
   onDisconnect,
   onRequestNotifications,
-  espHost,
-  onEspHostChange,
   isResettingEnergy,
   onResetEnergy,
   acquisition,
@@ -535,7 +515,10 @@ function MonitorDashboard({
         <div className="status-row">
           <StatusBadge label={connection.label} tone={mqttTone} />
           <StatusBadge label={deviceOnline ? "ESP32 online" : telemetry ? "ESP32 sem telemetria" : "ESP32 aguardando"} tone={deviceOnline ? "good" : telemetry ? "bad" : "warning"} />
-          <span style={{ color: C.muted, fontSize: 12, marginLeft: "auto" }}>Última leitura: {lastUpdate}</span>
+          <button className="danger-button" onClick={onResetEnergy} disabled={isResettingEnergy} style={{ marginLeft: "auto" }}>
+            {isResettingEnergy ? "Enviando…" : "Zerar energia acumulada"}
+          </button>
+          <span style={{ color: C.muted, fontSize: 12 }}>Última leitura: {lastUpdate}</span>
         </div>
         {connection.message && <div style={{ color: connection.phase === "error" ? C.red : C.muted, fontSize: 12, marginTop: 12 }}>{connection.message}</div>}
         <div className="connection-row" style={{ borderTop: `1px solid ${C.border}`, marginTop: 14, paddingTop: 14 }}>
@@ -551,10 +534,6 @@ function MonitorDashboard({
       </Card>
 
       <AcquisitionControls
-        espHost={espHost}
-        onEspHostChange={onEspHostChange}
-        isResettingEnergy={isResettingEnergy}
-        onResetEnergy={onResetEnergy}
         acquisition={acquisition}
         elapsedMs={acquisitionElapsedMs}
         connectionPhase={connection.phase}
@@ -578,22 +557,19 @@ function MonitorDashboard({
       </div>
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
-        <Card title="Potências elétricas — últimas leituras">
+        <Card title="Tensão — tendência ao vivo">
           {history.length ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={history} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
-                <YAxis tick={{ fill: C.muted, fontSize: 11 }} />
+                <YAxis tick={{ fill: C.cyan, fontSize: 11 }} tickFormatter={value => `${value}V`} />
                 <Tooltip content={<TT />} />
-                <Legend wrapperStyle={{ fontSize: 12, color: C.muted }} />
-                <Line type="monotone" dataKey="power" name="Ativa (W)" stroke={C.amber} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                <Line type="monotone" dataKey="apparentPower" name="Aparente (VA)" stroke={C.cyan} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="reactivePower" name="Reativa* (VAr)" stroke={C.purple} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="voltage" name="Tensão" stroke={C.cyan} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <LiveChartPlaceholder label="Conecte ao MQTT para visualizar as leituras do ESP32." />
+            <LiveChartPlaceholder label="Aguardando leituras de tensão." />
           )}
         </Card>
 
@@ -611,6 +587,25 @@ function MonitorDashboard({
           ) : <LiveChartPlaceholder label="Aguardando leituras de corrente." />}
         </Card>
 
+        <Card title="Potências elétricas — últimas leituras">
+          {history.length ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={history} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
+                <YAxis tick={{ fill: C.muted, fontSize: 11 }} />
+                <Tooltip content={<TT />} />
+                <Legend wrapperStyle={{ fontSize: 12, color: C.muted }} />
+                <Line type="monotone" dataKey="power" name="Ativa (W)" stroke={C.amber} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="apparentPower" name="Aparente (VA)" stroke={C.cyan} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="reactivePower" name="Reativa* (VAr)" stroke={C.purple} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <LiveChartPlaceholder label="Aguardando leituras de potência." />
+          )}
+        </Card>
+
         <Card title="Fator de potência — tendência ao vivo">
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
@@ -625,20 +620,6 @@ function MonitorDashboard({
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de fator de potência." />}
         </Card>
-
-        {history.some(h => h.temperature != null) && (
-          <Card title="Temperatura ESP32 — deriva térmica">
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-                <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
-                <YAxis tick={{ fill: C.amber, fontSize: 11 }} tickFormatter={v => `${v}°C`} />
-                <Tooltip content={<TT />} />
-                <Line type="monotone" dataKey="temperature" name="Temp. (°C)" stroke={C.amber} strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </Card>
-        )}
 
         <Card title="Energia acumulada (kWh)">
           {history.length ? (
@@ -658,6 +639,20 @@ function MonitorDashboard({
               </AreaChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de energia acumulada." />}
+        </Card>
+
+        <Card title="Temperatura ESP32 — deriva térmica">
+          {history.some(h => h.temperature != null) ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
+                <YAxis tick={{ fill: C.amber, fontSize: 11 }} tickFormatter={v => `${v}°C`} />
+                <Tooltip content={<TT />} />
+                <Line type="monotone" dataKey="temperature" name="Temp. (°C)" stroke={C.amber} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : <LiveChartPlaceholder label="Aguardando leituras de temperatura do ESP32." />}
         </Card>
       </div>
 
@@ -700,7 +695,6 @@ export default function App() {
   const [data, setData] = useState(INITIAL_DATA);
   const [tab, setTab] = useState("monitor"); // monitor | dashboard | editor
   const [mqttConfig, setMqttConfig] = useState(() => loadSettings(MQTT_SETTINGS_KEY, DEFAULT_MQTT_CONFIG));
-  const [espSettings, setEspSettings] = useState(() => loadSettings(ESP_SETTINGS_KEY, DEFAULT_ESP_SETTINGS));
   const [alertSettings, setAlertSettings] = useState(() => loadSettings(ALERT_SETTINGS_KEY, DEFAULT_ALERT_SETTINGS));
   const [connection, setConnection] = useState({ phase: "disconnected", label: "MQTT desconectado", message: "Configure um endpoint WebSocket para iniciar." });
   const [telemetry, setTelemetry] = useState(null);
@@ -729,10 +723,6 @@ export default function App() {
     const { password, ...safeConfig } = mqttConfig;
     window.localStorage.setItem(MQTT_SETTINGS_KEY, JSON.stringify(safeConfig));
   }, [mqttConfig]);
-
-  useEffect(() => {
-    window.localStorage.setItem(ESP_SETTINGS_KEY, JSON.stringify(espSettings));
-  }, [espSettings]);
 
   useEffect(() => {
     acquisitionRef.current = acquisition;
@@ -844,20 +834,19 @@ export default function App() {
   }
 
   async function resetEnergy() {
-    if (!espSettings.host.trim()) {
-      setConnection(current => ({ ...current, message: "Informe o endereço do ESP32 para zerar a energia." }));
-      return;
-    }
     if (!window.confirm("Zerar os contadores de energia acumulada do PZEM? Esta ação não pode ser desfeita.")) {
       return;
     }
 
     setIsResettingEnergy(true);
     try {
-      const message = await resetEspEnergy(espSettings.host);
-      setConnection(current => ({ ...current, message }));
+      const requestTopic = await publishResetEnergy(clientRef.current, mqttConfig.topic);
+      setConnection(current => ({
+        ...current,
+        message: `Comando para zerar energia enviado em ${requestTopic}.`,
+      }));
     } catch (error) {
-      setConnection(current => ({ ...current, message: error.message || "Não foi possível zerar a energia no ESP32." }));
+      setConnection(current => ({ ...current, message: error.message || "Não foi possível enviar o comando de reset." }));
     } finally {
       setIsResettingEnergy(false);
     }
@@ -1100,8 +1089,6 @@ export default function App() {
           onConnect={connect}
           onDisconnect={disconnect}
           onRequestNotifications={requestNotifications}
-          espHost={espSettings.host}
-          onEspHostChange={host => setEspSettings({ host })}
           isResettingEnergy={isResettingEnergy}
           onResetEnergy={resetEnergy}
           acquisition={acquisition}

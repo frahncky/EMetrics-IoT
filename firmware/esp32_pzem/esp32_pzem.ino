@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // INCLUDES
 // ═══════════════════════════════════════════════════════════════════════════
+#include <ArduinoOTA.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <esp_wpa2.h>
@@ -1552,22 +1553,7 @@ void handleWifiReconnect() {
       "{\"ok\":true,\"message\":\"Tentativa de conexao iniciada.\"}");
 }
 
-// Permite que o dashboard web, quando hospedado em outra origem, acione o
-// reset local do PZEM. O endpoint continua limitado à rede que alcança o ESP.
-void sendResetEnergyCorsHeaders() {
-  provisionServer.sendHeader("Access-Control-Allow-Origin", "*");
-  provisionServer.sendHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  provisionServer.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-  provisionServer.sendHeader("Access-Control-Allow-Private-Network", "true");
-}
-
-void handleResetEnergyOptions() {
-  sendResetEnergyCorsHeaders();
-  provisionServer.send(204, "text/plain", "");
-}
-
 void handleResetEnergy() {
-  sendResetEnergyCorsHeaders();
   if (!resetAllEnergy()) {
     provisionServer.send(
         503,
@@ -1599,7 +1585,6 @@ void startProvisioningServer() {
   provisionServer.on("/wifi-connection-settings", HTTP_POST, handleWifiConnectionSettingsSave);
   provisionServer.on("/firmware/update", HTTP_POST, handleFirmwareUpdate, handleFirmwareUpdateUpload);
   provisionServer.on("/reset-energy", HTTP_POST, handleResetEnergy);
-  provisionServer.on("/reset-energy", HTTP_OPTIONS, handleResetEnergyOptions);
   provisionServer.on("/wifi-status", HTTP_GET, handleWifiStatus);
   provisionServer.on("/wifi-reconnect", HTTP_POST, handleWifiReconnect);
   provisionServer.begin();
@@ -2078,6 +2063,27 @@ void updateLcdDisplay() {
 // SETUP E LOOP PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
 
+void setupArduinoOTA() {
+  ArduinoOTA.setHostname(config.mqttClientId);
+  if (strlen(config.otaPassword) >= 8) {
+    ArduinoOTA.setPassword(config.otaPassword);
+  }
+  ArduinoOTA.onStart([]() {
+    Serial.println("[OTA] Iniciando atualizacao de firmware...");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[OTA] Concluido. Reiniciando...");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("[OTA] Progresso: %u%%\r", progress * 100 / total);
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] Erro [%u]\n", error);
+  });
+  ArduinoOTA.begin();
+  Serial.println("[OTA] ArduinoOTA pronto. IP: " + WiFi.localIP().toString());
+}
+
 void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, 16, 17);
@@ -2138,6 +2144,7 @@ void setup() {
   }
   lastWifiAttemptMs = millis();
   startProvisioningServer();
+  setupArduinoOTA();
 }
 
 void loop() {
@@ -2153,6 +2160,8 @@ void loop() {
     updateLcdDisplay();
     return;
   }
+
+  ArduinoOTA.handle();
 
   // E11: Modo hibrido Wi-Fi — alterna entre fase de aquisicao (Wi-Fi OFF) e TX (Wi-Fi ON)
   if (hybridWifiEnabled) {

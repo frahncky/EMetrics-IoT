@@ -23,8 +23,10 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(mqttStatusProvider);
+    final latestLive = ref.watch(latestMqttMetricProvider);
     final metricsData = ref.watch(metricsProvider).asData;
-    final lastMetricTime = _lastMetricReceivedAt(metricsData?.value);
+    final lastMetricTime =
+        latestLive?.receivedAt ?? _lastMetricReceivedAt(metricsData?.value);
 
     final mqttVisual = _mqttVisual(status);
     final deviceVisual = _deviceVisual(status, lastMetricTime);
