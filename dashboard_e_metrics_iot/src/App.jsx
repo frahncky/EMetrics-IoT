@@ -156,10 +156,19 @@ function downloadChartAsPng(chartElement, fileName) {
     return Promise.reject(new Error("Gráfico sem dimensões para exportação."));
   }
 
+  const exportPadding = 24;
+  const viewBox = svg.viewBox.baseVal;
+  const sourceWidth = viewBox.width || width;
+  const sourceHeight = viewBox.height || height;
   const svgCopy = svg.cloneNode(true);
   svgCopy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  svgCopy.setAttribute("width", String(width));
-  svgCopy.setAttribute("height", String(height));
+  svgCopy.setAttribute("overflow", "visible");
+  svgCopy.setAttribute(
+    "viewBox",
+    `${viewBox.x - exportPadding} ${viewBox.y - exportPadding} ${sourceWidth + exportPadding * 2} ${sourceHeight + exportPadding * 2}`,
+  );
+  svgCopy.setAttribute("width", String(width + exportPadding * 2));
+  svgCopy.setAttribute("height", String(height + exportPadding * 2));
   svgCopy.style.fontFamily = "Inter, Segoe UI, sans-serif";
 
   const svgBlob = new Blob([new XMLSerializer().serializeToString(svgCopy)], {
@@ -172,8 +181,10 @@ function downloadChartAsPng(chartElement, fileName) {
     image.onload = () => {
       const scale = Math.min(window.devicePixelRatio || 1, 2);
       const canvas = document.createElement("canvas");
-      canvas.width = Math.round(width * scale);
-      canvas.height = Math.round(height * scale);
+      const imageWidth = width + exportPadding * 2;
+      const imageHeight = height + exportPadding * 2;
+      canvas.width = Math.round(imageWidth * scale);
+      canvas.height = Math.round(imageHeight * scale);
 
       const context = canvas.getContext("2d");
       if (!context) {
@@ -184,8 +195,8 @@ function downloadChartAsPng(chartElement, fileName) {
 
       context.scale(scale, scale);
       context.fillStyle = C.surface;
-      context.fillRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
+      context.fillRect(0, 0, imageWidth, imageHeight);
+      context.drawImage(image, 0, 0, imageWidth, imageHeight);
       URL.revokeObjectURL(svgUrl);
 
       canvas.toBlob((pngBlob) => {
