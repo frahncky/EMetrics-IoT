@@ -5,6 +5,7 @@ import {
   ReferenceLine
 } from "recharts";
 import { connectMqtt, DEFAULT_MQTT_CONFIG } from "./services/mqttService";
+import { resetEspEnergy } from "./services/espService";
 
 // ─── Paleta de cores (tema instrumento técnico) ───────────────────────────────
 const C = {
@@ -21,13 +22,16 @@ const C = {
 };
 
 const MQTT_SETTINGS_KEY = "emetrics.mqtt-settings";
+const ESP_SETTINGS_KEY = "emetrics.esp-settings";
 const ALERT_SETTINGS_KEY = "emetrics.alert-settings";
 const DEVICE_TIMEOUT_MS = 15000;
+const MAX_ACQUISITION_DURATION_SECONDS = 24 * 60 * 60;
 const DEFAULT_ALERT_SETTINGS = {
   voltageMin: 200,
   voltageMax: 240,
   energyLimit: 10,
 };
+const DEFAULT_ESP_SETTINGS = { host: "" };
 
 // ─── Dados de exemplo (substituir pelos dados reais do ESP32 / medidor) ───────
 const INITIAL_DATA = [
@@ -379,7 +383,7 @@ function StatusBadge({ label, tone }) {
   );
 }
 
-function SettingsField({ label, type = "text", value, onChange, placeholder, help }) {
+function SettingsField({ label, type = "text", value, onChange, placeholder, help, min, max, disabled }) {
   return (
     <label style={{ display: "block", color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
       {label}
@@ -388,10 +392,101 @@ function SettingsField({ label, type = "text", value, onChange, placeholder, hel
         value={value}
         onChange={onChange}
         placeholder={placeholder}
+        min={min}
+        max={max}
+        disabled={disabled}
         style={{ width: "100%", marginTop: 6, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: "9px 10px", outline: "none" }}
       />
       {help && <span style={{ display: "block", color: C.muted, fontSize: 10, fontWeight: 400, letterSpacing: 0, marginTop: 4, textTransform: "none" }}>{help}</span>}
     </label>
+  );
+}
+
+function formatDuration(milliseconds) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours) return `${hours}h ${String(minutes).padStart(2, "0")}min`;
+  if (minutes) return `${minutes}min ${String(seconds).padStart(2, "0")}s`;
+  return `${seconds}s`;
+}
+
+function AcquisitionControls({
+  espHost,
+  onEspHostChange,
+  isResettingEnergy,
+  onResetEnergy,
+  acquisition,
+  elapsedMs,
+  connectionPhase,
+  onDurationChange,
+  onStart,
+  onPause,
+  onStop,
+}) {
+  const durationMs = acquisition.durationSeconds * 1000;
+  const remainingMs = Math.max(0, durationMs - elapsedMs);
+  const isConnected = connectionPhase === "connected";
+  const validDuration = Number.isInteger(acquisition.durationSeconds)
+    && acquisition.durationSeconds >= 1
+    && acquisition.durationSeconds <= MAX_ACQUISITION_DURATION_SECONDS;
+  const status = {
+    running: { label: "Coleta em andamento", tone: "good" },
+    paused: { label: "Coleta pausada", tone: "warning" },
+    stopped: { label: "Coleta encerrada", tone: "muted" },
+  }[acquisition.phase];
+
+  return (
+    <Card title="Controle de coleta e do dispositivo">
+      <div className="device-control-row">
+        <SettingsField
+          label="Endereço do ESP32"
+          value={espHost}
+          onChange={event => onEspHostChange(event.target.value)}
+          placeholder="192.168.1.50 ou http://192.168.1.50"
+          help="Usado apenas para zerar os contadores acumulados do PZEM."
+        />
+        <div className="connection-actions">
+          <button className="danger-button" onClick={onResetEnergy} disabled={isResettingEnergy}>
+            {isResettingEnergy ? "Zerando…" : "Zerar energia acumulada"}
+          </button>
+        </div>
+      </div>
+
+      <div className="acquisition-row">
+        <SettingsField
+          label="Período da coleta (segundos)"
+          type="number"
+          value={acquisition.durationSeconds}
+          min="1"
+          max={String(MAX_ACQUISITION_DURATION_SECONDS)}
+          disabled={acquisition.phase === "running"}
+          onChange={event => onDurationChange(event.target.value)}
+          help="Defina a duração antes de iniciar; limite de 24 horas."
+        />
+        <div className="acquisition-status">
+          <StatusBadge label={status.label} tone={status.tone} />
+          <span>Decorrido: {formatDuration(elapsedMs)}</span>
+          <span>Restante: {formatDuration(remainingMs)}</span>
+          <span>Amostras registradas: {acquisition.samples}</span>
+        </div>
+        <div className="connection-actions">
+          <button className="primary-button" onClick={onStart} disabled={!isConnected || !validDuration || acquisition.phase === "running"}>
+            {acquisition.phase === "paused" ? "Retomar" : "Iniciar"}
+          </button>
+          <button className="secondary-button" onClick={onPause} disabled={acquisition.phase !== "running"}>
+            Pausar
+          </button>
+          <button className="danger-button" onClick={onStop} disabled={acquisition.phase === "stopped"}>
+            Encerrar
+          </button>
+        </div>
+      </div>
+      <div style={{ color: C.muted, fontSize: 11, marginTop: 12 }}>
+        O controle registra as leituras deste painel durante o período definido; o ESP32 continua publicando MQTT para não acumular leituras na fila.
+      </div>
+    </Card>
   );
 }
 
@@ -416,6 +511,16 @@ function MonitorDashboard({
   onConnect,
   onDisconnect,
   onRequestNotifications,
+  espHost,
+  onEspHostChange,
+  isResettingEnergy,
+  onResetEnergy,
+  acquisition,
+  acquisitionElapsedMs,
+  onAcquisitionDurationChange,
+  onStartAcquisition,
+  onPauseAcquisition,
+  onStopAcquisition,
 }) {
   const format = (value, digits = 2) => Number.isFinite(value) ? value.toFixed(digits) : "—";
   const latestMeasurement = telemetry?.measuredAt ?? telemetry?.receivedAt;
@@ -444,6 +549,20 @@ function MonitorDashboard({
           </div>
         </div>
       </Card>
+
+      <AcquisitionControls
+        espHost={espHost}
+        onEspHostChange={onEspHostChange}
+        isResettingEnergy={isResettingEnergy}
+        onResetEnergy={onResetEnergy}
+        acquisition={acquisition}
+        elapsedMs={acquisitionElapsedMs}
+        connectionPhase={connection.phase}
+        onDurationChange={onAcquisitionDurationChange}
+        onStart={onStartAcquisition}
+        onPause={onPauseAcquisition}
+        onStop={onStopAcquisition}
+      />
 
       <div className="metric-grid" style={{ marginBottom: 20 }}>
         <MetricCard label="Tensão" value={format(telemetry?.voltage)} unit="V" accent={telemetry && (telemetry.voltage < alertSettings.voltageMin || telemetry.voltage > alertSettings.voltageMax) ? C.red : C.cyan} />
@@ -581,15 +700,25 @@ export default function App() {
   const [data, setData] = useState(INITIAL_DATA);
   const [tab, setTab] = useState("monitor"); // monitor | dashboard | editor
   const [mqttConfig, setMqttConfig] = useState(() => loadSettings(MQTT_SETTINGS_KEY, DEFAULT_MQTT_CONFIG));
+  const [espSettings, setEspSettings] = useState(() => loadSettings(ESP_SETTINGS_KEY, DEFAULT_ESP_SETTINGS));
   const [alertSettings, setAlertSettings] = useState(() => loadSettings(ALERT_SETTINGS_KEY, DEFAULT_ALERT_SETTINGS));
   const [connection, setConnection] = useState({ phase: "disconnected", label: "MQTT desconectado", message: "Configure um endpoint WebSocket para iniciar." });
   const [telemetry, setTelemetry] = useState(null);
   const [liveHistory, setLiveHistory] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [isResettingEnergy, setIsResettingEnergy] = useState(false);
+  const [acquisition, setAcquisition] = useState({
+    phase: "stopped",
+    durationSeconds: 60,
+    elapsedMs: 0,
+    startedAtMs: null,
+    samples: 0,
+  });
   const [clock, setClock] = useState(Date.now());
   const clientRef = useRef(null);
   const alertSettingsRef = useRef(alertSettings);
   const alertGateRef = useRef({ voltage: false, energy: false, offline: false });
+  const acquisitionRef = useRef(acquisition);
 
   useEffect(() => {
     alertSettingsRef.current = alertSettings;
@@ -600,6 +729,14 @@ export default function App() {
     const { password, ...safeConfig } = mqttConfig;
     window.localStorage.setItem(MQTT_SETTINGS_KEY, JSON.stringify(safeConfig));
   }, [mqttConfig]);
+
+  useEffect(() => {
+    window.localStorage.setItem(ESP_SETTINGS_KEY, JSON.stringify(espSettings));
+  }, [espSettings]);
+
+  useEffect(() => {
+    acquisitionRef.current = acquisition;
+  }, [acquisition]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
@@ -622,6 +759,109 @@ export default function App() {
     },
     [clock, connection.phase, telemetry],
   );
+
+  function elapsedAcquisitionMs(session, now = Date.now()) {
+    if (session.phase !== "running" || session.startedAtMs == null) {
+      return session.elapsedMs;
+    }
+    return session.elapsedMs + Math.max(0, now - session.startedAtMs);
+  }
+
+  function updateAcquisition(updater) {
+    setAcquisition(current => {
+      const next = updater(current);
+      acquisitionRef.current = next;
+      return next;
+    });
+  }
+
+  const acquisitionElapsedMs = elapsedAcquisitionMs(acquisition, clock);
+
+  function changeAcquisitionDuration(value) {
+    const durationSeconds = Number(value);
+    updateAcquisition(current => ({
+      ...current,
+      durationSeconds: Number.isInteger(durationSeconds) ? durationSeconds : 0,
+    }));
+  }
+
+  function startAcquisition() {
+    if (connection.phase !== "connected") {
+      setConnection(current => ({ ...current, message: "Conecte ao MQTT antes de iniciar a coleta." }));
+      return;
+    }
+
+    const now = Date.now();
+    const current = acquisitionRef.current;
+    if (!Number.isInteger(current.durationSeconds)
+      || current.durationSeconds < 1
+      || current.durationSeconds > MAX_ACQUISITION_DURATION_SECONDS) {
+      setConnection(state => ({ ...state, message: "Defina um período de coleta entre 1 segundo e 24 horas." }));
+      return;
+    }
+
+    if (current.phase === "paused") {
+      updateAcquisition(state => ({ ...state, phase: "running", startedAtMs: now }));
+      return;
+    }
+
+    setLiveHistory([]);
+    updateAcquisition(state => ({
+      ...state,
+      phase: "running",
+      elapsedMs: 0,
+      startedAtMs: now,
+      samples: 0,
+    }));
+  }
+
+  function pauseAcquisition() {
+    updateAcquisition(current => {
+      if (current.phase !== "running") return current;
+      return {
+        ...current,
+        phase: "paused",
+        elapsedMs: elapsedAcquisitionMs(current),
+        startedAtMs: null,
+      };
+    });
+  }
+
+  function stopAcquisition(message = "Coleta encerrada.") {
+    updateAcquisition(current => {
+      if (current.phase === "stopped") return current;
+      return {
+        ...current,
+        phase: "stopped",
+        elapsedMs: Math.min(
+          elapsedAcquisitionMs(current),
+          current.durationSeconds * 1000,
+        ),
+        startedAtMs: null,
+      };
+    });
+    setConnection(current => ({ ...current, message }));
+  }
+
+  async function resetEnergy() {
+    if (!espSettings.host.trim()) {
+      setConnection(current => ({ ...current, message: "Informe o endereço do ESP32 para zerar a energia." }));
+      return;
+    }
+    if (!window.confirm("Zerar os contadores de energia acumulada do PZEM? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    setIsResettingEnergy(true);
+    try {
+      const message = await resetEspEnergy(espSettings.host);
+      setConnection(current => ({ ...current, message }));
+    } catch (error) {
+      setConnection(current => ({ ...current, message: error.message || "Não foi possível zerar a energia no ESP32." }));
+    } finally {
+      setIsResettingEnergy(false);
+    }
+  }
 
   function appendAlert({ key, title, message, severity }) {
     if (alertGateRef.current[key]) return;
@@ -676,18 +916,23 @@ export default function App() {
         onTelemetry: (nextTelemetry) => {
           setTelemetry(nextTelemetry);
           const measurementTime = nextTelemetry.measuredAt ?? nextTelemetry.receivedAt;
-          setLiveHistory(current => [...current, {
-            time: measurementTime.toLocaleTimeString("pt-BR"),
-            power: nextTelemetry.power,
-            apparentPower: nextTelemetry.apparentPower,
-            reactivePower: nextTelemetry.reactivePower,
-            voltage: nextTelemetry.voltage,
-            current: nextTelemetry.current,
-            frequency: nextTelemetry.frequency,
-            pf: nextTelemetry.pf,
-            energy: nextTelemetry.energy,
-            temperature: nextTelemetry.temperature,
-          }].slice(-60));
+          if (acquisitionRef.current.phase === "running") {
+            setLiveHistory(current => [...current, {
+              time: measurementTime.toLocaleTimeString("pt-BR"),
+              power: nextTelemetry.power,
+              apparentPower: nextTelemetry.apparentPower,
+              reactivePower: nextTelemetry.reactivePower,
+              voltage: nextTelemetry.voltage,
+              current: nextTelemetry.current,
+              frequency: nextTelemetry.frequency,
+              pf: nextTelemetry.pf,
+              energy: nextTelemetry.energy,
+              temperature: nextTelemetry.temperature,
+            }].slice(-60));
+            updateAcquisition(current => current.phase === "running"
+              ? { ...current, samples: current.samples + 1 }
+              : current);
+          }
           clearAlertGate("offline");
           evaluateTelemetryAlerts(nextTelemetry);
         },
@@ -703,6 +948,7 @@ export default function App() {
   }
 
   function disconnect() {
+    pauseAcquisition();
     clientRef.current?.removeAllListeners();
     clientRef.current?.end(true);
     clientRef.current = null;
@@ -738,6 +984,22 @@ export default function App() {
       });
     }
   }, [clock, connection.phase, deviceOnline, telemetry]);
+
+  useEffect(() => {
+    if (acquisition.phase !== "running" || connection.phase === "connected") {
+      return;
+    }
+    pauseAcquisition();
+  }, [connection.phase]);
+
+  useEffect(() => {
+    if (acquisition.phase !== "running") {
+      return;
+    }
+    if (acquisitionElapsedMs >= acquisition.durationSeconds * 1000) {
+      stopAcquisition("Período de coleta concluído.");
+    }
+  }, [acquisition.phase, acquisition.durationSeconds, acquisitionElapsedMs]);
 
   const derived = data.map(d => ({
     ...d,
@@ -838,6 +1100,16 @@ export default function App() {
           onConnect={connect}
           onDisconnect={disconnect}
           onRequestNotifications={requestNotifications}
+          espHost={espSettings.host}
+          onEspHostChange={host => setEspSettings({ host })}
+          isResettingEnergy={isResettingEnergy}
+          onResetEnergy={resetEnergy}
+          acquisition={acquisition}
+          acquisitionElapsedMs={acquisitionElapsedMs}
+          onAcquisitionDurationChange={changeAcquisitionDuration}
+          onStartAcquisition={startAcquisition}
+          onPauseAcquisition={pauseAcquisition}
+          onStopAcquisition={() => stopAcquisition()}
         />
       )}
 

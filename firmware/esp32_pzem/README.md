@@ -172,6 +172,18 @@ Quando a fila lota, a amostra mais antiga e descartada para abrir espaco.
 4. Envie SSID/senha da rede final e dados do MQTT.
 5. O ESP reinicia e passa a operar no modo normal.
 
+## Controle pelo dashboard web
+
+O dashboard aceita o endereço do ESP32 (por exemplo, `192.168.1.50`) para
+enviar `POST /reset-energy`, a mesma operação de **Zerar energia acumulada**
+disponível no app. A ação zera os contadores de energia do PZEM e exige
+confirmação na interface.
+
+O painel também permite iniciar, pausar, retomar ou encerrar uma sessão de
+coleta por um período definido em segundos. Esses controles registram as
+leituras no gráfico do navegador e não interrompem a publicação MQTT do ESP32;
+assim, pausar a coleta não acumula mensagens na fila do dispositivo.
+
 ## Observacao sobre QoS
 
 Nesta implementacao (PubSubClient), a publicacao de payload usa QoS 0.
