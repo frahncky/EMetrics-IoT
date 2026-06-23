@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // INCLUDES
 // ═══════════════════════════════════════════════════════════════════════════
+#include <ArduinoOTA.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <esp_wpa2.h>
@@ -2062,6 +2063,27 @@ void updateLcdDisplay() {
 // SETUP E LOOP PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
 
+void setupArduinoOTA() {
+  ArduinoOTA.setHostname(config.mqttClientId);
+  if (strlen(config.otaPassword) >= 8) {
+    ArduinoOTA.setPassword(config.otaPassword);
+  }
+  ArduinoOTA.onStart([]() {
+    Serial.println("[OTA] Iniciando atualizacao de firmware...");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[OTA] Concluido. Reiniciando...");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("[OTA] Progresso: %u%%\r", progress * 100 / total);
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] Erro [%u]\n", error);
+  });
+  ArduinoOTA.begin();
+  Serial.println("[OTA] ArduinoOTA pronto. IP: " + WiFi.localIP().toString());
+}
+
 void setup() {
   Serial.begin(115200);
   Serial2.begin(9600, SERIAL_8N1, 16, 17);
@@ -2122,6 +2144,7 @@ void setup() {
   }
   lastWifiAttemptMs = millis();
   startProvisioningServer();
+  setupArduinoOTA();
 }
 
 void loop() {
@@ -2137,6 +2160,8 @@ void loop() {
     updateLcdDisplay();
     return;
   }
+
+  ArduinoOTA.handle();
 
   // E11: Modo hibrido Wi-Fi — alterna entre fase de aquisicao (Wi-Fi OFF) e TX (Wi-Fi ON)
   if (hybridWifiEnabled) {

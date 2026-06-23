@@ -97,16 +97,32 @@ provisionamento inicial e permanece somente como AP ate receber `/provision`.
 
 ## Atualização de firmware por Wi-Fi (OTA)
 
-O firmware expõe `POST /firmware/update` para receber um arquivo `.bin` gerado
-para o ESP32. A primeira gravação deste firmware ainda precisa ser feita via
-USB. Depois disso, o app pode selecionar um `.bin` e enviá-lo pela rede local.
+A primeira gravação deste firmware ainda precisa ser feita via USB. Depois
+disso, há duas formas de atualizar sem cabo:
 
-Durante o provisionamento, defina `otaPassword` com 8 a 64 caracteres. Cada
-upload deve enviar essa mesma chave no cabeçalho HTTP
-`X-EMetrics-OTA-Key`; sem ela, o ESP recusa a atualização. Ao concluir a
-gravação, o ESP reinicia automaticamente usando o novo firmware.
+### 1. Pelo Arduino IDE (ArduinoOTA)
 
-Para gerar um binário selecionável no app com Arduino CLI:
+Após a gravação inicial e o provisionamento do Wi-Fi, o ESP32 aparece
+automaticamente como porta de rede no Arduino IDE:
+
+**Tools > Port > `<clientId>` at `<IP>`**
+
+Basta selecionar essa porta e clicar em **Upload** normalmente. Se a
+`otaPassword` foi definida no provisionamento (8 a 64 caracteres), o IDE
+solicitará a senha na primeira vez — informe a mesma chave. O hostname
+exibido no IDE é o `clientId` definido no provisionamento (padrão:
+`esp32_pzem_001`).
+
+> **Requisito:** computador e ESP32 na mesma rede local.
+
+### 2. Pelo app Flutter (HTTP OTA)
+
+O firmware também expõe `POST /firmware/update` para receber um `.bin`
+gerado para o ESP32. O app pode selecionar um `.bin` e enviá-lo pela rede
+local. Cada upload deve enviar a chave OTA no cabeçalho HTTP
+`X-EMetrics-OTA-Key`; sem ela, o ESP recusa a atualização.
+
+Para gerar um binário com Arduino CLI:
 
 ```bash
 arduino-cli compile --fqbn esp32:esp32:esp32 --export-binaries firmware/esp32_pzem
