@@ -57,6 +57,8 @@ Campos esperados em /provision (form-urlencoded):
 - mqttRequestTopic
 - clientId
 - useTls (1 ou 0)
+- initialConnectTimeoutSeconds, retryIntervalSeconds e fallbackApDelaySeconds
+  (opcionais; de 5 a 600 segundos)
 
 O ESP32 tambem salva a rede Wi-Fi enviada em uma lista local. O app pode
 gerenciar essa lista quando estiver conectado ao AP do ESP ou ao IP do ESP na
@@ -66,16 +68,25 @@ rede local:
 - POST `/wifi-networks`: cria ou edita uma rede (`ssid`, `wifiPassword`,
   `oldSsid` opcional, `keepPassword` 1 ou 0).
 - POST `/wifi-networks/delete`: exclui uma rede (`ssid`).
+- POST `/wifi-networks/reorder`: muda a prioridade de uma rede (`ssid` e
+  `direction`, com `up` ou `down`).
+- GET `/wifi-connection-settings`: retorna os tempos de conexão Wi-Fi.
+- POST `/wifi-connection-settings`: atualiza `initialConnectTimeoutSeconds`,
+  `retryIntervalSeconds` e `fallbackApDelaySeconds` (de 5 a 600 segundos) e
+  reinicia o ESP para aplicar a tentativa inicial.
 
 O firmware mantém ate 5 redes salvas e tenta reconectar alternando entre elas
-quando o Wi-Fi cai.
+quando o Wi-Fi cai. A ordem exibida no app define a prioridade: a primeira
+rede é sempre a primeira tentativa do próximo ciclo.
 
 ## AP de fallback
 
 Depois da primeira configuracao, o ESP continua iniciando o servidor HTTP local.
-Se ele ficar 60 segundos sem conseguir conectar em uma rede salva, ou se a lista
-de redes ficar vazia, ele abre automaticamente o AP `EMetrics-Setup` em modo
-AP+STA. Nesse modo:
+Os valores padrão são: 20 segundos para a tentativa inicial, 15 segundos entre
+tentativas e 60 segundos para ativar o AP de fallback. Eles podem ser alterados
+no app, entre 5 e 600 segundos. Se o ESP ficar pelo tempo configurado sem
+conseguir conectar em uma rede salva, ou se a lista de redes ficar vazia, ele
+abre automaticamente o AP `EMetrics-Setup` em modo AP+STA. Nesse modo:
 
 - O ESP continua tentando conectar nas redes salvas.
 - O app pode acessar `http://192.168.4.1` para editar ou excluir redes.
@@ -83,6 +94,27 @@ AP+STA. Nesse modo:
 
 Se o ESP iniciar sem nenhuma configuracao valida, ele entra no modo de
 provisionamento inicial e permanece somente como AP ate receber `/provision`.
+
+## Atualização de firmware por Wi-Fi (OTA)
+
+O firmware expõe `POST /firmware/update` para receber um arquivo `.bin` gerado
+para o ESP32. A primeira gravação deste firmware ainda precisa ser feita via
+USB. Depois disso, o app pode selecionar um `.bin` e enviá-lo pela rede local.
+
+Durante o provisionamento, defina `otaPassword` com 8 a 64 caracteres. Cada
+upload deve enviar essa mesma chave no cabeçalho HTTP
+`X-EMetrics-OTA-Key`; sem ela, o ESP recusa a atualização. Ao concluir a
+gravação, o ESP reinicia automaticamente usando o novo firmware.
+
+Para gerar um binário selecionável no app com Arduino CLI:
+
+```bash
+arduino-cli compile --fqbn esp32:esp32:esp32 --export-binaries firmware/esp32_pzem
+```
+
+Use uma tabela de partições com duas partições OTA. O esquema padrão usado pelo
+core ESP32 possui espaço para a atualização, desde que o `.bin` caiba na
+partição de aplicação.
 
 ## Robustez incluida neste exemplo
 
@@ -139,6 +171,18 @@ Quando a fila lota, a amostra mais antiga e descartada para abrir espaco.
 3. No app, abra Configuracoes > MQTT > Provisionar ESP32.
 4. Envie SSID/senha da rede final e dados do MQTT.
 5. O ESP reinicia e passa a operar no modo normal.
+
+## Controle pelo dashboard web
+
+O dashboard aceita o endereço do ESP32 (por exemplo, `192.168.1.50`) para
+enviar `POST /reset-energy`, a mesma operação de **Zerar energia acumulada**
+disponível no app. A ação zera os contadores de energia do PZEM e exige
+confirmação na interface.
+
+O painel também permite iniciar, pausar, retomar ou encerrar uma sessão de
+coleta por um período definido em segundos. Esses controles registram as
+leituras no gráfico do navegador e não interrompem a publicação MQTT do ESP32;
+assim, pausar a coleta não acumula mensagens na fila do dispositivo.
 
 ## Observacao sobre QoS
 

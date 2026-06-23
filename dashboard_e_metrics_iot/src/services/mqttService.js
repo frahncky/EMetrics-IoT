@@ -100,8 +100,9 @@ export function connectMqtt(config, handlers) {
     });
   });
 
-  client.on("message", (messageTopic, payload) => {
+  client.on("message", (messageTopic, payload, packet) => {
     if (messageTopic !== topic) return;
+    if (packet.retain) return;
 
     try {
       handlers.onTelemetry(parseTelemetry(payload));

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../providers/mqtt_settings_provider.dart';
 import '../../services/esp_local_host_store.dart';
@@ -20,6 +21,16 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   final _wifiSsidController = TextEditingController();
   final _wifiUsernameController = TextEditingController();
   final _wifiPasswordController = TextEditingController();
+  final _wifiInitialConnectTimeoutController = TextEditingController(
+    text: '${EspWifiConnectionSettings.defaultInitialConnectTimeoutSeconds}',
+  );
+  final _wifiRetryIntervalController = TextEditingController(
+    text: '${EspWifiConnectionSettings.defaultRetryIntervalSeconds}',
+  );
+  final _wifiFallbackApDelayController = TextEditingController(
+    text: '${EspWifiConnectionSettings.defaultFallbackApDelaySeconds}',
+  );
+  final _otaPasswordController = TextEditingController();
   final _mqttHostController = TextEditingController();
   final _mqttPortController = TextEditingController(text: '1883');
   final _mqttUserController = TextEditingController();
@@ -31,13 +42,20 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   bool _isSubmitting = false;
   bool _isLoadingNetworks = false;
   bool _isSavingNetwork = false;
+  bool _isLoadingWifiConnectionSettings = false;
+  bool _isSavingWifiConnectionSettings = false;
+  bool _isUploadingFirmware = false;
+  bool _isTestingWifi = false;
   bool _isScanning = false;
   bool _wifiPasswordVisible = false;
+  bool _otaPasswordVisible = false;
   bool _mqttPasswordVisible = false;
   String? _editingNetworkSsid;
   String? _deletingNetworkSsid;
+  String? _movingNetworkSsid;
   String _appMqttClientId = '';
   List<EspWifiNetwork> _savedNetworks = const [];
+  PlatformFile? _selectedFirmware;
   final EspProvisioningService _service = const EspProvisioningService();
   final EspLocalHostStore _espHostStore = const EspLocalHostStore();
 
@@ -99,6 +117,223 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
           ),
         ),
       );
+    }
+  }
+
+  EspWifiConnectionSettings? _wifiConnectionSettingsFromFields() {
+    final initial = int.tryParse(_wifiInitialConnectTimeoutController.text);
+    final retry = int.tryParse(_wifiRetryIntervalController.text);
+    final fallback = int.tryParse(_wifiFallbackApDelayController.text);
+    final values = [initial, retry, fallback];
+    final hasInvalidValue = values.any(
+      (value) =>
+          value == null ||
+          value < EspWifiConnectionSettings.minDelaySeconds ||
+          value > EspWifiConnectionSettings.maxDelaySeconds,
+    );
+    if (hasInvalidValue) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Informe os tempos entre ${EspWifiConnectionSettings.minDelaySeconds} e ${EspWifiConnectionSettings.maxDelaySeconds} segundos.',
+          ),
+        ),
+      );
+      return null;
+    }
+
+    return EspWifiConnectionSettings(
+      initialConnectTimeoutSeconds: initial!,
+      retryIntervalSeconds: retry!,
+      fallbackApDelaySeconds: fallback!,
+    );
+  }
+
+  Future<void> _loadWifiConnectionSettings() async {
+    if (_espHostController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe o IP do ESP32 antes de carregar os tempos.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoadingWifiConnectionSettings = true);
+    await _saveCurrentEspHost();
+    try {
+      final settings = await _service.loadWifiConnectionSettings(
+        espHost: _espHostController.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _wifiInitialConnectTimeoutController.text = settings
+            .initialConnectTimeoutSeconds
+            .toString();
+        _wifiRetryIntervalController.text = settings.retryIntervalSeconds
+            .toString();
+        _wifiFallbackApDelayController.text = settings.fallbackApDelaySeconds
+            .toString();
+        _isLoadingWifiConnectionSettings = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingWifiConnectionSettings = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Não foi possível carregar os tempos: ${_message(e)}'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveWifiConnectionSettings() async {
+    final settings = _wifiConnectionSettingsFromFields();
+    if (settings == null || _espHostController.text.trim().isEmpty) {
+      if (_espHostController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Informe o IP do ESP32 antes de salvar os tempos.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isSavingWifiConnectionSettings = true);
+    await _saveCurrentEspHost();
+    final result = await _service.saveWifiConnectionSettings(
+      espHost: _espHostController.text,
+      initialConnectTimeoutSeconds: settings.initialConnectTimeoutSeconds,
+      retryIntervalSeconds: settings.retryIntervalSeconds,
+      fallbackApDelaySeconds: settings.fallbackApDelaySeconds,
+    );
+    if (!mounted) return;
+    setState(() => _isSavingWifiConnectionSettings = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
+  String? _validateOtaPassword(String? value) {
+    final password = value?.trim() ?? '';
+    if (password.length < 8 || password.length > 64) {
+      return 'Defina uma chave OTA entre 8 e 64 caracteres.';
+    }
+    return null;
+  }
+
+
+  Future<void> _testWifiConnection() async {
+    setState(() => _isTestingWifi = true);
+    await _saveCurrentEspHost();
+    final host = _espHostController.text;
+    final reconnect = await _service.triggerWifiReconnect(espHost: host);
+    if (!mounted) return;
+    setState(() => _isTestingWifi = false);
+    if (!reconnect.ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(reconnect.message), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _WifiTestDialog(service: _service, espHost: host),
+    );
+  }
+
+  Future<void> _selectFirmware() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['bin'],
+      allowMultiple: false,
+      withData: true,
+    );
+    final file = result == null || result.files.isEmpty
+        ? null
+        : result.files.first;
+    if (file == null || !mounted) {
+      return;
+    }
+    if (file.bytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível ler o arquivo .bin selecionado.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _selectedFirmware = file);
+  }
+
+  Future<void> _uploadFirmware() async {
+    final file = _selectedFirmware;
+    final otaPasswordError = _validateOtaPassword(_otaPasswordController.text);
+    if (_espHostController.text.trim().isEmpty ||
+        otaPasswordError != null ||
+        file == null ||
+        file.bytes == null) {
+      final message = _espHostController.text.trim().isEmpty
+          ? 'Informe o IP do ESP32 antes de enviar o firmware.'
+          : otaPasswordError ??
+                (file == null
+                    ? 'Selecione o arquivo .bin do firmware.'
+                    : 'Não foi possível ler o arquivo .bin selecionado.');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+
+    setState(() => _isUploadingFirmware = true);
+    await _saveCurrentEspHost();
+    final result = await _service.uploadFirmware(
+      espHost: _espHostController.text,
+      otaPassword: _otaPasswordController.text,
+      firmwareBytes: file.bytes!,
+      fileName: file.name,
+    );
+    if (!mounted) return;
+    setState(() {
+      _isUploadingFirmware = false;
+      if (result.ok) {
+        _selectedFirmware = null;
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
+  Future<void> _moveWifiNetwork(
+    EspWifiNetwork network, {
+    required bool moveUp,
+  }) async {
+    setState(() => _movingNetworkSsid = network.ssid);
+    await _saveCurrentEspHost();
+    final result = await _service.moveWifiNetwork(
+      espHost: _espHostController.text,
+      ssid: network.ssid,
+      moveUp: moveUp,
+    );
+    if (!mounted) return;
+    setState(() => _movingNetworkSsid = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : Colors.redAccent,
+      ),
+    );
+    if (result.ok) {
+      await _loadSavedNetworks(silent: true);
     }
   }
 
@@ -240,9 +475,9 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isScanning = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_message(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_message(e))));
     }
   }
 
@@ -281,8 +516,7 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                       leading: Icon(_rssiIcon(n.rssi)),
                       title: Text(n.ssid),
                       subtitle: Text(
-                        '${_rssiLabel(n.rssi)} (${n.rssi} dBm)'
-                        '${n.open ? ' · Aberta' : ''}',
+                        '${_rssiLabel(n.rssi)} · ${n.rssi} dBm · ${n.authLabel}',
                       ),
                       trailing: n.open
                           ? null
@@ -333,7 +567,10 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
+    final wifiConnectionSettings = _wifiConnectionSettingsFromFields();
+    if (wifiConnectionSettings == null) {
+      return;
+    }
     setState(() => _isSubmitting = true);
     await _saveCurrentEspHost();
 
@@ -350,6 +587,11 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
       mqttRequestTopic: _mqttRequestTopicController.text,
       mqttClientId: _mqttClientIdController.text,
       useTls: _useTls,
+      initialConnectTimeoutSeconds:
+          wifiConnectionSettings.initialConnectTimeoutSeconds,
+      retryIntervalSeconds: wifiConnectionSettings.retryIntervalSeconds,
+      fallbackApDelaySeconds: wifiConnectionSettings.fallbackApDelaySeconds,
+      otaPassword: _otaPasswordController.text,
     );
 
     if (!mounted) {
@@ -407,31 +649,239 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                 },
               ),
               const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: _isLoadingNetworks ? null : _loadSavedNetworks,
-                  icon: _isLoadingNetworks
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
-                  label: Text(
-                    _isLoadingNetworks
-                        ? 'Carregando...'
-                        : 'Carregar redes salvas',
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _isLoadingNetworks ? null : _loadSavedNetworks,
+                    icon: _isLoadingNetworks
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                    label: Text(
+                      _isLoadingNetworks ? 'Carregando...' : 'Carregar redes',
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: _isTestingWifi ? null : _testWifiConnection,
+                    icon: _isTestingWifi
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.network_check),
+                    label: Text(
+                      _isTestingWifi ? 'Aguarde...' : 'Testar conexão',
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               _SavedNetworksPanel(
                 networks: _savedNetworks,
                 editingSsid: _editingNetworkSsid,
                 deletingSsid: _deletingNetworkSsid,
+                movingSsid: _movingNetworkSsid,
                 onEdit: _editWifiNetwork,
                 onDelete: _deleteWifiNetwork,
+                onMove: _moveWifiNetwork,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tentativas de conexão Wi-Fi',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Informe valores entre ${EspWifiConnectionSettings.minDelaySeconds} e ${EspWifiConnectionSettings.maxDelaySeconds} segundos.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _wifiInitialConnectTimeoutController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Tentativa inicial (segundos)',
+                        helperText: 'Tempo aguardado quando o ESP é ligado.',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _wifiRetryIntervalController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Intervalo entre tentativas (segundos)',
+                        helperText: 'Pausa antes de tentar a próxima rede.',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _wifiFallbackApDelayController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText:
+                            'Tempo para abrir AP de recuperação (segundos)',
+                        helperText:
+                            'Após esse período, o AP EMetrics-Setup é ativado.',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed:
+                              _isLoadingWifiConnectionSettings ||
+                                  _isSavingWifiConnectionSettings
+                              ? null
+                              : _loadWifiConnectionSettings,
+                          icon: _isLoadingWifiConnectionSettings
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.download_outlined),
+                          label: const Text('Carregar tempos do ESP'),
+                        ),
+                        FilledButton.icon(
+                          onPressed:
+                              _isLoadingWifiConnectionSettings ||
+                                  _isSavingWifiConnectionSettings
+                              ? null
+                              : _saveWifiConnectionSettings,
+                          icon: _isSavingWifiConnectionSettings
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined),
+                          label: const Text('Salvar tempos e reiniciar ESP'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Atualização de firmware por Wi-Fi',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Defina a chave durante o provisionamento. Depois, selecione o .bin e envie-o ao ESP32 pela rede local.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _otaPasswordController,
+                      obscureText: !_otaPasswordVisible,
+                      validator: (value) {
+                        if ((value ?? '').trim().isEmpty) {
+                          return null;
+                        }
+                        return _validateOtaPassword(value);
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Chave OTA',
+                        helperText:
+                            'Opcional no provisionamento. Para OTA, use 8 a 64 caracteres.',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          tooltip: _otaPasswordVisible
+                              ? 'Ocultar chave OTA'
+                              : 'Mostrar chave OTA',
+                          icon: Icon(
+                            _otaPasswordVisible
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () => setState(
+                            () => _otaPasswordVisible = !_otaPasswordVisible,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _selectedFirmware == null
+                          ? 'Nenhum firmware selecionado.'
+                          : '${_selectedFirmware!.name} (${(_selectedFirmware!.size / 1024).toStringAsFixed(1)} KB)',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _isUploadingFirmware
+                              ? null
+                              : _selectFirmware,
+                          icon: const Icon(Icons.attach_file),
+                          label: const Text('Selecionar .bin'),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _isUploadingFirmware
+                              ? null
+                              : _uploadFirmware,
+                          icon: _isUploadingFirmware
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.system_update_alt),
+                          label: Text(
+                            _isUploadingFirmware
+                                ? 'Enviando firmware...'
+                                : 'Atualizar ESP32',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 16),
               Row(
@@ -648,6 +1098,10 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     _wifiSsidController.dispose();
     _wifiUsernameController.dispose();
     _wifiPasswordController.dispose();
+    _wifiInitialConnectTimeoutController.dispose();
+    _wifiRetryIntervalController.dispose();
+    _wifiFallbackApDelayController.dispose();
+    _otaPasswordController.dispose();
     _mqttHostController.dispose();
     _mqttPortController.dispose();
     _mqttUserController.dispose();
@@ -663,15 +1117,20 @@ class _SavedNetworksPanel extends StatelessWidget {
   final List<EspWifiNetwork> networks;
   final String? editingSsid;
   final String? deletingSsid;
+  final String? movingSsid;
   final ValueChanged<EspWifiNetwork> onEdit;
   final ValueChanged<EspWifiNetwork> onDelete;
+  final Future<void> Function(EspWifiNetwork network, {required bool moveUp})
+  onMove;
 
   const _SavedNetworksPanel({
     required this.networks,
     required this.editingSsid,
     required this.deletingSsid,
+    required this.movingSsid,
     required this.onEdit,
     required this.onDelete,
+    required this.onMove,
   });
 
   @override
@@ -703,9 +1162,13 @@ class _SavedNetworksPanel extends StatelessWidget {
           if (networks.isEmpty)
             Text('Nenhuma rede carregada.', style: theme.textTheme.bodySmall)
           else
-            ...networks.map((network) {
+            ...networks.asMap().entries.map((entry) {
+              final index = entry.key;
+              final network = entry.value;
               final deleting = deletingSsid == network.ssid;
               final editing = editingSsid == network.ssid;
+              final moving = movingSsid == network.ssid;
+              final isReordering = movingSsid != null;
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(
@@ -719,21 +1182,42 @@ class _SavedNetworksPanel extends StatelessWidget {
                   editing
                       ? 'Editando'
                       : network.active
-                      ? 'Rede em uso'
-                      : 'Salva no ESP32',
+                      ? 'Rede em uso · Prioridade ${index + 1}'
+                      : 'Salva no ESP32 · Prioridade ${index + 1}',
                 ),
                 trailing: Wrap(
                   spacing: 4,
                   children: [
                     IconButton(
+                      tooltip: 'Aumentar prioridade',
+                      onPressed: index == 0 || deleting || isReordering
+                          ? null
+                          : () => onMove(network, moveUp: true),
+                      icon: const Icon(Icons.keyboard_arrow_up),
+                    ),
+                    IconButton(
+                      tooltip: 'Diminuir prioridade',
+                      onPressed:
+                          index == networks.length - 1 ||
+                              deleting ||
+                              isReordering
+                          ? null
+                          : () => onMove(network, moveUp: false),
+                      icon: const Icon(Icons.keyboard_arrow_down),
+                    ),
+                    IconButton(
                       tooltip: 'Editar rede',
-                      onPressed: deleting ? null : () => onEdit(network),
+                      onPressed: deleting || isReordering
+                          ? null
+                          : () => onEdit(network),
                       icon: const Icon(Icons.edit_outlined),
                     ),
                     IconButton(
                       tooltip: 'Excluir rede',
-                      onPressed: deleting ? null : () => onDelete(network),
-                      icon: deleting
+                      onPressed: deleting || isReordering
+                          ? null
+                          : () => onDelete(network),
+                      icon: deleting || moving
                           ? const SizedBox(
                               width: 18,
                               height: 18,
@@ -747,6 +1231,172 @@ class _SavedNetworksPanel extends StatelessWidget {
             }),
         ],
       ),
+    );
+  }
+}
+
+// ── Diálogo de teste de conexão Wi-Fi ────────────────────────────────────────
+
+class _WifiTestDialog extends StatefulWidget {
+  final EspProvisioningService service;
+  final String espHost;
+
+  const _WifiTestDialog({required this.service, required this.espHost});
+
+  @override
+  State<_WifiTestDialog> createState() => _WifiTestDialogState();
+}
+
+class _WifiTestDialogState extends State<_WifiTestDialog> {
+  static const _totalSeconds = 20;
+  int _remaining = _totalSeconds;
+  WifiConnectionStatus? _status;
+  bool _unreachable = false;
+  bool _done = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick();
+  }
+
+  Future<void> _tick() async {
+    for (var i = _totalSeconds; i >= 1; i--) {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      setState(() => _remaining = i - 1);
+    }
+    await _checkStatus();
+  }
+
+  Future<void> _checkStatus() async {
+    try {
+      final status = await widget.service.getWifiStatus(espHost: widget.espHost);
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _done = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // ESP saiu do AP — conectou à rede alvo com sucesso
+      setState(() {
+        _unreachable = true;
+        _done = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Teste de conexão Wi-Fi'),
+      content: _done ? _buildResult() : _buildWaiting(),
+      actions: [
+        if (_done)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Fechar'),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildWaiting() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 16),
+        Text('Aguardando resultado... $_remaining s'),
+        const SizedBox(height: 8),
+        const Text(
+          'O ESP32 está tentando conectar à rede configurada.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResult() {
+    if (_unreachable) {
+      return _ResultContent(
+        icon: Icons.check_circle,
+        iconColor: Colors.green,
+        title: 'Conexão bem-sucedida',
+        lines: const ['O ESP32 conectou à rede e saiu do AP.', 'Reconecte o celular à rede Wi-Fi normal.'],
+      );
+    }
+
+    final s = _status!;
+    if (s.connected) {
+      return _ResultContent(
+        icon: Icons.check_circle,
+        iconColor: Colors.green,
+        title: 'Conectado',
+        lines: [
+          'Rede: ${s.ssid}',
+          if (s.ip != null) 'IP: ${s.ip}',
+          if (s.rssi != null) 'Sinal: ${s.rssi} dBm',
+          if (s.enterprise) 'Modo: WPA2-Enterprise',
+        ],
+      );
+    }
+
+    String hint = '';
+    if (s.statusCode == 1) {
+      hint = 'Rede não encontrada. Verifique o nome exato e se é 2.4 GHz.';
+    } else if (s.statusCode == 4) {
+      hint = s.enterprise
+          ? 'Falha de autenticação. Verifique usuário e senha (WPA2-Enterprise).'
+          : 'Senha incorreta.';
+    } else {
+      hint = 'Sem conexão. Verifique as credenciais e a rede.';
+    }
+
+    return _ResultContent(
+      icon: Icons.error_outline,
+      iconColor: Colors.redAccent,
+      title: s.description,
+      lines: [
+        'Rede: ${s.ssid}',
+        'Modo: ${s.enterprise ? "WPA2-Enterprise" : "WPA2-Personal"}',
+        hint,
+      ],
+    );
+  }
+}
+
+class _ResultContent extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final List<String> lines;
+
+  const _ResultContent({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.lines,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: iconColor, size: 48),
+        const SizedBox(height: 12),
+        Text(title,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        for (final line in lines) ...[
+          Text(line, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)),
+          const SizedBox(height: 4),
+        ],
+      ],
     );
   }
 }

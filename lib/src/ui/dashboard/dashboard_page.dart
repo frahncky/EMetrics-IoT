@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
 import '../../providers/metric_provider.dart';
+import '../../services/esp_local_host_store.dart';
+import '../../services/esp_provisioning_service.dart';
 import '../../theme/app_colors.dart';
 import 'dashboard_tabs.dart';
 import '../shared/mqtt_connection_status_icon.dart';
@@ -18,6 +20,46 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage>
     with WidgetsBindingObserver {
+  final _espHostStore = const EspLocalHostStore();
+  final _espService = const EspProvisioningService();
+  bool _isResettingEnergy = false;
+
+  Future<void> _resetEnergy() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Zerar energia acumulada'),
+        content: const Text(
+          'Isso vai zerar os contadores de energia (kWh, kVAh, kVArh) do PZEM. Esta ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Zerar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isResettingEnergy = true);
+    final host = await _espHostStore.loadHost();
+    if (!mounted) return;
+    final result = await _espService.resetEnergy(espHost: host);
+    if (!mounted) return;
+    setState(() => _isResettingEnergy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
   /// Sincroniza o estado do serviço MQTT em segundo plano com o provider de status.
   Future<void> _syncBackgroundState() async {
     await ref.read(mqttStatusProvider.notifier).syncBackgroundState();
@@ -51,7 +93,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     // Ativa o saver para que métricas MQTT sejam persistidas enquanto a tela estiver visível.
     ref.watch(mqttMetricSaverProvider);
     final mqttSettings = ref.watch(mqttSettingsProvider);
-    final metricsAsync = ref.watch(metricsProvider);
+    ref.watch(metricsProvider);
+    final lastMetric = ref.watch(latestMqttMetricProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -68,10 +111,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
                       AppColors.darkSurface,
                       AppColors.darkScaffold.withValues(alpha: 0.9),
                     ]
-                  : [
-                      AppColors.lightCard,
-                      AppColors.lightScaffold,
-                    ],
+                  : [AppColors.lightCard, AppColors.lightScaffold],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -103,6 +143,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
         centerTitle: false,
         foregroundColor: isDarkMode ? Colors.white : Colors.black87,
         actions: [
+          IconButton(
+            tooltip: 'Zerar energia acumulada',
+            onPressed: _isResettingEnergy ? null : _resetEnergy,
+            icon: _isResettingEnergy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.restart_alt),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: Column(
@@ -135,47 +186,32 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
       ),
       // Drawer removido
       body: SafeArea(
-        child: metricsAsync.when(
-          data: (metrics) {
-            final last = metrics.isNotEmpty ? metrics.first : null;
-            return CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: 8,
-                          left: 8,
-                          right: 8,
-                          bottom: 0,
-                        ),
-                        child: _MainIndicators(metric: last),
-                      ),
-                    ],
-                  ),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  top: 8,
+                  left: 8,
+                  right: 8,
+                  bottom: 0,
                 ),
-                SliverFillRemaining(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    child: DashboardTabs(),
-                  ),
-                ),
-              ],
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-            child: Text(
-              'Erro ao carregar dados: $e',
-              style: const TextStyle(color: AppColors.errorDataText),
+                child: _MainIndicators(metric: lastMetric),
+              ),
             ),
-          ),
+            SliverFillRemaining(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: DashboardTabs(),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
 String formatWithSIPrefix(num value, {int? fractionDigits}) {
   if (value == 0 || value.isNaN) return '--';
   final abs = value.abs();
@@ -237,7 +273,6 @@ class _MainIndicators extends StatelessWidget {
         ? math.sqrt(math.max((apparent! * apparent) - (power! * power), 0))
         : null;
     const spacing = 8.0;
-    // Cada card representa uma grandeza elétrica medida pelo PZEM004T.
     final cards = [
       _IndicatorCard(
         label: 'Aparente',
@@ -352,7 +387,11 @@ class _MainIndicators extends StatelessWidget {
           runSpacing: spacing,
           children: [
             for (final card in cards)
-              SizedBox(key: ValueKey(card.label), width: cardWidth, child: card),
+              SizedBox(
+                key: ValueKey(card.label),
+                width: cardWidth,
+                child: card,
+              ),
           ],
         );
       },
@@ -447,7 +486,9 @@ class _IndicatorCardState extends State<_IndicatorCard>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: widget.color.withValues(alpha: isDarkMode ? 0.14 : 0.16),
+                  color: widget.color.withValues(
+                    alpha: isDarkMode ? 0.14 : 0.16,
+                  ),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -497,7 +538,9 @@ class _IndicatorCardState extends State<_IndicatorCard>
                         const SizedBox(width: 3),
                         Padding(
                           padding: EdgeInsets.only(
-                            bottom: isExtraCompact ? 0 : (widget.compact ? 1 : 2),
+                            bottom: isExtraCompact
+                                ? 0
+                                : (widget.compact ? 1 : 2),
                           ),
                           child: Text(
                             widget.unit!,

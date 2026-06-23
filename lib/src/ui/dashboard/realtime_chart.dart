@@ -406,7 +406,12 @@ class RealtimeChart extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => _LoadingChartCard(
+        meta: meta,
+        cardGradient: cardGradient,
+        titleColor: titleColor,
+        fieldSelector: fieldSelector,
+      ),
       error: (e, _) => Center(
         child: Text(
           'Erro ao carregar gráfico: $e',
@@ -731,6 +736,138 @@ const _metricFieldOptions = [
   _MetricFieldOption('energy_apparent', 'Energia Aparente'),
   _MetricFieldOption('energy_reactive', 'Energia Reativa'),
 ];
+
+/// Mantém o espaço e a aparência do gráfico enquanto a primeira leitura é
+/// carregada, evitando que o dashboard mude de organização ao conectar.
+class _LoadingChartCard extends StatelessWidget {
+  final _FieldMeta meta;
+  final LinearGradient cardGradient;
+  final Color titleColor;
+  final FieldSelectorBuilder? fieldSelector;
+
+  const _LoadingChartCard({
+    required this.meta,
+    required this.cardGradient,
+    required this.titleColor,
+    this.fieldSelector,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final displayUnit = meta.unit;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: cardGradient,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: meta.color.withValues(alpha: 0.45),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDarkMode ? 0.28 : 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: fieldSelector != null
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              fieldSelector!(context),
+                              if (displayUnit.isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  '($displayUnit)',
+                                  style: TextStyle(
+                                    color: titleColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          )
+                        : Text(
+                            '${meta.title} ${displayUnit.isNotEmpty ? '($displayUnit)' : ''}',
+                            style: TextStyle(
+                              color: titleColor,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: meta.color.withValues(
+                      alpha: isDarkMode ? 0.18 : 0.12,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: meta.color.withValues(alpha: 0.42),
+                      width: 1.1,
+                    ),
+                  ),
+                  child: Text(
+                    'Instantâneo: --',
+                    style: TextStyle(
+                      color: meta.color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(color: meta.color),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Aguardando dados',
+                      style: TextStyle(
+                        color: titleColor.withValues(alpha: 0.72),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _MetricFieldOption {
   final String value;
