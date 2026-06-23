@@ -276,7 +276,6 @@ class _MainIndicators extends StatelessWidget {
         ? math.sqrt(math.max((apparent! * apparent) - (power! * power), 0))
         : null;
     const spacing = 8.0;
-    // Cada card representa uma grandeza elétrica medida pelo PZEM004T.
     final cards = [
       _IndicatorCard(
         label: 'Aparente',

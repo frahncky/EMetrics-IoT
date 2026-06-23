@@ -450,16 +450,12 @@ function MonitorDashboard({
         <MetricCard label="Corrente" value={format(telemetry?.current, 3)} unit="A" accent={C.purple} />
         <MetricCard label="Frequência" value={format(telemetry?.frequency, 2)} unit="Hz" accent={C.cyan} />
         <MetricCard label="Energia acumulada" value={format(telemetry?.energy, 3)} unit="kWh" accent={telemetry && telemetry.energy > alertSettings.energyLimit ? C.red : C.green} />
-        {telemetry?.temperature != null && (
-          <MetricCard label="Temperatura ESP32" value={format(telemetry.temperature, 1)} unit="°C" accent={C.amber} />
-        )}
+        <MetricCard label="Temperatura ESP32" value={format(telemetry?.temperature, 1)} unit="°C" accent={C.amber} />
         <MetricCard label="Potência aparente" value={format(telemetry?.apparentPower, 2)} unit="VA" accent={C.cyan} />
         <MetricCard label="Potência ativa" value={format(telemetry?.power, 2)} unit="W" accent={C.amber} />
         <MetricCard label="Potência reativa*" value={format(telemetry?.reactivePower, 2)} unit="VAr" accent={C.purple} />
         <MetricCard label="Fator de potência" value={format(telemetry?.pf)} unit="" accent={C.green} />
-        {telemetry?.crcErrors != null && (
-          <MetricCard label="Erros CRC" value={String(telemetry.crcErrors)} unit="" accent={telemetry.crcErrors > 0 ? C.red : C.green} />
-        )}
+        <MetricCard label="Erros CRC" value={telemetry?.crcErrors != null ? String(telemetry.crcErrors) : "—"} unit="" accent={telemetry?.crcErrors > 0 ? C.red : C.green} />
       </div>
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
