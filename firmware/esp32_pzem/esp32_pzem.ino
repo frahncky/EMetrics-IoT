@@ -7,11 +7,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
 #include <Preferences.h>
 #include <PubSubClient.h>
+#include <esp_wpa2.h>
 #include <PZEM004Tv30.h>
 #include <FS.h>
 #include <SD.h>
 #include <SPIFFS.h>
 #include <SPI.h>
+#include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -47,8 +49,12 @@ struct DeviceConfig {
   char mqttTopic[129];
   char mqttRequestTopic[129];
   char mqttClientId[65];
+  char otaPassword[65];
   bool useTls;
   uint16_t sdRetentionDays;
+  uint16_t wifiInitialConnectTimeoutSeconds;
+  uint16_t wifiRetryIntervalSeconds;
+  uint16_t wifiFallbackApDelaySeconds;
   bool valid;
 };
 
@@ -69,8 +75,12 @@ DeviceConfig config = {
   "emetrics/pzem",
   "emetrics/pzem/history/request",
   "esp32_pzem_001",
+  "",
   false,
   30,
+  20,
+  15,
+  60,
   false,
 };
 
@@ -78,8 +88,13 @@ DeviceConfig config = {
 // CONSTANTES E VARIAVEIS GLOBAIS
 // ═══════════════════════════════════════════════════════════════════════════
 constexpr unsigned long PUBLISH_INTERVAL_MS_DEFAULT = 2000; // intervalo padrao entre leituras PZEM
-constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 15000;   // retentatida de reconexao WiFi
-constexpr unsigned long WIFI_FALLBACK_AP_DELAY_MS = 60UL * 1000UL;
+constexpr uint16_t DEFAULT_WIFI_INITIAL_CONNECT_TIMEOUT_SECONDS = 20;
+constexpr uint16_t DEFAULT_WIFI_RETRY_INTERVAL_SECONDS = 15;
+constexpr uint16_t DEFAULT_WIFI_FALLBACK_AP_DELAY_SECONDS = 60;
+constexpr uint16_t MIN_WIFI_CONNECTION_DELAY_SECONDS = 5;
+constexpr uint16_t MAX_WIFI_CONNECTION_DELAY_SECONDS = 600;
+constexpr const char* OTA_AUTH_HEADER = "X-EMetrics-OTA-Key";
+const char* OTA_REQUEST_HEADERS[] = {OTA_AUTH_HEADER};
 constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 3000;    // retentativa de reconexao MQTT
 constexpr unsigned long HISTORY_PUBLISH_DELAY_MS = 10;    // pausa entre publicacoes de replay
 constexpr bool MQTT_RETAINED = true;
@@ -291,6 +306,9 @@ bool fallbackApActive = false;
 bool restartScheduled = false;
 unsigned long restartScheduledAtMs = 0;
 bool sntpConfigured = false;
+bool firmwareUpdateAuthorized = false;
+bool firmwareUpdateSucceeded = false;
+String firmwareUpdateError;
 uint64_t bootEpochOffsetMs = 0;
 bool bootEpochOffsetValid = false;
 bool historyStorageReady = false;
@@ -299,6 +317,12 @@ unsigned long lastHistoryRetentionPruneMs = 0;
 
 // E8: Contador de erros de comunicacao PZEM
 uint32_t pzemCrcErrors = 0;
+uint8_t lastWifiFailureStatus = 0;  // WL_NO_SSID_AVAIL=1, WL_CONNECT_FAILED=4, WL_DISCONNECTED=6
+
+// Energias acumuladas calculadas em RAM (aparente e reativa — PZEM nao armazena)
+unsigned long lcdLastEnergyUpdateMs = 0;
+float lcdApparentEnergyKvah = 0.0f;
+float lcdReactiveEnergyKvarh = 0.0f;
 uint32_t telemetrySequence = 0;  // E13: sequência reinicia a cada boot do ESP
 
 // E10: Compensacao de consumo proprio
@@ -348,6 +372,7 @@ bool upsertWifiNetwork(String ssid,
                        bool keepExistingUsername = false,
                        bool keepExistingPassword = false);
 bool deleteWifiNetwork(String ssid);
+bool moveWifiNetwork(String ssid, int direction);
 int findWifiNetworkIndex(const String& ssid);
 String jsonEscape(const char* value);
 
@@ -757,6 +782,13 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
       hybridPhaseStartMs = millis();
       return;
     }
+
+    // Zera energia acumulada do PZEM
+    // payload: {"command":"resetEnergy"}
+    if (raw.indexOf("\"resetEnergy\"") >= 0) {
+      resetAllEnergy();
+      return;
+    }
   }
 
   uint16_t sdRetentionDays = 0;
@@ -900,6 +932,21 @@ bool deleteWifiNetwork(String ssid) {
   return true;
 }
 
+bool moveWifiNetwork(String ssid, int direction) {
+  const int index = findWifiNetworkIndex(ssid);
+  const int targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= wifiNetworkCount) {
+    return false;
+  }
+
+  const SavedWifiNetwork movedNetwork = wifiNetworks[index];
+  wifiNetworks[index] = wifiNetworks[targetIndex];
+  wifiNetworks[targetIndex] = movedNetwork;
+  // A proxima tentativa sempre comeca pela maior prioridade da lista editada.
+  wifiConnectIndex = 0;
+  return true;
+}
+
 void loadWifiNetworks(Preferences& prefs) {
   clearWifiNetworks();
   const uint8_t storedCount = prefs.getUChar("wifi_net_count", 0);
@@ -970,9 +1017,16 @@ void loadConfig() {
     const String mqttRequestTopic =
         preferences.getString("mqtt_req_topic", "emetrics/pzem/history/request");
     const String mqttClientId = preferences.getString("mqtt_client_id", "esp32_pzem_001");
+    const String otaPassword = preferences.getString("ota_pwd", "");
     const bool useTls = preferences.getBool("mqtt_tls", false);
     const uint16_t sdRetentionDays =
         preferences.getUShort("sd_ret_days", DEFAULT_SD_RETENTION_DAYS);
+    const uint16_t wifiInitialConnectTimeoutSeconds = preferences.getUShort(
+        "wifi_init_s", DEFAULT_WIFI_INITIAL_CONNECT_TIMEOUT_SECONDS);
+    const uint16_t wifiRetryIntervalSeconds = preferences.getUShort(
+        "wifi_retry_s", DEFAULT_WIFI_RETRY_INTERVAL_SECONDS);
+    const uint16_t wifiFallbackApDelaySeconds = preferences.getUShort(
+        "wifi_fallback_s", DEFAULT_WIFI_FALLBACK_AP_DELAY_SECONDS);
 
     safeCopy(wifiSsid, config.wifiSsid, sizeof(config.wifiSsid));
     safeCopy(wifiUsername, config.wifiUsername, sizeof(config.wifiUsername));
@@ -984,10 +1038,26 @@ void loadConfig() {
     safeCopy(mqttTopic, config.mqttTopic, sizeof(config.mqttTopic));
     safeCopy(mqttRequestTopic, config.mqttRequestTopic, sizeof(config.mqttRequestTopic));
     safeCopy(mqttClientId, config.mqttClientId, sizeof(config.mqttClientId));
+    safeCopy(otaPassword, config.otaPassword, sizeof(config.otaPassword));
     config.useTls = useTls;
     config.sdRetentionDays = sdRetentionDays == 0 || sdRetentionDays > MAX_SD_RETENTION_DAYS
                                  ? DEFAULT_SD_RETENTION_DAYS
                                  : sdRetentionDays;
+    config.wifiInitialConnectTimeoutSeconds =
+        wifiInitialConnectTimeoutSeconds < MIN_WIFI_CONNECTION_DELAY_SECONDS ||
+                wifiInitialConnectTimeoutSeconds > MAX_WIFI_CONNECTION_DELAY_SECONDS
+            ? DEFAULT_WIFI_INITIAL_CONNECT_TIMEOUT_SECONDS
+            : wifiInitialConnectTimeoutSeconds;
+    config.wifiRetryIntervalSeconds =
+        wifiRetryIntervalSeconds < MIN_WIFI_CONNECTION_DELAY_SECONDS ||
+                wifiRetryIntervalSeconds > MAX_WIFI_CONNECTION_DELAY_SECONDS
+            ? DEFAULT_WIFI_RETRY_INTERVAL_SECONDS
+            : wifiRetryIntervalSeconds;
+    config.wifiFallbackApDelaySeconds =
+        wifiFallbackApDelaySeconds < MIN_WIFI_CONNECTION_DELAY_SECONDS ||
+                wifiFallbackApDelaySeconds > MAX_WIFI_CONNECTION_DELAY_SECONDS
+            ? DEFAULT_WIFI_FALLBACK_AP_DELAY_SECONDS
+            : wifiFallbackApDelaySeconds;
   }
   loadWifiNetworks(preferences);
   config.valid = wifiNetworkCount > 0 && strlen(config.mqttHost) > 0;
@@ -1007,10 +1077,14 @@ void saveConfig() {
   preferences.putString("mqtt_topic", config.mqttTopic);
   preferences.putString("mqtt_req_topic", config.mqttRequestTopic);
   preferences.putString("mqtt_client_id", config.mqttClientId);
+  preferences.putString("ota_pwd", config.otaPassword);
   preferences.putBool("mqtt_tls", config.useTls);
   preferences.putUShort("sd_ret_days", config.sdRetentionDays);
+  preferences.putUShort("wifi_init_s", config.wifiInitialConnectTimeoutSeconds);
+  preferences.putUShort("wifi_retry_s", config.wifiRetryIntervalSeconds);
+  preferences.putUShort("wifi_fallback_s", config.wifiFallbackApDelaySeconds);
   saveWifiNetworks(preferences);
-  preferences.putBool("cfg_valid", true);
+  preferences.putBool("cfg_valid", config.valid);
   preferences.end();
 }
 
@@ -1048,6 +1122,154 @@ void handleMetrics() {
   provisionServer.send(200, "application/json", payload);
 }
 
+bool applyWifiConnectionSettings(long initialConnectTimeoutSeconds,
+                                 long retryIntervalSeconds,
+                                 long fallbackApDelaySeconds) {
+  if (initialConnectTimeoutSeconds < MIN_WIFI_CONNECTION_DELAY_SECONDS ||
+      initialConnectTimeoutSeconds > MAX_WIFI_CONNECTION_DELAY_SECONDS ||
+      retryIntervalSeconds < MIN_WIFI_CONNECTION_DELAY_SECONDS ||
+      retryIntervalSeconds > MAX_WIFI_CONNECTION_DELAY_SECONDS ||
+      fallbackApDelaySeconds < MIN_WIFI_CONNECTION_DELAY_SECONDS ||
+      fallbackApDelaySeconds > MAX_WIFI_CONNECTION_DELAY_SECONDS) {
+    return false;
+  }
+
+  config.wifiInitialConnectTimeoutSeconds = static_cast<uint16_t>(initialConnectTimeoutSeconds);
+  config.wifiRetryIntervalSeconds = static_cast<uint16_t>(retryIntervalSeconds);
+  config.wifiFallbackApDelaySeconds = static_cast<uint16_t>(fallbackApDelaySeconds);
+  return true;
+}
+
+bool applyWifiConnectionSettingsFromRequest(bool allowMissingSettings) {
+  const bool hasInitial = provisionServer.hasArg("initialConnectTimeoutSeconds");
+  const bool hasRetry = provisionServer.hasArg("retryIntervalSeconds");
+  const bool hasFallback = provisionServer.hasArg("fallbackApDelaySeconds");
+  if (!hasInitial && !hasRetry && !hasFallback && allowMissingSettings) {
+    return true;
+  }
+  if (!hasInitial || !hasRetry || !hasFallback) {
+    return false;
+  }
+
+  return applyWifiConnectionSettings(
+      provisionServer.arg("initialConnectTimeoutSeconds").toInt(),
+      provisionServer.arg("retryIntervalSeconds").toInt(),
+      provisionServer.arg("fallbackApDelaySeconds").toInt());
+}
+
+void handleWifiConnectionSettings() {
+  String body = "{\"ok\":true,\"initialConnectTimeoutSeconds\":";
+  body += config.wifiInitialConnectTimeoutSeconds;
+  body += ",\"retryIntervalSeconds\":";
+  body += config.wifiRetryIntervalSeconds;
+  body += ",\"fallbackApDelaySeconds\":";
+  body += config.wifiFallbackApDelaySeconds;
+  body += "}";
+  provisionServer.send(200, "application/json", body);
+}
+
+void handleWifiConnectionSettingsSave() {
+  if (!applyWifiConnectionSettingsFromRequest(false)) {
+    provisionServer.send(
+        400,
+        "application/json",
+        "{\"ok\":false,\"message\":\"Informe os tres tempos entre 5 e 600 segundos.\"}");
+    return;
+  }
+
+  saveConfig();
+  provisionServer.send(
+      200,
+      "application/json",
+      "{\"ok\":true,\"message\":\"Tempos de conexao Wi-Fi salvos. ESP32 sera reiniciado.\"}");
+  scheduleRestart();
+}
+
+bool hasValidOtaPassword() {
+  const String providedPassword = provisionServer.header(OTA_AUTH_HEADER);
+  const size_t expectedLength = strlen(config.otaPassword);
+  if (expectedLength == 0 || providedPassword.length() != expectedLength) {
+    return false;
+  }
+
+  uint8_t differences = 0;
+  for (size_t i = 0; i < expectedLength; i++) {
+    differences |= static_cast<uint8_t>(providedPassword[i] ^ config.otaPassword[i]);
+  }
+  return differences == 0;
+}
+
+void handleFirmwareUpdateUpload() {
+  HTTPUpload& upload = provisionServer.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    firmwareUpdateAuthorized = hasValidOtaPassword();
+    firmwareUpdateSucceeded = false;
+    firmwareUpdateError = "";
+    if (!firmwareUpdateAuthorized) {
+      firmwareUpdateError = "Chave OTA invalida ou nao configurada.";
+      return;
+    }
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+      firmwareUpdateError = Update.errorString();
+    }
+    return;
+  }
+
+  if (!firmwareUpdateAuthorized || firmwareUpdateError.length() > 0) {
+    return;
+  }
+
+  if (upload.status == UPLOAD_FILE_WRITE) {
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      firmwareUpdateError = Update.errorString();
+      Update.abort();
+    }
+    return;
+  }
+
+  if (upload.status == UPLOAD_FILE_END) {
+    if (!Update.end(true)) {
+      firmwareUpdateError = Update.errorString();
+      return;
+    }
+    firmwareUpdateSucceeded = true;
+    return;
+  }
+
+  if (upload.status == UPLOAD_FILE_ABORTED) {
+    if (Update.isRunning()) {
+      Update.abort();
+    }
+    firmwareUpdateError = "Atualizacao de firmware cancelada.";
+  }
+}
+
+void handleFirmwareUpdate() {
+  if (!firmwareUpdateAuthorized) {
+    provisionServer.send(
+        401,
+        "application/json",
+        "{\"ok\":false,\"message\":\"Chave OTA invalida ou nao configurada.\"}");
+    return;
+  }
+  if (!firmwareUpdateSucceeded) {
+    String body = "{\"ok\":false,\"message\":\"Falha ao atualizar firmware";
+    if (firmwareUpdateError.length() > 0) {
+      body += ": ";
+      body += jsonEscape(firmwareUpdateError.c_str());
+    }
+    body += ".\"}";
+    provisionServer.send(500, "application/json", body);
+    return;
+  }
+
+  provisionServer.send(
+      200,
+      "application/json",
+      "{\"ok\":true,\"message\":\"Firmware atualizado. ESP32 sera reiniciado.\"}");
+  scheduleRestart();
+}
+
 bool parseAndApplyProvisioning() {
   if (!provisionServer.hasArg("ssid") || !provisionServer.hasArg("mqttHost") ||
       !provisionServer.hasArg("mqttPort") || !provisionServer.hasArg("mqttTopic") ||
@@ -1080,6 +1302,16 @@ bool parseAndApplyProvisioning() {
   safeCopy(mqttRequestTopic, config.mqttRequestTopic, sizeof(config.mqttRequestTopic));
   safeCopy(clientId, config.mqttClientId, sizeof(config.mqttClientId));
   config.useTls = provisionServer.arg("useTls") == "1";
+  if (provisionServer.hasArg("otaPassword")) {
+    const String otaPassword = provisionServer.arg("otaPassword");
+    if (otaPassword.length() < 8 || otaPassword.length() >= sizeof(config.otaPassword)) {
+      return false;
+    }
+    safeCopy(otaPassword, config.otaPassword, sizeof(config.otaPassword));
+  }
+  if (!applyWifiConnectionSettingsFromRequest(true)) {
+    return false;
+  }
   if (!upsertWifiNetwork(ssid,
                          provisionServer.arg("wifiUsername"),
                          provisionServer.arg("wifiPassword"))) {
@@ -1116,6 +1348,8 @@ void handleWifiNetworksList() {
     body += wifiNetworks[i].username[0] == '\0' ? "false" : "true";
     body += ",\"active\":";
     body += strcmp(wifiNetworks[i].ssid, config.wifiSsid) == 0 ? "true" : "false";
+    body += ",\"priority\":";
+    body += String(i + 1);
     body += "}";
   }
   body += "]}";
@@ -1178,6 +1412,32 @@ void handleWifiNetworkDelete() {
       200, "application/json", "{\"ok\":true,\"message\":\"Rede Wi-Fi excluida do ESP32.\"}");
 }
 
+void handleWifiNetworkReorder() {
+  if (!provisionServer.hasArg("ssid") || !provisionServer.hasArg("direction")) {
+    provisionServer.send(
+        400,
+        "application/json",
+        "{\"ok\":false,\"message\":\"Informe a rede e a direcao da movimentacao.\"}");
+    return;
+  }
+
+  const String direction = provisionServer.arg("direction");
+  const int movement = direction == "up" ? -1 : direction == "down" ? 1 : 0;
+  if (movement == 0 || !moveWifiNetwork(provisionServer.arg("ssid"), movement)) {
+    provisionServer.send(
+        400,
+        "application/json",
+        "{\"ok\":false,\"message\":\"Nao foi possivel alterar a prioridade da rede.\"}");
+    return;
+  }
+
+  saveConfig();
+  provisionServer.send(
+      200,
+      "application/json",
+      "{\"ok\":true,\"message\":\"Prioridade da rede atualizada no ESP32.\"}");
+}
+
 void handleWifiScan() {
   const wifi_mode_t prevMode = WiFi.getMode();
   if (prevMode == WIFI_AP) {
@@ -1203,6 +1463,23 @@ void handleWifiScan() {
     body += WiFi.RSSI(i);
     body += ",\"open\":";
     body += (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "true" : "false";
+    body += ",\"authType\":";
+    body += static_cast<int>(WiFi.encryptionType(i));
+    const char* authLabel = "WPA2";
+    switch (WiFi.encryptionType(i)) {
+      case WIFI_AUTH_OPEN:            authLabel = "Aberta"; break;
+      case WIFI_AUTH_WEP:             authLabel = "WEP"; break;
+      case WIFI_AUTH_WPA_PSK:         authLabel = "WPA"; break;
+      case WIFI_AUTH_WPA2_PSK:        authLabel = "WPA2"; break;
+      case WIFI_AUTH_WPA_WPA2_PSK:    authLabel = "WPA/WPA2"; break;
+      case WIFI_AUTH_WPA2_ENTERPRISE: authLabel = "Enterprise"; break;
+      case WIFI_AUTH_WPA3_PSK:        authLabel = "WPA3"; break;
+      case WIFI_AUTH_WPA2_WPA3_PSK:   authLabel = "WPA2/WPA3"; break;
+      default: break;
+    }
+    body += ",\"authLabel\":\"";
+    body += authLabel;
+    body += "\"";
     body += "}";
   }
   body += "]}";
@@ -1214,11 +1491,87 @@ void handleWifiScan() {
   provisionServer.send(200, "application/json", body);
 }
 
+bool resetAllEnergy() {
+  if (!pzem.resetEnergy()) {
+    return false;
+  }
+  lcdApparentEnergyKvah = 0.0f;
+  lcdReactiveEnergyKvarh = 0.0f;
+  lcdLastEnergyUpdateMs = 0;
+  return true;
+}
+
+void handleWifiStatus() {
+  const wl_status_t wlStatus = WiFi.status();
+  const bool connected = (wlStatus == WL_CONNECTED);
+
+  const char* desc = "Aguardando";
+  switch (wlStatus) {
+    case WL_CONNECTED:        desc = "Conectado"; break;
+    case WL_NO_SSID_AVAIL:   desc = "SSID nao encontrado (verifique o nome ou se e 2.4 GHz)"; break;
+    case WL_CONNECT_FAILED:   desc = "Falha de autenticacao (usuario ou senha incorretos)"; break;
+    case WL_CONNECTION_LOST:  desc = "Conexao perdida"; break;
+    case WL_DISCONNECTED:     desc = "Desconectado"; break;
+    default: break;
+  }
+
+  String body = "{\"connected\":";
+  body += connected ? "true" : "false";
+  body += ",\"status\":";
+  body += static_cast<int>(wlStatus);
+  body += ",\"description\":\"";
+  body += desc;
+  body += "\",\"ssid\":\"";
+  body += jsonEscape(connected ? WiFi.SSID().c_str() : config.wifiSsid);
+  body += "\",\"enterprise\":";
+  body += strlen(config.wifiUsername) > 0 ? "true" : "false";
+  if (connected) {
+    body += ",\"ip\":\"";
+    body += WiFi.localIP().toString();
+    body += "\",\"rssi\":";
+    body += WiFi.RSSI();
+  }
+  body += "}";
+
+  provisionServer.send(200, "application/json", body);
+}
+
+void handleWifiReconnect() {
+  if (provisioningMode) {
+    provisionServer.send(
+        400,
+        "application/json",
+        "{\"ok\":false,\"message\":\"ESP em modo provisionamento. Use /provision para configurar.\"}");
+    return;
+  }
+  lastWifiAttemptMs = 0;
+  wifiDisconnectedSinceMs = millis();
+  provisionServer.send(
+      200,
+      "application/json",
+      "{\"ok\":true,\"message\":\"Tentativa de conexao iniciada.\"}");
+}
+
+void handleResetEnergy() {
+  if (!resetAllEnergy()) {
+    provisionServer.send(
+        503,
+        "application/json",
+        "{\"ok\":false,\"message\":\"Falha ao zerar energia no PZEM.\"}");
+    return;
+  }
+  provisionServer.send(
+      200,
+      "application/json",
+      "{\"ok\":true,\"message\":\"Energia acumulada zerada.\"}");
+}
+
 void startProvisioningServer() {
   if (provisionServerStarted) {
     return;
   }
 
+  provisionServer.collectHeaders(OTA_REQUEST_HEADERS, 1);
   provisionServer.on("/health", HTTP_GET, handleHealth);
   provisionServer.on("/metrics", HTTP_GET, handleMetrics);
   provisionServer.on("/wifi-scan", HTTP_GET, handleWifiScan);
@@ -1226,6 +1579,13 @@ void startProvisioningServer() {
   provisionServer.on("/wifi-networks", HTTP_GET, handleWifiNetworksList);
   provisionServer.on("/wifi-networks", HTTP_POST, handleWifiNetworkSave);
   provisionServer.on("/wifi-networks/delete", HTTP_POST, handleWifiNetworkDelete);
+  provisionServer.on("/wifi-networks/reorder", HTTP_POST, handleWifiNetworkReorder);
+  provisionServer.on("/wifi-connection-settings", HTTP_GET, handleWifiConnectionSettings);
+  provisionServer.on("/wifi-connection-settings", HTTP_POST, handleWifiConnectionSettingsSave);
+  provisionServer.on("/firmware/update", HTTP_POST, handleFirmwareUpdate, handleFirmwareUpdateUpload);
+  provisionServer.on("/reset-energy", HTTP_POST, handleResetEnergy);
+  provisionServer.on("/wifi-status", HTTP_GET, handleWifiStatus);
+  provisionServer.on("/wifi-reconnect", HTTP_POST, handleWifiReconnect);
   provisionServer.begin();
   provisionServerStarted = true;
 }
@@ -1259,6 +1619,29 @@ void stopFallbackAccessPoint() {
   wifiDisconnectedSinceMs = 0;
 }
 
+// Inicia conexao Wi-Fi usando WPA2-Enterprise (PEAP) se wifiUsername estiver
+// preenchido, ou WPA2-Personal caso contrario.
+void beginWiFiWithConfig() {
+  if (strlen(config.wifiUsername) > 0) {
+    esp_wifi_sta_wpa2_ent_set_identity(
+        reinterpret_cast<const uint8_t*>(config.wifiUsername),
+        strlen(config.wifiUsername));
+    esp_wifi_sta_wpa2_ent_set_username(
+        reinterpret_cast<const uint8_t*>(config.wifiUsername),
+        strlen(config.wifiUsername));
+    esp_wifi_sta_wpa2_ent_set_password(
+        reinterpret_cast<const uint8_t*>(config.wifiPassword),
+        strlen(config.wifiPassword));
+    esp_wifi_sta_wpa2_ent_enable();
+    WiFi.begin(config.wifiSsid);
+    Serial.println("[WiFi] Modo WPA2-Enterprise (PEAP)");
+  } else {
+    esp_wifi_sta_wpa2_ent_disable();
+    WiFi.begin(config.wifiSsid, config.wifiPassword);
+    Serial.println("[WiFi] Modo WPA2-Personal");
+  }
+}
+
 void connectWiFi() {
   if (!config.valid || wifiNetworkCount == 0) {
     return;
@@ -1269,15 +1652,20 @@ void connectWiFi() {
   }
   applyWifiNetworkToConfig(wifiConnectIndex);
   wifiConnectIndex = (wifiConnectIndex + 1) % wifiNetworkCount;
+  WiFi.setAutoReconnect(false);
   WiFi.mode(fallbackApActive ? WIFI_AP_STA : WIFI_STA);
+  WiFi.disconnect(false, true);
+  delay(200);
   if (wifiDisconnectedSinceMs == 0) {
     wifiDisconnectedSinceMs = millis();
   }
   Serial.print("[WiFi] SSID=[");
   Serial.print(config.wifiSsid);
-  Serial.print("] PASS_LEN=");
+  Serial.print("] USER_LEN=");
+  Serial.print(strlen(config.wifiUsername));
+  Serial.print(" PASS_LEN=");
   Serial.println(strlen(config.wifiPassword));
-  WiFi.begin(config.wifiSsid, config.wifiPassword);
+  beginWiFiWithConfig();
 }
 
 void ensureFallbackAccessPoint() {
@@ -1301,7 +1689,9 @@ void ensureFallbackAccessPoint() {
     wifiDisconnectedSinceMs = now;
   }
 
-  if (now - wifiDisconnectedSinceMs >= WIFI_FALLBACK_AP_DELAY_MS) {
+  const unsigned long fallbackApDelayMs =
+      static_cast<unsigned long>(config.wifiFallbackApDelaySeconds) * 1000UL;
+  if (now - wifiDisconnectedSinceMs >= fallbackApDelayMs) {
     startFallbackAccessPoint();
   }
 }
@@ -1312,10 +1702,16 @@ void ensureWiFiConnected() {
   }
 
   const unsigned long now = millis();
-  if (now - lastWifiAttemptMs < WIFI_RETRY_INTERVAL_MS) {
+  const unsigned long retryIntervalMs =
+      static_cast<unsigned long>(config.wifiRetryIntervalSeconds) * 1000UL;
+  if (now - lastWifiAttemptMs < retryIntervalMs) {
     return;
   }
 
+  const uint8_t st = static_cast<uint8_t>(WiFi.status());
+  if (st != WL_IDLE_STATUS) {
+    lastWifiFailureStatus = st;
+  }
   lastWifiAttemptMs = now;
   connectWiFi();
 }
@@ -1582,13 +1978,19 @@ void updateLcdDisplay() {
   float apparentPower = voltage * current;
   float reactivePowerSquared = apparentPower * apparentPower - power * power;
   float reactivePower = reactivePowerSquared > 0.0f ? sqrtf(reactivePowerSquared) : 0.0f;
-  static unsigned long lastEnergyUpdateMs = 0;
-  static float apparentEnergyKvah = 0.0f;
-  static float reactiveEnergyKvarh = 0.0f;
-
   if (lcdDisplayIndex == 3) {
-    String wifiStatus = WiFi.status() == WL_CONNECTED ? "STA OK" :
-                        (provisioningMode || fallbackApActive ? "AP ativo" : "sem conexao");
+    String wifiStatus;
+    if (WiFi.status() == WL_CONNECTED) {
+      wifiStatus = "STA OK";
+    } else if (provisioningMode || fallbackApActive) {
+      wifiStatus = "AP ativo";
+    } else if (lastWifiFailureStatus == WL_NO_SSID_AVAIL) {
+      wifiStatus = "SSID nao achado";
+    } else if (lastWifiFailureStatus == WL_CONNECT_FAILED) {
+      wifiStatus = "Senha incorreta";
+    } else {
+      wifiStatus = "sem conexao";
+    }
     printLcdLine(0, String("WiFi: ") + wifiStatus);
     printLcdLine(1, currentNetworkLineForLcd());
     printLcdLine(2, String("MQTT:") + (mqttClient.connected() ? "OK" : "OFF") + " Fila:" + queueCount);
@@ -1605,12 +2007,12 @@ void updateLcdDisplay() {
     return;
   }
 
-  if (lastEnergyUpdateMs != 0 && now > lastEnergyUpdateMs) {
-    const float elapsedHours = static_cast<float>(now - lastEnergyUpdateMs) / 3600000.0f;
-    apparentEnergyKvah += apparentPower * elapsedHours;
-    reactiveEnergyKvarh += reactivePower * elapsedHours;
+  if (lcdLastEnergyUpdateMs != 0 && now > lcdLastEnergyUpdateMs) {
+    const float elapsedHours = static_cast<float>(now - lcdLastEnergyUpdateMs) / 3600000.0f;
+    lcdApparentEnergyKvah += apparentPower * elapsedHours;
+    lcdReactiveEnergyKvarh += reactivePower * elapsedHours;
   }
-  lastEnergyUpdateMs = now;
+  lcdLastEnergyUpdateMs = now;
 
   if (lcdDisplayIndex == 0) {
     printLcdLine(0, formatMetricLine("Tensao", String(voltage, 1) + " V"));
@@ -1630,15 +2032,25 @@ void updateLcdDisplay() {
 
   if (lcdDisplayIndex == 2) {
     printLcdLine(0, formatMetricLine("E.Ativa", String(energy, 2) + " kWh"));
-    printLcdLine(1, formatMetricLine("E.Apte.", String(apparentEnergyKvah, 2) + " kVAh"));
-    printLcdLine(2, formatMetricLine("E.Reat.", String(reactiveEnergyKvarh, 2) + " kVArh"));
+    printLcdLine(1, formatMetricLine("E.Apte.", String(lcdApparentEnergyKvah, 2) + " kVAh"));
+    printLcdLine(2, formatMetricLine("E.Reat.", String(lcdReactiveEnergyKvarh, 2) + " kVArh"));
     printLcdLine(3, "");
     return;
   }
 
   {
-    String wifiStatus = WiFi.status() == WL_CONNECTED ? "STA OK" :
-                        (provisioningMode || fallbackApActive ? "AP ativo" : "sem conexao");
+    String wifiStatus;
+    if (WiFi.status() == WL_CONNECTED) {
+      wifiStatus = "STA OK";
+    } else if (provisioningMode || fallbackApActive) {
+      wifiStatus = "AP ativo";
+    } else if (lastWifiFailureStatus == WL_NO_SSID_AVAIL) {
+      wifiStatus = "SSID nao achado";
+    } else if (lastWifiFailureStatus == WL_CONNECT_FAILED) {
+      wifiStatus = "Senha incorreta";
+    } else {
+      wifiStatus = "sem conexao";
+    }
     printLcdLine(0, String("WiFi: ") + wifiStatus);
     printLcdLine(1, currentNetworkLineForLcd());
     printLcdLine(2, String("MQTT:") + (mqttClient.connected() ? "OK" : "OFF") + " Fila:" + queueCount);
@@ -1686,7 +2098,9 @@ void setup() {
   mqttClient.setCallback(onMqttMessage);
   connectWiFi();
   {
-    const unsigned long deadline = millis() + 20000UL;
+    const unsigned long initialConnectTimeoutMs =
+        static_cast<unsigned long>(config.wifiInitialConnectTimeoutSeconds) * 1000UL;
+    const unsigned long deadline = millis() + initialConnectTimeoutMs;
     unsigned long lastLcdMs = 0;
     while (WiFi.status() != WL_CONNECTED && millis() < deadline) {
       delay(100);
@@ -1701,7 +2115,9 @@ void setup() {
     if (WiFi.status() == WL_CONNECTED) {
       Serial.println("[WiFi] Conectado: " + WiFi.localIP().toString());
     } else {
-      Serial.println("[WiFi] Timeout inicial - continuando via loop");
+      lastWifiFailureStatus = static_cast<uint8_t>(WiFi.status());
+      Serial.print("[WiFi] Timeout inicial - status=");
+      Serial.println(lastWifiFailureStatus);
     }
   }
   lastWifiAttemptMs = millis();
@@ -1730,8 +2146,11 @@ void loop() {
         // transicao para fase TX: liga Wi-Fi
         hybridAcquiringPhase = false;
         hybridPhaseStartMs = now;
+        WiFi.setAutoReconnect(false);
         WiFi.mode(fallbackApActive ? WIFI_AP_STA : WIFI_STA);
-        WiFi.begin(config.wifiSsid, config.wifiPassword);
+        WiFi.disconnect(false, true);
+        delay(200);
+        beginWiFiWithConfig();
       }
     } else {
       // fase TX: aguarda conexao e publica lote

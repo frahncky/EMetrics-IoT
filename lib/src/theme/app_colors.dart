@@ -93,7 +93,7 @@ abstract final class AppColors {
   static const Color statusWarning = Color(0xFFD97706);
 
   /// Indica operação normal / conectado com leituras recentes.
-  static const Color statusSuccess = Color(0xFF15803D);
+  static const Color statusSuccess = Color(0xFF22C55E);
 
   /// Indica estado ocioso / desconectado.
   static const Color statusIdle = Color(0xFF64748B);

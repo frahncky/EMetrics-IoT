@@ -15,7 +15,6 @@ import '../../theme/app_colors.dart';
 /// O segundo ícone representa se há comunicação recente com o dispositivo.
 class MqttConnectionStatusIcon extends ConsumerWidget {
   static const _warningAfter = Duration(seconds: 15);
-  static const _errorAfter = Duration(minutes: 1);
 
   final double rightPadding;
 
@@ -188,65 +187,36 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
     MqttStatusState status,
     DateTime? lastMetricTime,
   ) {
-    // Após uma conexão estabelecida, a desconexão interrompe o recebimento de
-    // telemetria. Sinaliza isso imediatamente, sem esperar o prazo de atraso.
-    if (status.phase == MqttConnectionPhase.disconnected &&
-        status.lastConnectedAt != null) {
+    if (status.phase != MqttConnectionPhase.connected) {
       return const _StatusVisual(
-        icon: Icons.electric_meter,
+        icon: Icons.electric_meter_outlined,
         color: AppColors.statusIdle,
-        message: 'Monitoramento MQTT desconectado. Medidor sem telemetria.',
+        message: 'MQTT desconectado. Medidor sem telemetria.',
       );
     }
 
     if (lastMetricTime == null) {
       return const _StatusVisual(
-        icon: Icons.electric_meter_outlined,
-        color: AppColors.statusIdle,
-        message: 'Medidor não conectado.',
+        icon: Icons.electric_meter,
+        color: AppColors.statusWarning,
+        message: 'MQTT conectado, mas o medidor não está enviando dados.',
       );
     }
 
     final elapsed = DateTime.now().difference(lastMetricTime);
-    if (elapsed >= _errorAfter) {
-      return _StatusVisual(
-        icon: Icons.electric_meter,
-        color: AppColors.statusError,
-        message: 'Medidor sem telemetria há ${_relativeTime(lastMetricTime)}.',
-      );
-    }
-
     if (elapsed >= _warningAfter) {
       return _StatusVisual(
         icon: Icons.electric_meter,
         color: AppColors.statusWarning,
         message:
-            'Medidor com telemetria atrasada. Última leitura ${_relativeTime(lastMetricTime)}.',
+            'MQTT conectado, mas sem dados do medidor. Última leitura ${_relativeTime(lastMetricTime)}.',
       );
     }
 
-    if (status.phase == MqttConnectionPhase.error) {
-      return _StatusVisual(
-        icon: Icons.electric_meter,
-        color: AppColors.statusWarning,
-        message:
-            'Medidor com leitura local. MQTT com erro. Última leitura ${_relativeTime(lastMetricTime)}.',
-      );
-    }
-
-    if (status.phase == MqttConnectionPhase.connected) {
-      return const _StatusVisual(
-        icon: Icons.electric_meter,
-        color: AppColors.statusSuccess,
-        message: 'Medidor conectado com envio/recebimento de dados.',
-      );
-    }
-
-    return _StatusVisual(
+    return const _StatusVisual(
       icon: Icons.electric_meter,
       color: AppColors.statusSuccess,
-      message:
-          'Medidor com leitura local ativa. Última leitura ${_relativeTime(lastMetricTime)}.',
+      message: 'Medidor conectado e enviando dados.',
     );
   }
 

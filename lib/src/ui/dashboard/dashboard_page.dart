@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:math' as math;
 import '../../providers/metric_provider.dart';
+import '../../services/esp_local_host_store.dart';
+import '../../services/esp_provisioning_service.dart';
 import '../../theme/app_colors.dart';
 import 'dashboard_tabs.dart';
 import '../shared/mqtt_connection_status_icon.dart';
@@ -18,6 +20,46 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage>
     with WidgetsBindingObserver {
+  final _espHostStore = const EspLocalHostStore();
+  final _espService = const EspProvisioningService();
+  bool _isResettingEnergy = false;
+
+  Future<void> _resetEnergy() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Zerar energia acumulada'),
+        content: const Text(
+          'Isso vai zerar os contadores de energia (kWh, kVAh, kVArh) do PZEM. Esta ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Zerar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isResettingEnergy = true);
+    final host = await _espHostStore.loadHost();
+    if (!mounted) return;
+    final result = await _espService.resetEnergy(espHost: host);
+    if (!mounted) return;
+    setState(() => _isResettingEnergy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.ok ? null : Colors.redAccent,
+      ),
+    );
+  }
+
   /// Sincroniza o estado do serviço MQTT em segundo plano com o provider de status.
   Future<void> _syncBackgroundState() async {
     await ref.read(mqttStatusProvider.notifier).syncBackgroundState();
@@ -53,9 +95,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     final mqttSettings = ref.watch(mqttSettingsProvider);
     final metricsAsync = ref.watch(metricsProvider);
     final metrics = metricsAsync.asData?.value;
-    final lastMetric = metrics != null && metrics.isNotEmpty
-        ? metrics.first
-        : null;
+    final latestLive = ref.watch(latestMqttMetricProvider);
+    final lastMetric = latestLive ??
+        (metrics != null && metrics.isNotEmpty ? metrics.first : null);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -104,6 +146,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
         centerTitle: false,
         foregroundColor: isDarkMode ? Colors.white : Colors.black87,
         actions: [
+          IconButton(
+            tooltip: 'Zerar energia acumulada',
+            onPressed: _isResettingEnergy ? null : _resetEnergy,
+            icon: _isResettingEnergy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.restart_alt),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: Column(
