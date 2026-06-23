@@ -7,7 +7,6 @@ import {
 import {
   connectMqtt,
   DEFAULT_MQTT_CONFIG,
-  publishResetEnergy,
 } from "./services/mqttService";
 
 // ─── Paleta de cores (tema instrumento técnico) ───────────────────────────────
@@ -493,8 +492,7 @@ function MonitorDashboard({
   onConnect,
   onDisconnect,
   onRequestNotifications,
-  isResettingEnergy,
-  onResetEnergy,
+  onStartNewMeasurement,
   acquisition,
   acquisitionElapsedMs,
   onAcquisitionDurationChange,
@@ -515,8 +513,8 @@ function MonitorDashboard({
         <div className="status-row">
           <StatusBadge label={connection.label} tone={mqttTone} />
           <StatusBadge label={deviceOnline ? "ESP32 online" : telemetry ? "ESP32 sem telemetria" : "ESP32 aguardando"} tone={deviceOnline ? "good" : telemetry ? "bad" : "warning"} />
-          <button className="danger-button" onClick={onResetEnergy} disabled={isResettingEnergy} style={{ marginLeft: "auto" }}>
-            {isResettingEnergy ? "Enviando…" : "Zerar energia acumulada"}
+          <button className="primary-button" onClick={onStartNewMeasurement} style={{ marginLeft: "auto" }}>
+            Iniciar nova leitura
           </button>
           <span style={{ color: C.muted, fontSize: 12 }}>Última leitura: {lastUpdate}</span>
         </div>
@@ -700,7 +698,6 @@ export default function App() {
   const [telemetry, setTelemetry] = useState(null);
   const [liveHistory, setLiveHistory] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [isResettingEnergy, setIsResettingEnergy] = useState(false);
   const [acquisition, setAcquisition] = useState({
     phase: "stopped",
     durationSeconds: 60,
@@ -833,23 +830,36 @@ export default function App() {
     setConnection(current => ({ ...current, message }));
   }
 
-  async function resetEnergy() {
-    if (!window.confirm("Zerar os contadores de energia acumulada do PZEM? Esta ação não pode ser desfeita.")) {
+  function startNewMeasurement() {
+    if (connection.phase !== "connected") {
+      setConnection(current => ({ ...current, message: "Conecte ao MQTT antes de iniciar uma nova leitura." }));
       return;
     }
 
-    setIsResettingEnergy(true);
-    try {
-      const requestTopic = await publishResetEnergy(clientRef.current, mqttConfig.topic);
-      setConnection(current => ({
-        ...current,
-        message: `Comando para zerar energia enviado em ${requestTopic}.`,
-      }));
-    } catch (error) {
-      setConnection(current => ({ ...current, message: error.message || "Não foi possível enviar o comando de reset." }));
-    } finally {
-      setIsResettingEnergy(false);
+    const current = acquisitionRef.current;
+    if (!Number.isInteger(current.durationSeconds)
+      || current.durationSeconds < 1
+      || current.durationSeconds > MAX_ACQUISITION_DURATION_SECONDS) {
+      setConnection(state => ({ ...state, message: "Defina um período de coleta entre 1 segundo e 24 horas." }));
+      return;
     }
+
+    if (!window.confirm("Iniciar uma nova leitura? Os valores e gráficos atuais deste painel serão limpos.")) {
+      return;
+    }
+
+    setTelemetry(null);
+    setLiveHistory([]);
+    setAlerts([]);
+    alertGateRef.current = { voltage: false, energy: false, offline: false };
+    updateAcquisition(state => ({
+      ...state,
+      phase: "running",
+      elapsedMs: 0,
+      startedAtMs: Date.now(),
+      samples: 0,
+    }));
+    setConnection(current => ({ ...current, message: "Nova leitura iniciada." }));
   }
 
   function appendAlert({ key, title, message, severity }) {
@@ -1089,8 +1099,7 @@ export default function App() {
           onConnect={connect}
           onDisconnect={disconnect}
           onRequestNotifications={requestNotifications}
-          isResettingEnergy={isResettingEnergy}
-          onResetEnergy={resetEnergy}
+          onStartNewMeasurement={startNewMeasurement}
           acquisition={acquisition}
           acquisitionElapsedMs={acquisitionElapsedMs}
           onAcquisitionDurationChange={changeAcquisitionDuration}

@@ -190,11 +190,10 @@ Quando a fila lota, a amostra mais antiga e descartada para abrir espaco.
 
 ## Controle pelo dashboard web
 
-O botão **Zerar energia acumulada** fica no topo do dashboard e envia o
-comando `{"command":"resetEnergy"}` ao tópico MQTT
-`<mqttTopic>/history/request` configurado no ESP32. Assim, não é necessário
-informar o endereço IP do dispositivo na interface web. A ação exige
-confirmação na interface.
+O botão **Iniciar nova leitura** fica no topo do dashboard. Ele limpa os
+valores, gráficos, alertas e amostras da sessão atual no navegador e começa
+uma nova coleta MQTT, sem apagar o histórico persistido no ESP32. Não é
+necessário informar o endereço IP do dispositivo na interface web.
 
 O painel também permite iniciar, pausar, retomar ou encerrar uma sessão de
 coleta por um período definido em segundos. Esses controles registram as
