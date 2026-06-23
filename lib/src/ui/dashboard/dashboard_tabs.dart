@@ -77,6 +77,7 @@ class _RealtimeChartWithInternalSelector extends StatelessWidget {
       {'label': 'Energia Ativa', 'value': 'energy_active'},
       {'label': 'Energia Aparente', 'value': 'energy_apparent'},
       {'label': 'Energia Reativa', 'value': 'energy_reactive'},
+      {'label': 'Temperatura', 'value': 'temperature'},
     ];
     final secondaryColor = Theme.of(context).colorScheme.secondary;
     final backgroundColor = Theme.of(context).cardColor;
