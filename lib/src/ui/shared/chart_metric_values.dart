@@ -40,6 +40,8 @@ double metricValueForField(Metric metric, String field) {
     case 'energy':
     case 'energy_active':
       return metric.energy;
+    case 'temperature':
+      return metric.temperature ?? 0;
     default:
       return 0;
   }

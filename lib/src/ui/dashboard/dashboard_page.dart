@@ -5,11 +5,14 @@ import '../../providers/mqtt_status_provider.dart';
 import '../../data/metric_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:math' as math;
+import '../../providers/indicator_layout_provider.dart';
 import '../../providers/metric_provider.dart';
 import '../../services/mqtt_service.dart';
 import '../../theme/app_colors.dart';
 import '../shared/chart_metric_values.dart';
 import 'dashboard_tabs.dart';
+import 'metric_field_defs.dart';
 import '../shared/mqtt_connection_status_icon.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
@@ -263,7 +266,135 @@ String formatIndicatorValue(
 
 // ── Indicadores de métricas ──────────────────────────────────────────────────
 
+String _resolveValue(
+  String key,
+  MetricFieldDef def,
+  Metric? metric,
+  bool hasHistory,
+  double? kvah,
+  double? kvarh,
+) {
+  final hasMeasurement = metric != null;
+  switch (key) {
+    case 'voltage':
+      return formatIndicatorValue(
+        metric?.voltage,
+        fractionDigits: def.fractionDigits,
+        hasMeasurement: hasMeasurement,
+      );
+    case 'current':
+      return formatIndicatorValue(
+        metric?.current,
+        fractionDigits: def.fractionDigits,
+        hasMeasurement: hasMeasurement,
+      );
+    case 'power':
+      return formatIndicatorValue(
+        metric?.power,
+        fractionDigits: def.fractionDigits,
+        hasMeasurement: hasMeasurement,
+      );
+    case 'apparent':
+      final ap = hasMeasurement ? metric.voltage * metric.current : null;
+      return formatIndicatorValue(
+        ap,
+        fractionDigits: def.fractionDigits,
+        hasMeasurement: hasMeasurement,
+      );
+    case 'reactive':
+      if (!hasMeasurement) return '--';
+      final s = metric.voltage * metric.current;
+      final q = math.sqrt(math.max(s * s - metric.power * metric.power, 0));
+      return q.toStringAsFixed(def.fractionDigits);
+    case 'pf':
+      return formatIndicatorValue(
+        metric?.pf,
+        fractionDigits: def.fractionDigits,
+        hasMeasurement: hasMeasurement,
+      );
+    case 'frequency':
+      return formatIndicatorValue(
+        metric?.frequency,
+        fractionDigits: def.fractionDigits,
+        hasMeasurement: hasMeasurement,
+      );
+    case 'energy':
+      return formatIndicatorValue(
+        metric?.energy,
+        fractionDigits: def.fractionDigits,
+        hasMeasurement: hasMeasurement,
+      );
+    case 'energy_apparent':
+      return hasHistory ? (kvah ?? 0.0).toStringAsFixed(def.fractionDigits) : '--';
+    case 'energy_reactive':
+      return hasHistory ? (kvarh ?? 0.0).toStringAsFixed(def.fractionDigits) : '--';
+    case 'temperature':
+      return formatIndicatorValue(
+        metric?.temperature,
+        fractionDigits: def.fractionDigits,
+        hasMeasurement: hasMeasurement,
+      );
+    default:
+      return '--';
+  }
+}
+
+void _showFieldPicker(BuildContext context, WidgetRef ref, int slotIndex) {
+  showModalBottomSheet<void>(
+    context: context,
+    builder: (sheetCtx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Escolher grandeza',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: kAllMetricFields.length,
+              itemBuilder: (_, i) {
+                final f = kAllMetricFields[i];
+                final current = ref.read(indicatorLayoutProvider)[slotIndex];
+                final selected = f.key == current;
+                return ListTile(
+                  leading: Icon(f.icon, color: f.color),
+                  title: Text(f.label),
+                  trailing: f.unit != null
+                      ? Text(
+                          f.unit!,
+                          style: TextStyle(
+                            color: f.color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      : null,
+                  selected: selected,
+                  selectedTileColor: f.color.withValues(alpha: 0.12),
+                  onTap: () {
+                    ref
+                        .read(indicatorLayoutProvider.notifier)
+                        .updateSlot(slotIndex, f.key);
+                    Navigator.of(sheetCtx).pop();
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Grade de cards com as grandezas elétricas calculadas e medidas pelo PZEM004T.
+/// Segurar qualquer card abre um seletor para trocar a grandeza exibida.
 class _MainIndicators extends ConsumerWidget {
   final Metric? metric;
 
@@ -271,119 +402,15 @@ class _MainIndicators extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasMeasurement = metric != null;
-    final voltage = metric?.voltage;
-    final current = metric?.current;
-    final power = metric?.power;
-    final frequency = metric?.frequency;
-    final energy = metric?.energy;
-    final pf = metric?.pf;
-    // Energias aparente e reativa acumuladas por integração numérica do histórico.
-    final allMetrics =
-        ref.watch(metricsProvider).asData?.value ?? const [];
+    final layout = ref.watch(indicatorLayoutProvider);
+
+    final allMetrics = ref.watch(metricsProvider).asData?.value ?? const [];
     final ascending = allMetrics.reversed.toList();
     final hasHistory = ascending.isNotEmpty;
-    final apparentEnergyKvah =
-        chartValuesForField(ascending, 'energy_apparent').lastOrNull;
-    final reactiveEnergyKvarh =
-        chartValuesForField(ascending, 'energy_reactive').lastOrNull;
+    final kvah = chartValuesForField(ascending, 'energy_apparent').lastOrNull;
+    final kvarh = chartValuesForField(ascending, 'energy_reactive').lastOrNull;
 
     const spacing = 8.0;
-    final cards = [
-      _IndicatorCard(
-        label: 'Aparente',
-        value: hasHistory
-            ? (apparentEnergyKvah ?? 0.0).toStringAsFixed(3)
-            : '--',
-        icon: Icons.data_usage,
-        color: AppColors.metricApparent,
-        compact: true,
-        unit: 'kVAh',
-      ),
-      _IndicatorCard(
-        label: 'Ativa',
-        value: formatIndicatorValue(
-          power,
-          fractionDigits: 1,
-          hasMeasurement: hasMeasurement,
-        ),
-        icon: Icons.flash_on_outlined,
-        color: AppColors.metricActive,
-        compact: true,
-        unit: 'W',
-      ),
-      _IndicatorCard(
-        label: 'Reativa',
-        value: hasHistory
-            ? (reactiveEnergyKvarh ?? 0.0).toStringAsFixed(3)
-            : '--',
-        icon: Icons.waves,
-        color: AppColors.metricReactive,
-        compact: true,
-        unit: 'kVArh',
-      ),
-      _IndicatorCard(
-        label: 'FP',
-        value: formatIndicatorValue(
-          pf,
-          fractionDigits: 2,
-          hasMeasurement: hasMeasurement,
-        ),
-        icon: Icons.speed_outlined,
-        color: AppColors.metricPf,
-        compact: true,
-        extraCompact: true,
-      ),
-      _IndicatorCard(
-        label: 'Tensão',
-        value: formatIndicatorValue(
-          voltage,
-          fractionDigits: 1,
-          hasMeasurement: hasMeasurement,
-        ),
-        icon: Icons.electrical_services,
-        color: AppColors.metricVoltage,
-        compact: true,
-        unit: 'V',
-      ),
-      _IndicatorCard(
-        label: 'Corrente',
-        value: formatIndicatorValue(
-          current,
-          fractionDigits: 3,
-          hasMeasurement: hasMeasurement,
-        ),
-        icon: Icons.bolt_outlined,
-        color: AppColors.metricCurrent,
-        compact: true,
-        unit: 'A',
-      ),
-      _IndicatorCard(
-        label: 'Energia',
-        value: formatIndicatorValue(
-          energy,
-          fractionDigits: 3,
-          hasMeasurement: hasMeasurement,
-        ),
-        icon: Icons.battery_charging_full_outlined,
-        color: AppColors.metricEnergy,
-        compact: true,
-        unit: 'kWh',
-      ),
-      _IndicatorCard(
-        label: 'Frequência',
-        value: formatIndicatorValue(
-          frequency,
-          fractionDigits: 2,
-          hasMeasurement: hasMeasurement,
-        ),
-        icon: Icons.ssid_chart,
-        color: AppColors.metricFrequency,
-        compact: true,
-        extraCompact: true,
-        unit: 'Hz',
-      ),
-    ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -398,15 +425,39 @@ class _MainIndicators extends ConsumerWidget {
           spacing: spacing,
           runSpacing: spacing,
           children: [
-            for (final card in cards)
+            for (var i = 0; i < layout.length; i++)
               SizedBox(
-                key: ValueKey(card.label),
+                key: ValueKey('slot_$i'),
                 width: cardWidth,
-                child: card,
+                child: _cardForSlot(
+                  context, ref, i, layout[i], hasHistory, kvah, kvarh,
+                ),
               ),
           ],
         );
       },
+    );
+  }
+
+  _IndicatorCard _cardForSlot(
+    BuildContext context,
+    WidgetRef ref,
+    int index,
+    String key,
+    bool hasHistory,
+    double? kvah,
+    double? kvarh,
+  ) {
+    final def = fieldByKey(key);
+    return _IndicatorCard(
+      label: def.label,
+      value: _resolveValue(key, def, metric, hasHistory, kvah, kvarh),
+      icon: def.icon,
+      color: def.color,
+      compact: true,
+      extraCompact: def.extraCompact,
+      unit: def.unit,
+      onLongPress: () => _showFieldPicker(context, ref, index),
     );
   }
 }
@@ -425,6 +476,7 @@ class _IndicatorCard extends StatefulWidget {
   final bool compact;
   final bool extraCompact;
   final String? unit;
+  final VoidCallback? onLongPress;
 
   const _IndicatorCard({
     required this.label,
@@ -434,6 +486,7 @@ class _IndicatorCard extends StatefulWidget {
     this.compact = false,
     this.extraCompact = false,
     this.unit,
+    this.onLongPress,
   });
 
   @override
@@ -472,11 +525,13 @@ class _IndicatorCardState extends State<_IndicatorCard>
     final textColor = isDarkMode ? Colors.white : AppColors.lightTextBody;
     final isExtraCompact = widget.extraCompact && widget.compact;
 
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: Semantics(
-        label: 'Indicador de ${widget.label}: ${widget.value}',
-        child: Align(
+    return GestureDetector(
+      onLongPress: widget.onLongPress,
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: Semantics(
+          label: 'Indicador de ${widget.label}: ${widget.value}',
+          child: Align(
           alignment: Alignment.center,
           child: Container(
             margin: EdgeInsets.symmetric(
@@ -576,6 +631,7 @@ class _IndicatorCardState extends State<_IndicatorCard>
           ),
         ),
       ),
+    ),
     );
   }
 }

@@ -665,6 +665,7 @@ const _metricFieldOptions = [
   _MetricFieldOption('energy_reactive', 'Energia Reativa'),
   _MetricFieldOption('pf', 'Fator de potência'),
   _MetricFieldOption('frequency', 'Frequência'),
+  _MetricFieldOption('temperature', 'Temperatura'),
 ];
 
 class _MetricFieldOption {

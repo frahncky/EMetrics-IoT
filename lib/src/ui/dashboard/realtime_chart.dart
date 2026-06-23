@@ -735,6 +735,7 @@ const _metricFieldOptions = [
   _MetricFieldOption('energy_active', 'Energia Ativa'),
   _MetricFieldOption('energy_apparent', 'Energia Aparente'),
   _MetricFieldOption('energy_reactive', 'Energia Reativa'),
+  _MetricFieldOption('temperature', 'Temperatura'),
 ];
 
 /// Mantém o espaço e a aparência do gráfico enquanto a primeira leitura é
