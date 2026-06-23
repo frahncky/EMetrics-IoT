@@ -293,6 +293,49 @@ class MqttService {
     }
   }
 
+  /// Publica o comando de reset de energia no [requestTopic].
+  ///
+  /// O firmware ESP32 zera os contadores kWh/kVAh/kVArh do PZEM ao receber
+  /// `{"command":"resetEnergy"}` no tópico de requisição.
+  Future<void> resetEnergy() async {
+    if (!isConnected) {
+      throw const MqttServiceException(
+        'Conecte ao broker MQTT antes de zerar a energia.',
+      );
+    }
+
+    try {
+      final payload = jsonEncode({
+        'command': 'resetEnergy',
+        'requestedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+      final builder = MqttClientPayloadBuilder()..addString(payload);
+      final data = builder.payload;
+      if (data == null) {
+        throw const MqttServiceException(
+          'Falha ao montar o comando de reset de energia.',
+        );
+      }
+      client.publishMessage(requestTopic, MqttQos.atLeastOnce, data);
+      developer.log(
+        'Comando resetEnergy publicado em $requestTopic',
+        name: 'MqttService',
+      );
+    } on MqttServiceException {
+      rethrow;
+    } catch (e, stackTrace) {
+      developer.log(
+        'Erro ao publicar resetEnergy',
+        name: 'MqttService',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      throw const MqttServiceException(
+        'Erro ao enviar comando de reset de energia via MQTT.',
+      );
+    }
+  }
+
   /// Callback interno invocado pelo [MqttServerClient] ao detectar desconexão.
   void onDisconnected() {
     developer.log('Cliente MQTT desconectado', name: 'MqttService');

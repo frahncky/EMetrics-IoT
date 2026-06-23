@@ -1,14 +1,14 @@
 import '../../providers/mqtt_metric_saver.dart';
+import '../../providers/mqtt_provider.dart';
 import '../../providers/mqtt_settings_provider.dart';
 import '../../providers/mqtt_status_provider.dart';
 import '../../data/metric_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:math' as math;
 import '../../providers/metric_provider.dart';
-import '../../services/esp_local_host_store.dart';
-import '../../services/esp_provisioning_service.dart';
+import '../../services/mqtt_service.dart';
 import '../../theme/app_colors.dart';
+import '../shared/chart_metric_values.dart';
 import 'dashboard_tabs.dart';
 import '../shared/mqtt_connection_status_icon.dart';
 
@@ -20,8 +20,6 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage>
     with WidgetsBindingObserver {
-  final _espHostStore = const EspLocalHostStore();
-  final _espService = const EspProvisioningService();
   bool _isResettingEnergy = false;
 
   Future<void> _resetEnergy() async {
@@ -30,7 +28,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
       builder: (context) => AlertDialog(
         title: const Text('Zerar energia acumulada'),
         content: const Text(
-          'Isso vai zerar os contadores de energia (kWh, kVAh, kVArh) do PZEM. Esta ação não pode ser desfeita.',
+          'Isso vai zerar o contador de energia do PZEM (kWh) e limpar o histórico de energias aparente (kVAh) e reativa (kVArh). Esta ação não pode ser desfeita.',
         ),
         actions: [
           TextButton(
@@ -47,15 +45,27 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     if (confirmed != true || !mounted) return;
 
     setState(() => _isResettingEnergy = true);
-    final host = await _espHostStore.loadHost();
-    if (!mounted) return;
-    final result = await _espService.resetEnergy(espHost: host);
+    String message;
+    bool ok;
+    try {
+      await ref.read(mqttServiceProvider).resetEnergy();
+      await ref.read(metricRepositoryProvider).deleteAllMetrics();
+      ref.invalidate(metricsProvider);
+      message = 'Energia zerada. Histórico de gráficos limpo.';
+      ok = true;
+    } on MqttServiceException catch (e) {
+      message = e.message;
+      ok = false;
+    } catch (_) {
+      message = 'Erro inesperado ao enviar o comando.';
+      ok = false;
+    }
     if (!mounted) return;
     setState(() => _isResettingEnergy = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(result.message),
-        backgroundColor: result.ok ? null : Colors.redAccent,
+        content: Text(message),
+        backgroundColor: ok ? null : Colors.redAccent,
       ),
     );
   }
@@ -253,14 +263,14 @@ String formatIndicatorValue(
 
 // ── Indicadores de métricas ──────────────────────────────────────────────────
 
-/// Grade de 8 cards com as grandezas elétricas calculadas e medidas pelo PZEM004T.
-class _MainIndicators extends StatelessWidget {
+/// Grade de cards com as grandezas elétricas calculadas e medidas pelo PZEM004T.
+class _MainIndicators extends ConsumerWidget {
   final Metric? metric;
 
   const _MainIndicators({this.metric});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hasMeasurement = metric != null;
     final voltage = metric?.voltage;
     final current = metric?.current;
@@ -268,23 +278,27 @@ class _MainIndicators extends StatelessWidget {
     final frequency = metric?.frequency;
     final energy = metric?.energy;
     final pf = metric?.pf;
-    final apparent = hasMeasurement ? voltage! * current! : null;
-    final reactive = hasMeasurement
-        ? math.sqrt(math.max((apparent! * apparent) - (power! * power), 0))
-        : null;
+    // Energias aparente e reativa acumuladas por integração numérica do histórico.
+    final allMetrics =
+        ref.watch(metricsProvider).asData?.value ?? const [];
+    final ascending = allMetrics.reversed.toList();
+    final hasHistory = ascending.isNotEmpty;
+    final apparentEnergyKvah =
+        chartValuesForField(ascending, 'energy_apparent').lastOrNull;
+    final reactiveEnergyKvarh =
+        chartValuesForField(ascending, 'energy_reactive').lastOrNull;
+
     const spacing = 8.0;
     final cards = [
       _IndicatorCard(
         label: 'Aparente',
-        value: formatIndicatorValue(
-          apparent,
-          fractionDigits: 1,
-          hasMeasurement: hasMeasurement,
-        ),
+        value: hasHistory
+            ? (apparentEnergyKvah ?? 0.0).toStringAsFixed(3)
+            : '--',
         icon: Icons.data_usage,
         color: AppColors.metricApparent,
         compact: true,
-        unit: 'VA',
+        unit: 'kVAh',
       ),
       _IndicatorCard(
         label: 'Ativa',
@@ -300,15 +314,13 @@ class _MainIndicators extends StatelessWidget {
       ),
       _IndicatorCard(
         label: 'Reativa',
-        value: formatIndicatorValue(
-          reactive,
-          fractionDigits: 1,
-          hasMeasurement: hasMeasurement,
-        ),
+        value: hasHistory
+            ? (reactiveEnergyKvarh ?? 0.0).toStringAsFixed(3)
+            : '--',
         icon: Icons.waves,
         color: AppColors.metricReactive,
         compact: true,
-        unit: 'VAr',
+        unit: 'kVArh',
       ),
       _IndicatorCard(
         label: 'FP',

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,7 +15,7 @@ import '../../theme/app_colors.dart';
 ///
 /// O primeiro ícone representa a conexão MQTT.
 /// O segundo ícone representa se há comunicação recente com o dispositivo.
-class MqttConnectionStatusIcon extends ConsumerWidget {
+class MqttConnectionStatusIcon extends ConsumerStatefulWidget {
   static const _warningAfter = Duration(seconds: 15);
 
   final double rightPadding;
@@ -21,7 +23,30 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
   const MqttConnectionStatusIcon({super.key, this.rightPadding = 14});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MqttConnectionStatusIcon> createState() =>
+      _MqttConnectionStatusIconState();
+}
+
+class _MqttConnectionStatusIconState
+    extends ConsumerState<MqttConnectionStatusIcon> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final status = ref.watch(mqttStatusProvider);
     final latestLive = ref.watch(latestMqttMetricProvider);
     final metricsData = ref.watch(metricsProvider).asData;
@@ -32,7 +57,7 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
     final deviceVisual = _deviceVisual(status, lastMetricTime);
 
     return Padding(
-      padding: EdgeInsets.only(right: rightPadding),
+      padding: EdgeInsets.only(right: widget.rightPadding),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -206,7 +231,7 @@ class MqttConnectionStatusIcon extends ConsumerWidget {
     }
 
     final elapsed = DateTime.now().difference(lastMetricTime);
-    if (elapsed >= _warningAfter) {
+    if (elapsed >= MqttConnectionStatusIcon._warningAfter) {
       return _StatusVisual(
         icon: Icons.electric_meter,
         color: AppColors.statusWarning,

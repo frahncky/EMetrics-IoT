@@ -915,19 +915,19 @@ export default function App() {
         onTelemetry: (nextTelemetry) => {
           setTelemetry(nextTelemetry);
           const measurementTime = nextTelemetry.measuredAt ?? nextTelemetry.receivedAt;
+          setLiveHistory(current => [...current, {
+            time: measurementTime.toLocaleTimeString("pt-BR"),
+            power: nextTelemetry.power,
+            apparentPower: nextTelemetry.apparentPower,
+            reactivePower: nextTelemetry.reactivePower,
+            voltage: nextTelemetry.voltage,
+            current: nextTelemetry.current,
+            frequency: nextTelemetry.frequency,
+            pf: nextTelemetry.pf,
+            energy: nextTelemetry.energy,
+            temperature: nextTelemetry.temperature,
+          }].slice(-60));
           if (acquisitionRef.current.phase === "running") {
-            setLiveHistory(current => [...current, {
-              time: measurementTime.toLocaleTimeString("pt-BR"),
-              power: nextTelemetry.power,
-              apparentPower: nextTelemetry.apparentPower,
-              reactivePower: nextTelemetry.reactivePower,
-              voltage: nextTelemetry.voltage,
-              current: nextTelemetry.current,
-              frequency: nextTelemetry.frequency,
-              pf: nextTelemetry.pf,
-              energy: nextTelemetry.energy,
-              temperature: nextTelemetry.temperature,
-            }].slice(-60));
             updateAcquisition(current => current.phase === "running"
               ? { ...current, samples: current.samples + 1 }
               : current);
