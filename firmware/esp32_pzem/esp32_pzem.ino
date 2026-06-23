@@ -1552,22 +1552,7 @@ void handleWifiReconnect() {
       "{\"ok\":true,\"message\":\"Tentativa de conexao iniciada.\"}");
 }
 
-// Permite que o dashboard web, quando hospedado em outra origem, acione o
-// reset local do PZEM. O endpoint continua limitado à rede que alcança o ESP.
-void sendResetEnergyCorsHeaders() {
-  provisionServer.sendHeader("Access-Control-Allow-Origin", "*");
-  provisionServer.sendHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  provisionServer.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-  provisionServer.sendHeader("Access-Control-Allow-Private-Network", "true");
-}
-
-void handleResetEnergyOptions() {
-  sendResetEnergyCorsHeaders();
-  provisionServer.send(204, "text/plain", "");
-}
-
 void handleResetEnergy() {
-  sendResetEnergyCorsHeaders();
   if (!resetAllEnergy()) {
     provisionServer.send(
         503,
@@ -1599,7 +1584,6 @@ void startProvisioningServer() {
   provisionServer.on("/wifi-connection-settings", HTTP_POST, handleWifiConnectionSettingsSave);
   provisionServer.on("/firmware/update", HTTP_POST, handleFirmwareUpdate, handleFirmwareUpdateUpload);
   provisionServer.on("/reset-energy", HTTP_POST, handleResetEnergy);
-  provisionServer.on("/reset-energy", HTTP_OPTIONS, handleResetEnergyOptions);
   provisionServer.on("/wifi-status", HTTP_GET, handleWifiStatus);
   provisionServer.on("/wifi-reconnect", HTTP_POST, handleWifiReconnect);
   provisionServer.begin();

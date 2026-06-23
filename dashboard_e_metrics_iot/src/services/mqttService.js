@@ -71,6 +71,33 @@ export function parseTelemetry(payload) {
   };
 }
 
+export function resetEnergyCommandTopic(telemetryTopic) {
+  const topic = String(telemetryTopic ?? "").trim().replace(/\/+$/, "");
+  if (!topic) {
+    throw new Error("Informe o tópico de telemetria antes de zerar a energia.");
+  }
+  return `${topic}/history/request`;
+}
+
+export function publishResetEnergy(client, telemetryTopic) {
+  if (!client?.connected) {
+    return Promise.reject(new Error("Conecte ao MQTT antes de zerar a energia."));
+  }
+
+  const requestTopic = resetEnergyCommandTopic(telemetryTopic);
+  return new Promise((resolve, reject) => {
+    client.publish(
+      requestTopic,
+      JSON.stringify({ command: "resetEnergy" }),
+      { qos: 0 },
+      (error) => {
+        if (error) reject(error);
+        else resolve(requestTopic);
+      },
+    );
+  });
+}
+
 export function connectMqtt(config, handlers) {
   const url = config.url.trim();
   const topic = config.topic.trim();

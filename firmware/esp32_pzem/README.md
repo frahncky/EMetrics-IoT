@@ -174,9 +174,10 @@ Quando a fila lota, a amostra mais antiga e descartada para abrir espaco.
 
 ## Controle pelo dashboard web
 
-O dashboard aceita o endereço do ESP32 (por exemplo, `192.168.1.50`) para
-enviar `POST /reset-energy`, a mesma operação de **Zerar energia acumulada**
-disponível no app. A ação zera os contadores de energia do PZEM e exige
+O botão **Zerar energia acumulada** fica no topo do dashboard e envia o
+comando `{"command":"resetEnergy"}` ao tópico MQTT
+`<mqttTopic>/history/request` configurado no ESP32. Assim, não é necessário
+informar o endereço IP do dispositivo na interface web. A ação exige
 confirmação na interface.
 
 O painel também permite iniciar, pausar, retomar ou encerrar uma sessão de

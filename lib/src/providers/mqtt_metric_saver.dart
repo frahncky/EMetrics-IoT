@@ -66,8 +66,9 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
     // ainda está ativo (preso pela cadeia lastOperation).
     lastOperation = lastOperation.then((_) async {
       final last = messages.last;
-      final payload = (last.payload as MqttPublishMessage).payload.message;
-      final payloadString = String.fromCharCodes(payload);
+      final publishMsg = last.payload as MqttPublishMessage;
+      if (publishMsg.header?.retain == true) return;
+      final payloadString = String.fromCharCodes(publishMsg.payload.message);
       final metric = parseMetricFromMqtt(payloadString);
       if (metric != null) {
         final repo = ref.read(metricRepositoryProvider);
