@@ -445,6 +445,8 @@ class RealtimeChart extends ConsumerWidget {
         return const _FieldMeta('Fator de potência', '', Color(0xFF9D8CFF));
       case 'frequency':
         return const _FieldMeta('Frequência', 'Hz', Color(0xFF22C55E));
+      case 'temperature':
+        return const _FieldMeta('Temperatura', '°C', Color(0xFFD97706));
       default:
         return _FieldMeta(selectedField, '', Colors.blueAccent);
     }
