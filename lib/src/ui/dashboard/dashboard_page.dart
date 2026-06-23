@@ -93,11 +93,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage>
     // Ativa o saver para que métricas MQTT sejam persistidas enquanto a tela estiver visível.
     ref.watch(mqttMetricSaverProvider);
     final mqttSettings = ref.watch(mqttSettingsProvider);
-    final metricsAsync = ref.watch(metricsProvider);
-    final metrics = metricsAsync.asData?.value;
-    final latestLive = ref.watch(latestMqttMetricProvider);
-    final lastMetric = latestLive ??
-        (metrics != null && metrics.isNotEmpty ? metrics.first : null);
+    ref.watch(metricsProvider);
+    final lastMetric = ref.watch(latestMqttMetricProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(

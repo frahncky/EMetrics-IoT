@@ -35,12 +35,12 @@ final metricsByRangeProvider =
 });
 
 /// Última métrica recebida diretamente do stream MQTT, sem passar pelo banco.
-/// Atualiza imediatamente quando uma mensagem chega, sem debounce.
+/// Mensagens retidas (retain=true) são ignoradas — são dados antigos do broker.
 final latestMqttMetricProvider = Provider<Metric?>((ref) {
   return ref.watch(mqttStreamProvider).whenOrNull(data: (messages) {
     if (messages.isEmpty) return null;
-    final payload =
-        (messages.last.payload as MqttPublishMessage).payload.message;
-    return parseMetricFromMqtt(String.fromCharCodes(payload));
+    final msg = messages.last.payload as MqttPublishMessage;
+    if (msg.header?.retain == true) return null;
+    return parseMetricFromMqtt(String.fromCharCodes(msg.payload.message));
   });
 });
