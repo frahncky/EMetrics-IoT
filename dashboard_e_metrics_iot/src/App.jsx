@@ -138,38 +138,50 @@ function Card({ title, children, accent, action }) {
     }}>
       {title && <div style={{ color: C.muted, fontSize: 11, fontWeight: 700,
         letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14,
-        paddingRight: action ? 100 : 0 }}>{title}</div>}
+        paddingRight: action ? 160 : 0 }}>{title}</div>}
       {action && <div className="chart-card-action">{action}</div>}
       {children}
     </div>
   );
 }
 
-function downloadChartAsPng(chartElement, fileName) {
+function renderChartToCanvas(chartElement) {
   const svg = chartElement?.querySelector("svg.recharts-surface");
-  if (!svg) {
-    return Promise.reject(new Error("Gráfico indisponível para exportação."));
-  }
+  if (!svg) return Promise.reject(new Error("Gráfico indisponível para exportação."));
 
   const { width, height } = svg.getBoundingClientRect();
-  if (!width || !height) {
-    return Promise.reject(new Error("Gráfico sem dimensões para exportação."));
-  }
+  if (!width || !height) return Promise.reject(new Error("Gráfico sem dimensões para exportação."));
 
-  const exportPadding = 24;
   const viewBox = svg.viewBox.baseVal;
   const sourceWidth = viewBox.width || width;
   const sourceHeight = viewBox.height || height;
+
   const svgCopy = svg.cloneNode(true);
   svgCopy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   svgCopy.setAttribute("overflow", "visible");
-  svgCopy.setAttribute(
-    "viewBox",
-    `${viewBox.x - exportPadding} ${viewBox.y - exportPadding} ${sourceWidth + exportPadding * 2} ${sourceHeight + exportPadding * 2}`,
-  );
-  svgCopy.setAttribute("width", String(width + exportPadding * 2));
-  svgCopy.setAttribute("height", String(height + exportPadding * 2));
   svgCopy.style.fontFamily = "Inter, Segoe UI, sans-serif";
+
+  // Temporarily attach to DOM so getBBox() can measure all rendered content (including overflowing labels)
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none";
+  probe.appendChild(svgCopy);
+  document.body.appendChild(probe);
+  let bbox;
+  try { bbox = svgCopy.getBBox(); } catch (_) { bbox = null; } finally { document.body.removeChild(probe); }
+
+  const pad = 16;
+  const contentX = bbox ? Math.min(bbox.x, viewBox.x) : viewBox.x;
+  const contentY = bbox ? Math.min(bbox.y, viewBox.y) : viewBox.y;
+  const contentRight = bbox ? Math.max(bbox.x + bbox.width, viewBox.x + sourceWidth) : viewBox.x + sourceWidth;
+  const contentBottom = bbox ? Math.max(bbox.y + bbox.height, viewBox.y + sourceHeight) : viewBox.y + sourceHeight;
+  const vbX = contentX - pad;
+  const vbY = contentY - pad;
+  const vbW = contentRight - contentX + pad * 2;
+  const vbH = contentBottom - contentY + pad * 2;
+
+  svgCopy.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
+  svgCopy.setAttribute("width", String(vbW));
+  svgCopy.setAttribute("height", String(vbH));
 
   const svgBlob = new Blob([new XMLSerializer().serializeToString(svgCopy)], {
     type: "image/svg+xml;charset=utf-8",
@@ -181,61 +193,108 @@ function downloadChartAsPng(chartElement, fileName) {
     image.onload = () => {
       const scale = Math.min(window.devicePixelRatio || 1, 2);
       const canvas = document.createElement("canvas");
-      const imageWidth = width + exportPadding * 2;
-      const imageHeight = height + exportPadding * 2;
-      canvas.width = Math.round(imageWidth * scale);
-      canvas.height = Math.round(imageHeight * scale);
-
-      const context = canvas.getContext("2d");
-      if (!context) {
-        URL.revokeObjectURL(svgUrl);
-        reject(new Error("Canvas indisponível para exportação."));
-        return;
-      }
-
-      context.scale(scale, scale);
-      context.fillStyle = C.surface;
-      context.fillRect(0, 0, imageWidth, imageHeight);
-      context.drawImage(image, 0, 0, imageWidth, imageHeight);
+      canvas.width = Math.round(vbW * scale);
+      canvas.height = Math.round(vbH * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(svgUrl); reject(new Error("Canvas indisponível para exportação.")); return; }
+      ctx.scale(scale, scale);
+      ctx.fillStyle = C.surface;
+      ctx.fillRect(0, 0, vbW, vbH);
+      ctx.drawImage(image, 0, 0, vbW, vbH);
       URL.revokeObjectURL(svgUrl);
-
-      canvas.toBlob((pngBlob) => {
-        if (!pngBlob) {
-          reject(new Error("Não foi possível gerar o PNG."));
-          return;
-        }
-
-        const pngUrl = URL.createObjectURL(pngBlob);
-        const anchor = document.createElement("a");
-        anchor.href = pngUrl;
-        anchor.download = fileName;
-        document.body.append(anchor);
-        anchor.click();
-        anchor.remove();
-        window.setTimeout(() => URL.revokeObjectURL(pngUrl), 0);
-        resolve();
-      }, "image/png");
+      resolve({ canvas, scale });
     };
-    image.onerror = () => {
-      URL.revokeObjectURL(svgUrl);
-      reject(new Error("Não foi possível preparar o gráfico para exportação."));
-    };
+    image.onerror = () => { URL.revokeObjectURL(svgUrl); reject(new Error("Não foi possível preparar o gráfico para exportação.")); };
     image.src = svgUrl;
   });
 }
 
+function triggerBlobDownload(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function downloadChart(chartElement, baseName, format) {
+  const base = baseName.replace(/\.\w+$/, "");
+  const { canvas } = await renderChartToCanvas(chartElement);
+
+  if (format === "jpeg") {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error("Não foi possível gerar o JPEG.")); return; }
+        triggerBlobDownload(blob, `${base}.jpg`);
+        resolve();
+      }, "image/jpeg", 0.92);
+    });
+  }
+
+  if (format === "eps") {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(async (jpegBlob) => {
+        if (!jpegBlob) { reject(new Error("Não foi possível gerar o EPS.")); return; }
+        try {
+          const buf = await jpegBlob.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+          const w = canvas.width;
+          const h = canvas.height;
+          const eps = [
+            "%!PS-Adobe-3.0 EPSF-3.0",
+            `%%BoundingBox: 0 0 ${w} ${h}`,
+            "%%LanguageLevel: 3",
+            "%%Pages: 1",
+            "%%EndComments",
+            "%%Page: 1 1",
+            `${w} ${h} 8 [${w} 0 0 ${-h} 0 ${h}]`,
+            "currentfile /ASCIIHexDecode filter /DCTDecode filter",
+            "false 3 colorimage",
+            hex,
+            ">",
+            "%%EOF",
+          ].join("\n");
+          triggerBlobDownload(new Blob([eps], { type: "application/postscript" }), `${base}.eps`);
+          resolve();
+        } catch (_) {
+          reject(new Error("Não foi possível gerar o EPS."));
+        }
+      }, "image/jpeg", 0.92);
+    });
+  }
+
+  // default: png
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error("Não foi possível gerar o PNG.")); return; }
+      triggerBlobDownload(blob, `${base}.png`);
+      resolve();
+    }, "image/png");
+  });
+}
+
+const EXPORT_FORMATS = [
+  { id: "png",  label: "PNG"  },
+  { id: "jpeg", label: "JPG"  },
+  { id: "eps",  label: "EPS"  },
+];
+
 function ChartCard({ title, children, accent, fileName }) {
   const chartRef = useRef(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const [exporting, setExporting] = useState(null);
 
-  const exportChart = async () => {
-    setIsExporting(true);
+  const exportChart = async (format) => {
+    setExporting(format);
     try {
-      await downloadChartAsPng(chartRef.current, fileName);
+      await downloadChart(chartRef.current, fileName, format);
     } catch (error) {
       window.alert(error.message || "Não foi possível exportar o gráfico.");
     } finally {
-      setIsExporting(false);
+      setExporting(null);
     }
   };
 
@@ -244,15 +303,20 @@ function ChartCard({ title, children, accent, fileName }) {
       title={title}
       accent={accent}
       action={(
-        <button
-          className="chart-download-button"
-          onClick={exportChart}
-          disabled={isExporting}
-          title="Baixar gráfico em PNG"
-          type="button"
-        >
-          {isExporting ? "Gerando…" : "⇩ PNG"}
-        </button>
+        <div className="chart-export-group">
+          {EXPORT_FORMATS.map(({ id, label }) => (
+            <button
+              key={id}
+              className="chart-download-button"
+              onClick={() => exportChart(id)}
+              disabled={exporting !== null}
+              title={`Baixar gráfico em ${label}`}
+              type="button"
+            >
+              {exporting === id ? "…" : label}
+            </button>
+          ))}
+        </div>
       )}
     >
       <div ref={chartRef}>{children}</div>

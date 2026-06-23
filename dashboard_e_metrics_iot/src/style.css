@@ -72,6 +72,11 @@ button:disabled {
   top: 12px;
 }
 
+.chart-export-group {
+  display: flex;
+  gap: 4px;
+}
+
 .chart-download-button {
   align-items: center;
   background: transparent;
