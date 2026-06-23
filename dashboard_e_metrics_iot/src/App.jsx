@@ -149,39 +149,50 @@ function renderChartToCanvas(chartElement) {
   const svg = chartElement?.querySelector("svg.recharts-surface");
   if (!svg) return Promise.reject(new Error("Gráfico indisponível para exportação."));
 
-  const { width, height } = svg.getBoundingClientRect();
-  if (!width || !height) return Promise.reject(new Error("Gráfico sem dimensões para exportação."));
+  const svgRect = svg.getBoundingClientRect();
+  if (!svgRect.width || !svgRect.height) return Promise.reject(new Error("Gráfico sem dimensões para exportação."));
 
   const viewBox = svg.viewBox.baseVal;
-  const sourceWidth = viewBox.width || width;
-  const sourceHeight = viewBox.height || height;
+  const vbW0 = viewBox.width || svgRect.width;
+  const vbH0 = viewBox.height || svgRect.height;
+  // Ratio: screen pixel → SVG user unit
+  const px2ux = vbW0 / svgRect.width;
+  const px2uy = vbH0 / svgRect.height;
+
+  // Walk every descendant element and collect their actual screen rects.
+  // This correctly captures rotated tick labels, even those clipped by the SVG viewport.
+  let minX = svgRect.left, minY = svgRect.top;
+  let maxX = svgRect.right, maxY = svgRect.bottom;
+  for (const el of svg.querySelectorAll("*")) {
+    try {
+      const r = el.getBoundingClientRect();
+      if (!r.width && !r.height) continue;
+      if (r.left  < minX) minX = r.left;
+      if (r.top   < minY) minY = r.top;
+      if (r.right > maxX) maxX = r.right;
+      if (r.bottom > maxY) maxY = r.bottom;
+    } catch (_) { /* skip elements that throw */ }
+  }
+
+  // Convert screen overflow (px) to SVG user units, then add padding
+  const pad = 20;
+  const extraL = Math.max(0, svgRect.left  - minX) * px2ux + pad;
+  const extraT = Math.max(0, svgRect.top   - minY) * px2uy + pad;
+  const extraR = Math.max(0, maxX - svgRect.right)  * px2ux + pad;
+  const extraB = Math.max(0, maxY - svgRect.bottom) * px2uy + pad;
+
+  const vbX = viewBox.x - extraL;
+  const vbY = viewBox.y - extraT;
+  const vbW = vbW0 + extraL + extraR;
+  const vbH = vbH0 + extraT + extraB;
 
   const svgCopy = svg.cloneNode(true);
   svgCopy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   svgCopy.setAttribute("overflow", "visible");
-  svgCopy.style.fontFamily = "Inter, Segoe UI, sans-serif";
-
-  // Temporarily attach to DOM so getBBox() can measure all rendered content (including overflowing labels)
-  const probe = document.createElement("div");
-  probe.style.cssText = "position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none";
-  probe.appendChild(svgCopy);
-  document.body.appendChild(probe);
-  let bbox;
-  try { bbox = svgCopy.getBBox(); } catch (_) { bbox = null; } finally { document.body.removeChild(probe); }
-
-  const pad = 16;
-  const contentX = bbox ? Math.min(bbox.x, viewBox.x) : viewBox.x;
-  const contentY = bbox ? Math.min(bbox.y, viewBox.y) : viewBox.y;
-  const contentRight = bbox ? Math.max(bbox.x + bbox.width, viewBox.x + sourceWidth) : viewBox.x + sourceWidth;
-  const contentBottom = bbox ? Math.max(bbox.y + bbox.height, viewBox.y + sourceHeight) : viewBox.y + sourceHeight;
-  const vbX = contentX - pad;
-  const vbY = contentY - pad;
-  const vbW = contentRight - contentX + pad * 2;
-  const vbH = contentBottom - contentY + pad * 2;
-
   svgCopy.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
   svgCopy.setAttribute("width", String(vbW));
   svgCopy.setAttribute("height", String(vbH));
+  svgCopy.style.fontFamily = "Inter, Segoe UI, sans-serif";
 
   const svgBlob = new Blob([new XMLSerializer().serializeToString(svgCopy)], {
     type: "image/svg+xml;charset=utf-8",
