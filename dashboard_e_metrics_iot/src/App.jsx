@@ -130,16 +130,122 @@ function CsvImportButton({ onImport }) {
 }
 
 // ─── Componentes de UI ────────────────────────────────────────────────────────
-function Card({ title, children, accent }) {
+function Card({ title, children, accent, action }) {
   return (
     <div style={{
       background: C.surface, border: `1px solid ${accent || C.border}`,
-      borderRadius: 10, padding: "18px 22px", marginBottom: 20,
+      borderRadius: 10, padding: "18px 22px", marginBottom: 20, position: "relative",
     }}>
       {title && <div style={{ color: C.muted, fontSize: 11, fontWeight: 700,
-        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14 }}>{title}</div>}
+        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 14,
+        paddingRight: action ? 100 : 0 }}>{title}</div>}
+      {action && <div className="chart-card-action">{action}</div>}
       {children}
     </div>
+  );
+}
+
+function downloadChartAsPng(chartElement, fileName) {
+  const svg = chartElement?.querySelector("svg.recharts-surface");
+  if (!svg) {
+    return Promise.reject(new Error("Gráfico indisponível para exportação."));
+  }
+
+  const { width, height } = svg.getBoundingClientRect();
+  if (!width || !height) {
+    return Promise.reject(new Error("Gráfico sem dimensões para exportação."));
+  }
+
+  const svgCopy = svg.cloneNode(true);
+  svgCopy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svgCopy.setAttribute("width", String(width));
+  svgCopy.setAttribute("height", String(height));
+  svgCopy.style.fontFamily = "Inter, Segoe UI, sans-serif";
+
+  const svgBlob = new Blob([new XMLSerializer().serializeToString(svgCopy)], {
+    type: "image/svg+xml;charset=utf-8",
+  });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(window.devicePixelRatio || 1, 2);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        URL.revokeObjectURL(svgUrl);
+        reject(new Error("Canvas indisponível para exportação."));
+        return;
+      }
+
+      context.scale(scale, scale);
+      context.fillStyle = C.surface;
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      URL.revokeObjectURL(svgUrl);
+
+      canvas.toBlob((pngBlob) => {
+        if (!pngBlob) {
+          reject(new Error("Não foi possível gerar o PNG."));
+          return;
+        }
+
+        const pngUrl = URL.createObjectURL(pngBlob);
+        const anchor = document.createElement("a");
+        anchor.href = pngUrl;
+        anchor.download = fileName;
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(pngUrl), 0);
+        resolve();
+      }, "image/png");
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(svgUrl);
+      reject(new Error("Não foi possível preparar o gráfico para exportação."));
+    };
+    image.src = svgUrl;
+  });
+}
+
+function ChartCard({ title, children, accent, fileName }) {
+  const chartRef = useRef(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const exportChart = async () => {
+    setIsExporting(true);
+    try {
+      await downloadChartAsPng(chartRef.current, fileName);
+    } catch (error) {
+      window.alert(error.message || "Não foi possível exportar o gráfico.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <Card
+      title={title}
+      accent={accent}
+      action={(
+        <button
+          className="chart-download-button"
+          onClick={exportChart}
+          disabled={isExporting}
+          title="Baixar gráfico em PNG"
+          type="button"
+        >
+          {isExporting ? "Gerando…" : "⇩ PNG"}
+        </button>
+      )}
+    >
+      <div ref={chartRef}>{children}</div>
+    </Card>
   );
 }
 
@@ -555,7 +661,7 @@ function MonitorDashboard({
       </div>
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
-        <Card title="Tensão — tendência ao vivo">
+        <ChartCard title="Tensão — tendência ao vivo" fileName="tendencia_tensao.png">
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
@@ -569,9 +675,9 @@ function MonitorDashboard({
           ) : (
             <LiveChartPlaceholder label="Aguardando leituras de tensão." />
           )}
-        </Card>
+        </ChartCard>
 
-        <Card title="Corrente — tendência ao vivo">
+        <ChartCard title="Corrente — tendência ao vivo" fileName="tendencia_corrente.png">
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
@@ -583,9 +689,9 @@ function MonitorDashboard({
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de corrente." />}
-        </Card>
+        </ChartCard>
 
-        <Card title="Potências elétricas — últimas leituras">
+        <ChartCard title="Potências elétricas — últimas leituras" fileName="potencias_eletricas.png">
           {history.length ? (
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={history} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
@@ -602,9 +708,9 @@ function MonitorDashboard({
           ) : (
             <LiveChartPlaceholder label="Aguardando leituras de potência." />
           )}
-        </Card>
+        </ChartCard>
 
-        <Card title="Fator de potência — tendência ao vivo">
+        <ChartCard title="Fator de potência — tendência ao vivo" fileName="tendencia_fator_potencia.png">
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
@@ -617,9 +723,9 @@ function MonitorDashboard({
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de fator de potência." />}
-        </Card>
+        </ChartCard>
 
-        <Card title="Energia acumulada (kWh)">
+        <ChartCard title="Energia acumulada (kWh)" fileName="energia_acumulada.png">
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={history} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
@@ -637,9 +743,9 @@ function MonitorDashboard({
               </AreaChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de energia acumulada." />}
-        </Card>
+        </ChartCard>
 
-        <Card title="Temperatura ESP32 — deriva térmica">
+        <ChartCard title="Temperatura ESP32 — deriva térmica" fileName="temperatura_esp32.png">
           {history.some(h => h.temperature != null) ? (
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
@@ -651,7 +757,7 @@ function MonitorDashboard({
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de temperatura do ESP32." />}
-        </Card>
+        </ChartCard>
       </div>
 
       <div style={{ color: C.muted, fontSize: 11, margin: "-6px 0 18px" }}>
@@ -1140,7 +1246,7 @@ export default function App() {
         </Card>
 
         {/* Erro por grandeza — barras */}
-        <Card title="Erro relativo (%) por grandeza e tipo de carga">
+        <ChartCard title="Erro relativo (%) por grandeza e tipo de carga" fileName="erro_por_grandeza.png">
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={barData} margin={{ top: 4, right: 16, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
@@ -1157,12 +1263,12 @@ export default function App() {
               <Bar dataKey="ΔWh" fill={C.green}  radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
-        </Card>
+        </ChartCard>
 
         <div className="analysis-grid" style={{ display: "grid", gap: 16 }}>
 
           {/* Erro P vs FP */}
-          <Card title="Erro ΔP (%) × Fator de Potência">
+          <ChartCard title="Erro ΔP (%) × Fator de Potência" fileName="erro_potencia_por_fp.png">
             <ResponsiveContainer width="100%" height={220}>
               <ScatterChart margin={{ top: 4, right: 16, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
@@ -1180,10 +1286,10 @@ export default function App() {
             <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
               Correlação entre FP baixo e erro elevado indica problema de sincronismo de fase entre canais V/I.
             </div>
-          </Card>
+          </ChartCard>
 
           {/* Erro P vs THD */}
-          <Card title="Erro ΔP (%) × Distorção Harmônica (THD%)">
+          <ChartCard title="Erro ΔP (%) × Distorção Harmônica (THD%)" fileName="erro_potencia_por_thd.png">
             <ResponsiveContainer width="100%" height={220}>
               <ScatterChart margin={{ top: 4, right: 16, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
@@ -1201,12 +1307,12 @@ export default function App() {
             <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
               THD elevado em cargas não-lineares pode saturar o ADC ou causar aliasing se fs &lt; 2·fmax.
             </div>
-          </Card>
+          </ChartCard>
 
         </div>
 
         {/* Bland-Altman */}
-        <Card title="Gráfico Bland-Altman — Potência Ativa P (W)">
+        <ChartCard title="Gráfico Bland-Altman — Potência Ativa P (W)" fileName="bland_altman_potencia.png">
           <ResponsiveContainer width="100%" height={220}>
             <ScatterChart margin={{ top: 4, right: 16, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
@@ -1230,7 +1336,7 @@ export default function App() {
               Pontos fora do intervalo = outliers a investigar
             </span>
           </div>
-        </Card>
+        </ChartCard>
 
         {/* Diagnóstico */}
         <Card title="Guia de diagnóstico — padrão de erro → causa provável" accent={`${C.amber}44`}>
