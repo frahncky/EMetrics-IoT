@@ -1247,16 +1247,21 @@ export default function App() {
 
         {/* Erro por grandeza — barras */}
         <ChartCard title="Erro relativo (%) por grandeza e tipo de carga" fileName="erro_por_grandeza.png">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={barData} margin={{ top: 12, right: 24, left: 8, bottom: 12 }}>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={barData} margin={{ top: 20, right: 36, left: 16, bottom: 28 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
               <XAxis
                 dataKey="load"
-                height={44}
+                angle={-24}
+                height={72}
+                interval={0}
+                padding={{ left: 12, right: 12 }}
+                textAnchor="end"
+                tickMargin={12}
                 tick={{ fill: C.muted, fontSize: 10 }}
               />
               <YAxis
-                width={52}
+                width={60}
                 tickFormatter={v => `${v}%`}
                 tick={{ fill: C.muted, fontSize: 11 }}
               />
