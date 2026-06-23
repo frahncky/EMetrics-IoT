@@ -42,6 +42,12 @@ class MetricRepository {
     return result.map((e) => Metric.fromMap(e)).toList();
   }
 
+  /// Remove todas as métricas do banco local.
+  Future<void> deleteAllMetrics() async {
+    final db = await LocalDatabase.database;
+    await db.delete('metrics');
+  }
+
   /// Remove metricas anteriores a [cutoff] do banco local.
   Future<int> deleteMetricsOlderThan(DateTime cutoff) async {
     final db = await LocalDatabase.database;

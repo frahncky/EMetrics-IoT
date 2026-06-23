@@ -8,7 +8,7 @@
 #include <ArduinoOTA.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
-#include <esp_wpa2.h>
+#include <esp_eap_client.h>
 #include <PZEM004Tv30.h>
 #include <FS.h>
 #include <SD.h>
@@ -1624,20 +1624,20 @@ void stopFallbackAccessPoint() {
 // preenchido, ou WPA2-Personal caso contrario.
 void beginWiFiWithConfig() {
   if (strlen(config.wifiUsername) > 0) {
-    esp_wifi_sta_wpa2_ent_set_identity(
+    esp_eap_client_set_identity(
         reinterpret_cast<const uint8_t*>(config.wifiUsername),
         strlen(config.wifiUsername));
-    esp_wifi_sta_wpa2_ent_set_username(
+    esp_eap_client_set_username(
         reinterpret_cast<const uint8_t*>(config.wifiUsername),
         strlen(config.wifiUsername));
-    esp_wifi_sta_wpa2_ent_set_password(
+    esp_eap_client_set_password(
         reinterpret_cast<const uint8_t*>(config.wifiPassword),
         strlen(config.wifiPassword));
-    esp_wifi_sta_wpa2_ent_enable();
+    esp_wifi_sta_enterprise_enable();
     WiFi.begin(config.wifiSsid);
     Serial.println("[WiFi] Modo WPA2-Enterprise (PEAP)");
   } else {
-    esp_wifi_sta_wpa2_ent_disable();
+    esp_wifi_sta_enterprise_disable();
     WiFi.begin(config.wifiSsid, config.wifiPassword);
     Serial.println("[WiFi] Modo WPA2-Personal");
   }
