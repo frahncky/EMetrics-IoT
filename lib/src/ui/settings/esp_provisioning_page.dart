@@ -45,7 +45,6 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
   bool _isLoadingWifiConnectionSettings = false;
   bool _isSavingWifiConnectionSettings = false;
   bool _isUploadingFirmware = false;
-  bool _isResettingEnergy = false;
   bool _isTestingWifi = false;
   bool _isScanning = false;
   bool _wifiPasswordVisible = false;
@@ -227,40 +226,6 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     return null;
   }
 
-  Future<void> _resetEnergy() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Zerar energia acumulada'),
-        content: const Text(
-          'Isso vai zerar o contador de energia (kWh) do PZEM. Esta ação não pode ser desfeita.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Zerar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _isResettingEnergy = true);
-    await _saveCurrentEspHost();
-    final result = await _service.resetEnergy(espHost: _espHostController.text);
-    if (!mounted) return;
-    setState(() => _isResettingEnergy = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result.message),
-        backgroundColor: result.ok ? null : Colors.redAccent,
-      ),
-    );
-  }
 
   Future<void> _testWifiConnection() async {
     setState(() => _isTestingWifi = true);
@@ -724,45 +689,6 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
                 onEdit: _editWifiNetwork,
                 onDelete: _deleteWifiNetwork,
                 onMove: _moveWifiNetwork,
-              ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Energia acumulada',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Zera o contador de energia (kWh) armazenado no PZEM.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: _isResettingEnergy ? null : _resetEnergy,
-                      icon: _isResettingEnergy
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.restart_alt),
-                      label: Text(
-                        _isResettingEnergy ? 'Zerando...' : 'Zerar energia',
-                      ),
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(height: 16),
               Container(
