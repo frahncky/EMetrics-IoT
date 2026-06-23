@@ -188,19 +188,50 @@ function renderChartToCanvas(chartElement) {
   });
   const svgUrl = URL.createObjectURL(svgBlob);
 
+  // Recharts renders the Legend as an HTML div outside the SVG — capture it before async rendering
+  const legendItems = Array.from(
+    chartElement.querySelectorAll(".recharts-legend-item"),
+  ).map((item) => ({
+    color: item.querySelector("path, rect, circle")?.getAttribute("fill") || C.muted,
+    label: item.querySelector(".recharts-legend-item-text")?.textContent?.trim() || "",
+  }));
+
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => {
       const scale = Math.min(window.devicePixelRatio || 1, 2);
+      const LEGEND_H = legendItems.length > 0 ? 32 : 0;
+      const totalH = vbH + LEGEND_H;
+
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(vbW * scale);
-      canvas.height = Math.round(vbH * scale);
+      canvas.height = Math.round(totalH * scale);
       const ctx = canvas.getContext("2d");
       if (!ctx) { URL.revokeObjectURL(svgUrl); reject(new Error("Canvas indisponível para exportação.")); return; }
       ctx.scale(scale, scale);
       ctx.fillStyle = C.surface;
-      ctx.fillRect(0, 0, vbW, vbH);
+      ctx.fillRect(0, 0, vbW, totalH);
       ctx.drawImage(image, 0, 0, vbW, vbH);
+
+      if (legendItems.length > 0) {
+        const ICON = 10;
+        const GAP = 6;
+        const ITEM_GAP = 18;
+        ctx.font = "12px Inter, Segoe UI, sans-serif";
+        const totalWidth = legendItems.reduce(
+          (acc, { label }) => acc + ICON + GAP + ctx.measureText(label).width + ITEM_GAP, 0,
+        ) - ITEM_GAP;
+        let x = (vbW - totalWidth) / 2;
+        const y = vbH + (LEGEND_H - ICON) / 2;
+        for (const { color, label } of legendItems) {
+          ctx.fillStyle = color;
+          ctx.fillRect(x, y, ICON, ICON);
+          ctx.fillStyle = C.muted;
+          ctx.fillText(label, x + ICON + GAP, y + ICON - 1);
+          x += ICON + GAP + ctx.measureText(label).width + ITEM_GAP;
+        }
+      }
+
       URL.revokeObjectURL(svgUrl);
       resolve({ canvas, scale });
     };
