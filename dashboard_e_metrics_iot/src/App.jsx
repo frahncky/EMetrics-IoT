@@ -120,44 +120,27 @@ function renderChartToCanvas(chartElement) {
   const px2ux = vbW0 / svgRect.width;
   const px2uy = vbH0 / svgRect.height;
 
-  // Walk every descendant element and collect their actual screen rects.
-  // getBBox+getScreenCTM bypasses SVG viewport clipping, correctly capturing
-  // rotated tick labels that extend beyond the SVG edges (e.g. angle={-24}).
+  // Temporarily reveal SVG overflow so getBoundingClientRect() returns the
+  // actual unclipped positions of elements (e.g. rotated tick labels with
+  // angle={-24} that extend below the SVG viewport). getBoundingClientRect()
+  // forces a sync layout, so the updated overflow is reflected immediately.
+  const savedOverflow = svg.style.overflow;
+  svg.style.overflow = "visible";
+
   let minX = svgRect.left, minY = svgRect.top;
   let maxX = svgRect.right, maxY = svgRect.bottom;
   for (const el of svg.querySelectorAll("*")) {
-    // Elements in <defs> are non-rendered; their getBBox coordinates are in
-    // definition space (gradients, clip paths) and corrupt the bounds math.
-    if (el.closest("defs, clipPath, mask")) continue;
     try {
-      if (typeof el.getBBox === "function" && typeof el.getScreenCTM === "function") {
-        const bbox = el.getBBox();
-        if (!bbox.width && !bbox.height) continue;
-        const ctm = el.getScreenCTM();
-        if (!ctm) continue;
-        for (const [bx, by] of [
-          [bbox.x, bbox.y],
-          [bbox.x + bbox.width, bbox.y],
-          [bbox.x, bbox.y + bbox.height],
-          [bbox.x + bbox.width, bbox.y + bbox.height],
-        ]) {
-          const sx = ctm.a * bx + ctm.c * by + ctm.e;
-          const sy = ctm.b * bx + ctm.d * by + ctm.f;
-          if (sx < minX) minX = sx;
-          if (sx > maxX) maxX = sx;
-          if (sy < minY) minY = sy;
-          if (sy > maxY) maxY = sy;
-        }
-      } else {
-        const r = el.getBoundingClientRect();
-        if (!r.width && !r.height) continue;
-        if (r.left  < minX) minX = r.left;
-        if (r.top   < minY) minY = r.top;
-        if (r.right > maxX) maxX = r.right;
-        if (r.bottom > maxY) maxY = r.bottom;
-      }
-    } catch (_) { /* skip elements that throw */ }
+      const r = el.getBoundingClientRect();
+      if (!r.width && !r.height) continue;
+      if (r.left   < minX) minX = r.left;
+      if (r.top    < minY) minY = r.top;
+      if (r.right  > maxX) maxX = r.right;
+      if (r.bottom > maxY) maxY = r.bottom;
+    } catch (_) { /* skip */ }
   }
+
+  svg.style.overflow = savedOverflow;
 
   // Convert screen overflow (px) to SVG user units, then add padding
   const pad = 20;
