@@ -8,6 +8,7 @@ import {
   connectMqtt,
   DEFAULT_MQTT_CONFIG,
 } from "./services/mqttService";
+import { err, fmt, sign, computeStats, formatDuration, parseCsvToData } from "./utils";
 
 // ─── Paleta de cores (tema instrumento técnico) ───────────────────────────────
 const C = {
@@ -44,47 +45,7 @@ const INITIAL_DATA = [
   { load: "Mista",           fp: 0.78, v_esp: 218.7, v_ref: 219.3, i_esp: 3.20, i_ref: 3.18, p_esp: 544,  p_ref: 541,  wh_esp: 45.4, wh_ref: 45.1, thd: 15 },
 ];
 
-// ─── Utilitários ──────────────────────────────────────────────────────────────
-const err = (meas, ref) => ((meas - ref) / ref * 100);
-const fmt = (v, d = 2) => (typeof v === "number" ? v.toFixed(d) : v);
-const sign = (v) => v >= 0 ? `+${fmt(v)}` : fmt(v);
-
-function computeStats(values) {
-  const n = values.length;
-  const mean = values.reduce((a, b) => a + b, 0) / n;
-  const std = Math.sqrt(values.map(v => (v - mean) ** 2).reduce((a, b) => a + b, 0) / n);
-  const max = Math.max(...values.map(Math.abs));
-  return { mean, std, max };
-}
-
-// E1/E2/E5/E6: importação de CSV da bancada
-// Formato esperado: load,fp,thd,v_esp,v_ref,i_esp,i_ref,p_esp,p_ref,wh_esp,wh_ref
-function parseCsvToData(csvText) {
-  const lines = csvText.trim().split(/\r?\n/);
-  if (lines.length < 2) throw new Error("CSV precisa ter cabeçalho e ao menos uma linha de dados.");
-  const header = lines[0].split(",").map(h => h.trim().toLowerCase());
-  const required = ["load", "fp", "thd", "v_esp", "v_ref", "i_esp", "i_ref", "p_esp", "p_ref", "wh_esp", "wh_ref"];
-  const missing = required.filter(k => !header.includes(k));
-  if (missing.length > 0) throw new Error(`Colunas faltando no CSV: ${missing.join(", ")}`);
-  return lines.slice(1).map((line, idx) => {
-    const cols = line.split(",").map(c => c.trim());
-    const row = {};
-    header.forEach((h, i) => { row[h] = cols[i]; });
-    const num = (k) => {
-      const v = parseFloat(row[k]);
-      if (isNaN(v)) throw new Error(`Linha ${idx + 2}: valor inválido em "${k}": "${row[k]}"`);
-      return v;
-    };
-    return {
-      load: row["load"] || `Carga ${idx + 1}`,
-      fp: num("fp"), thd: num("thd"),
-      v_esp: num("v_esp"), v_ref: num("v_ref"),
-      i_esp: num("i_esp"), i_ref: num("i_ref"),
-      p_esp: num("p_esp"), p_ref: num("p_ref"),
-      wh_esp: num("wh_esp"), wh_ref: num("wh_ref"),
-    };
-  });
-}
+// ─── Utilitários (importados de utils.js) ────────────────────────────────────
 
 // Botão de importação CSV para o editor de dados
 function CsvImportButton({ onImport }) {
@@ -625,15 +586,6 @@ function SettingsField({ label, type = "text", value, onChange, placeholder, hel
   );
 }
 
-function formatDuration(milliseconds) {
-  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours) return `${hours}h ${String(minutes).padStart(2, "0")}min`;
-  if (minutes) return `${minutes}min ${String(seconds).padStart(2, "0")}s`;
-  return `${seconds}s`;
-}
 
 function AcquisitionControls({
   acquisition,

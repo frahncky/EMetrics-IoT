@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
+import '../config/app_config.dart';
 
 class MqttServiceException implements Exception {
   final String message;
@@ -334,6 +335,40 @@ class MqttService {
         'Erro ao enviar comando de reset de energia via MQTT.',
       );
     }
+  }
+
+  /// Tenta conectar com backoff exponencial.
+  ///
+  /// Cada falha dobra o intervalo de espera (mínimo [AppConfig.mqttRetryBaseDelay],
+  /// máximo [AppConfig.mqttRetryMaxDelay]), até [AppConfig.mqttRetryMaxAttempts]
+  /// tentativas. Relança o último [MqttServiceException] se todas falharem.
+  Future<void> connectWithRetry() async {
+    var delay = AppConfig.mqttRetryBaseDelay;
+    MqttServiceException? last;
+
+    for (var attempt = 1; attempt <= AppConfig.mqttRetryMaxAttempts; attempt++) {
+      try {
+        await connect();
+        return;
+      } on MqttServiceException catch (e) {
+        last = e;
+        if (attempt == AppConfig.mqttRetryMaxAttempts) break;
+        developer.log(
+          'Tentativa $attempt/${AppConfig.mqttRetryMaxAttempts} falhou. '
+          'Próxima em ${delay.inSeconds}s.',
+          name: 'MqttService',
+        );
+        await Future.delayed(delay);
+        final next = delay.inSeconds * 2;
+        delay = Duration(
+          seconds: next.clamp(
+            AppConfig.mqttRetryBaseDelay.inSeconds,
+            AppConfig.mqttRetryMaxDelay.inSeconds,
+          ),
+        );
+      }
+    }
+    throw last!;
   }
 
   /// Callback interno invocado pelo [MqttServerClient] ao detectar desconexão.

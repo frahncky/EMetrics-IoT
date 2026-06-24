@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "test": "node --test",
+    "test": "node --test src/services/mqttService.test.js src/utils.test.js",
     "preview": "vite preview",
     "build:cloudflare": "vite build",
     "deploy:cloudflare": "npm run build:cloudflare && npx wrangler pages deploy dist"

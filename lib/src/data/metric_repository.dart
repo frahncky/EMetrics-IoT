@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'local_database.dart';
+import 'database_exception.dart';
 import 'integration_sync_item.dart';
 import 'metric_model.dart';
 import 'package:sqflite/sqflite.dart';
@@ -10,52 +11,76 @@ import 'package:sqflite/sqflite.dart';
 class MetricRepository {
   /// Insere uma métrica no banco. Ignora duplicatas (mesmo timestamp + valores).
   Future<void> insertMetric(Metric metric) async {
-    final db = await LocalDatabase.database;
-    await db.insert(
-      'metrics',
-      metric.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
+    try {
+      final db = await LocalDatabase.database;
+      await db.insert(
+        'metrics',
+        metric.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    } on AppDatabaseException {
+      rethrow;
+    } catch (e) {
+      throw AppDatabaseException('Falha ao inserir métrica.', cause: e);
+    }
   }
 
   /// Retorna métricas em ordem decrescente de timestamp (mais recente primeiro).
   ///
   /// Filtra pelo intervalo [from]..[to] em epoch milissegundos quando fornecidos.
   Future<List<Metric>> getMetrics({int? from, int? to}) async {
-    final db = await LocalDatabase.database;
-    final where = <String>[];
-    final args = <dynamic>[];
-    if (from != null) {
-      where.add('timestamp >= ?');
-      args.add(from);
+    try {
+      final db = await LocalDatabase.database;
+      final where = <String>[];
+      final args = <dynamic>[];
+      if (from != null) {
+        where.add('timestamp >= ?');
+        args.add(from);
+      }
+      if (to != null) {
+        where.add('timestamp <= ?');
+        args.add(to);
+      }
+      final result = await db.query(
+        'metrics',
+        where: where.isNotEmpty ? where.join(' AND ') : null,
+        whereArgs: args.isNotEmpty ? args : null,
+        orderBy: 'timestamp DESC',
+      );
+      return result.map((e) => Metric.fromMap(e)).toList();
+    } on AppDatabaseException {
+      rethrow;
+    } catch (e) {
+      throw AppDatabaseException('Falha ao consultar métricas.', cause: e);
     }
-    if (to != null) {
-      where.add('timestamp <= ?');
-      args.add(to);
-    }
-    final result = await db.query(
-      'metrics',
-      where: where.isNotEmpty ? where.join(' AND ') : null,
-      whereArgs: args.isNotEmpty ? args : null,
-      orderBy: 'timestamp DESC',
-    );
-    return result.map((e) => Metric.fromMap(e)).toList();
   }
 
   /// Remove todas as métricas do banco local.
   Future<void> deleteAllMetrics() async {
-    final db = await LocalDatabase.database;
-    await db.delete('metrics');
+    try {
+      final db = await LocalDatabase.database;
+      await db.delete('metrics');
+    } on AppDatabaseException {
+      rethrow;
+    } catch (e) {
+      throw AppDatabaseException('Falha ao apagar métricas.', cause: e);
+    }
   }
 
   /// Remove metricas anteriores a [cutoff] do banco local.
   Future<int> deleteMetricsOlderThan(DateTime cutoff) async {
-    final db = await LocalDatabase.database;
-    return db.delete(
-      'metrics',
-      where: 'timestamp < ?',
-      whereArgs: [cutoff.millisecondsSinceEpoch],
-    );
+    try {
+      final db = await LocalDatabase.database;
+      return db.delete(
+        'metrics',
+        where: 'timestamp < ?',
+        whereArgs: [cutoff.millisecondsSinceEpoch],
+      );
+    } on AppDatabaseException {
+      rethrow;
+    } catch (e) {
+      throw AppDatabaseException('Falha ao apagar métricas antigas.', cause: e);
+    }
   }
 
   /// Adiciona uma métrica à fila de sincronização de integração.

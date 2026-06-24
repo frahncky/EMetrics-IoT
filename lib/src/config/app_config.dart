@@ -16,4 +16,9 @@ abstract final class AppConfig {
   static const defaultPort = 1883;
   static const defaultTopic = 'emetrics/pzem';
   static const defaultRequestTopic = 'emetrics/pzem/history/request';
+
+  // Política de reconexão MQTT com backoff exponencial.
+  static const mqttRetryMaxAttempts = 5;
+  static const mqttRetryBaseDelay = Duration(seconds: 2);
+  static const mqttRetryMaxDelay = Duration(seconds: 60);
 }

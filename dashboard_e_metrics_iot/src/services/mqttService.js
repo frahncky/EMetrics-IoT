@@ -71,6 +71,9 @@ export function parseTelemetry(payload) {
   };
 }
 
+export const RECONNECT_BASE_MS = 2_000;
+export const RECONNECT_MAX_MS = 30_000;
+
 export function connectMqtt(config, handlers) {
   const url = config.url.trim();
   const topic = config.topic.trim();
@@ -84,20 +87,34 @@ export function connectMqtt(config, handlers) {
     throw new Error("Informe o tópico de telemetria.");
   }
 
+  let reconnectAttempts = 0;
+
   const client = mqtt.connect(url, {
     clientId: `emetrics-dashboard-${clientSuffix}`,
     username: config.username.trim() || undefined,
     password: config.password || undefined,
-    reconnectPeriod: 3000,
+    reconnectPeriod: RECONNECT_BASE_MS,
     connectTimeout: 8000,
     clean: true,
   });
 
   client.on("connect", () => {
+    reconnectAttempts = 0;
+    client.options.reconnectPeriod = RECONNECT_BASE_MS;
     client.subscribe(topic, { qos: 0 }, (error) => {
       if (error) handlers.onError(error);
       else handlers.onConnected();
     });
+  });
+
+  client.on("reconnect", () => {
+    reconnectAttempts++;
+    const delay = Math.min(
+      RECONNECT_BASE_MS * 2 ** (reconnectAttempts - 1),
+      RECONNECT_MAX_MS,
+    );
+    client.options.reconnectPeriod = delay;
+    handlers.onReconnecting?.();
   });
 
   client.on("message", (messageTopic, payload, packet) => {
@@ -111,7 +128,6 @@ export function connectMqtt(config, handlers) {
     }
   });
 
-  client.on("reconnect", handlers.onReconnecting);
   client.on("offline", handlers.onOffline);
   client.on("close", handlers.onClosed);
   client.on("error", handlers.onError);
