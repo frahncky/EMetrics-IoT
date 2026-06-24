@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/app_config.dart';
 import '../services/background_mqtt_service.dart';
 import 'mqtt_settings_provider.dart';
 
@@ -29,9 +30,9 @@ class MqttStatusState {
   });
 
   const MqttStatusState.initial()
-    : broker = 'test.mosquitto.org',
-      port = 1883,
-      topic = 'emetrics/pzem',
+    : broker = AppConfig.defaultBroker,
+      port = AppConfig.defaultPort,
+      topic = AppConfig.defaultTopic,
       useTls = false,
       phase = MqttConnectionPhase.disconnected,
       backgroundActive = false,

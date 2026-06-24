@@ -5,14 +5,8 @@ import 'ui/alerts/alerts_page.dart';
 import 'ui/dashboard/dashboard_page.dart';
 import 'ui/history/history_page.dart';
 import 'ui/settings/settings_page.dart';
-import '../src/providers/alert_provider.dart';
-import '../src/providers/alert_history_provider.dart';
-import '../src/providers/device_storage_provider.dart';
-import '../src/providers/local_metric_collector_provider.dart';
-import '../src/providers/metric_provider.dart';
-import '../src/providers/mqtt_status_provider.dart';
+import '../src/providers/app_bootstrap_provider.dart';
 import '../src/providers/theme_provider.dart';
-import '../src/providers/mqtt_metric_saver.dart';
 import 'theme/app_colors.dart';
 
 class EmetricsApp extends StatelessWidget {
@@ -29,27 +23,7 @@ class _AppInitializer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Ativa os providers de efeito colateral (alertas e sincronização automática)
-    // via ref.listen sem bloquear o ciclo de renderização.
-    ref.listen(alertProvider, (previous, next) {});
-    ref.listen(deviceStorageTrackerProvider, (previous, next) {});
-    ref.listen(localMetricCollectorProvider, (previous, next) {});
-    ref.listen(integrationAutoSyncProvider, (previous, next) {});
-    ref.listen(mqttMetricSaverProvider, (previous, next) {});
-    ref.listen(backgroundMqttConnectionEventsProvider, (previous, next) {
-      next.whenData(
-        (event) => ref
-            .read(mqttStatusProvider.notifier)
-            .applyBackgroundConnectionEvent(event),
-      );
-    });
-    ref.listen(backgroundMqttMetricPersistedProvider, (previous, next) {
-      next.whenData((_) {
-        ref.invalidate(metricsProvider);
-        ref.invalidate(metricsByRangeProvider);
-        ref.invalidate(alertHistoryProvider);
-      });
-    });
+    ref.watch(appBootstrapProvider);
     final isDarkMode = ref.watch(themeProvider);
 
     // Escolhe tema com base na preferência salva pelo usuário.

@@ -6,6 +6,7 @@ import 'metric_provider.dart';
 import 'integration_settings_provider.dart';
 import 'mqtt_stream_provider.dart';
 import 'mqtt_metric_parser.dart';
+import '../config/app_config.dart';
 import '../services/background_mqtt_service.dart';
 import '../services/storage_settings_store.dart';
 import '../services/integration_service.dart';
@@ -32,7 +33,7 @@ final integrationAutoSyncProvider = Provider<void>((ref) {
   }
 
   unawaited(flush());
-  timer = Timer.periodic(const Duration(seconds: 45), (_) {
+  timer = Timer.periodic(AppConfig.integrationSyncInterval, (_) {
     unawaited(flush());
   });
   ref.onDispose(() => timer?.cancel());
@@ -76,7 +77,8 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
         await repo.insertMetric(metric);
         final now = DateTime.now();
         if (lastRetentionCleanupAt == null ||
-            now.difference(lastRetentionCleanupAt!).inHours >= 1) {
+            now.difference(lastRetentionCleanupAt!) >=
+                AppConfig.retentionCleanupInterval) {
           final storageSettings = await const StorageSettingsStore().load();
           final cutoff = now.subtract(
             Duration(days: storageSettings.localRetentionDays),
@@ -91,7 +93,7 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
         // Debounce: cancela e reagenda para que um burst de mensagens
         // dispare apenas uma invalidação ao final da ráfaga.
         debounceTimer?.cancel();
-        debounceTimer = Timer(const Duration(milliseconds: 100), () {
+        debounceTimer = Timer(AppConfig.mqttSaverDebounce, () {
           ref.invalidate(metricsProvider);
           ref.invalidate(metricsByRangeProvider);
         });

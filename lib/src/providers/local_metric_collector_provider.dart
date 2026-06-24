@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/app_config.dart';
 import '../services/esp_local_host_store.dart';
 import '../services/local_measurement_service.dart';
 import 'device_storage_provider.dart';
@@ -50,7 +51,7 @@ final localMetricCollectorProvider = Provider<void>((ref) {
   }
 
   unawaited(collect());
-  timer = Timer.periodic(const Duration(seconds: 2), (_) {
+  timer = Timer.periodic(AppConfig.localCollectorInterval, (_) {
     unawaited(collect());
   });
 

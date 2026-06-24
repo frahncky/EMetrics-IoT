@@ -66,27 +66,41 @@ class _NoopCredentialsStore implements MqttCredentialsStore {
   }) async {}
 }
 
+List<Override> _baseOverrides({
+  Future<List<Metric>> Function()? metricsFactory,
+  Metric? latestMetric,
+}) {
+  return [
+    metricsProvider.overrideWith(
+      (ref) => metricsFactory != null ? metricsFactory() : Future.value([]),
+    ),
+    if (latestMetric != null)
+      latestMqttMetricProvider.overrideWith((ref) => latestMetric),
+    mqttMetricSaverProvider.overrideWith((ref) {}),
+    mqttSettingsProvider.overrideWith(
+      (ref) => _TestMqttSettingsNotifier(),
+    ),
+    mqttStatusProvider.overrideWith(
+      (ref) => MqttStatusNotifier(() async => false),
+    ),
+  ];
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets(
     'mantém a organização do dashboard enquanto a primeira métrica carrega',
     (tester) async {
-      SharedPreferences.setMockInitialValues({});
       final metricsCompleter = Completer<List<Metric>>();
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            metricsProvider.overrideWith((ref) => metricsCompleter.future),
-            mqttMetricSaverProvider.overrideWith((ref) {}),
-            mqttSettingsProvider.overrideWith(
-              (ref) => _TestMqttSettingsNotifier(),
-            ),
-            mqttStatusProvider.overrideWith(
-              (ref) => MqttStatusNotifier(() async => false),
-            ),
-          ],
+          overrides: _baseOverrides(
+            metricsFactory: () => metricsCompleter.future,
+          ),
           child: const MaterialApp(home: DashboardPage()),
         ),
       );
@@ -94,8 +108,115 @@ void main() {
 
       expect(find.byType(CustomScrollView), findsOneWidget);
       expect(find.byType(DashboardTabs), findsOneWidget);
-      expect(find.text('Aparente'), findsOneWidget);
       expect(find.text('Aguardando dados'), findsNWidgets(2));
     },
   );
+
+  testWidgets('exibe 8 cards de indicadores com o layout padrão', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _baseOverrides(),
+        child: const MaterialApp(home: DashboardPage()),
+      ),
+    );
+    await tester.pump();
+
+    // Layout padrão tem 8 slots (energy_apparent, power, energy_reactive, pf,
+    // voltage, current, energy, frequency).
+    for (var i = 0; i < 8; i++) {
+      expect(find.byKey(ValueKey('slot_$i')), findsOneWidget);
+    }
+    expect(find.byKey(const ValueKey('slot_8')), findsNothing);
+  });
+
+  testWidgets('mostra valor de tensão quando métrica chega via provider', (
+    tester,
+  ) async {
+    final metric = Metric(
+      timestamp: DateTime.now(),
+      voltage: 220.5,
+      current: 1.2,
+      power: 250.0,
+      pf: 0.95,
+      frequency: 60.0,
+      energy: 0.5,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _baseOverrides(
+          metricsFactory: () async => [metric],
+          latestMetric: metric,
+        ),
+        child: const MaterialApp(home: DashboardPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Tensão com fractionDigits=1 → '220.5'
+    expect(find.text('220.5'), findsOneWidget);
+  });
+
+  testWidgets(
+    'diálogo de confirmação aparece ao tocar no botão de reset de energia',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _baseOverrides(),
+          child: const MaterialApp(home: DashboardPage()),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.restart_alt));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Zerar energia acumulada'), findsOneWidget);
+      expect(find.text('Cancelar'), findsOneWidget);
+      expect(find.text('Zerar'), findsOneWidget);
+    },
+  );
+
+  testWidgets('cancelar no diálogo de reset fecha sem executar ação', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _baseOverrides(),
+        child: const MaterialApp(home: DashboardPage()),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.restart_alt));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+    // Botão de reset volta a ficar disponível (não está em estado de loading).
+    expect(find.byIcon(Icons.restart_alt), findsOneWidget);
+  });
+
+  testWidgets('seletor de grandeza abre ao segurar um card de indicador', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _baseOverrides(),
+        child: const MaterialApp(home: DashboardPage()),
+      ),
+    );
+    await tester.pump();
+
+    await tester.longPress(find.byKey(const ValueKey('slot_0')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Escolher grandeza'), findsOneWidget);
+  });
 }

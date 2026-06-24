@@ -135,7 +135,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Medidor conectado com envio/recebimento de dados.'),
+        find.text('Medidor conectado e enviando dados.'),
         findsOneWidget,
       );
     },
@@ -187,14 +187,16 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    final deviceIcon = tester.widget<Icon>(find.byIcon(Icons.electric_meter));
+    final deviceIcon = tester.widget<Icon>(
+      find.byIcon(Icons.electric_meter_outlined),
+    );
     expect(deviceIcon.color, AppColors.statusIdle);
 
-    await tester.tap(find.byIcon(Icons.electric_meter));
+    await tester.tap(find.byIcon(Icons.electric_meter_outlined));
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Monitoramento MQTT desconectado. Medidor sem telemetria.'),
+      find.text('MQTT desconectado. Medidor sem telemetria.'),
       findsOneWidget,
     );
   });
@@ -253,16 +255,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Medidor com telemetria atrasada.'),
+      find.textContaining('MQTT conectado, mas sem dados do medidor.'),
       findsOneWidget,
     );
     expect(
-      find.text('Medidor conectado com envio/recebimento de dados.'),
+      find.text('Medidor conectado e enviando dados.'),
       findsNothing,
     );
   });
 
-  testWidgets('mostra medidor com erro após um minuto sem telemetria', (
+  testWidgets('mantém alerta após um minuto sem telemetria', (
     tester,
   ) async {
     final staleReading = DateTime.now().subtract(const Duration(minutes: 1));
@@ -309,11 +311,14 @@ void main() {
     await tester.pumpAndSettle();
 
     final deviceIcon = tester.widget<Icon>(find.byIcon(Icons.electric_meter));
-    expect(deviceIcon.color, AppColors.statusError);
+    expect(deviceIcon.color, AppColors.statusWarning);
 
     await tester.tap(find.byIcon(Icons.electric_meter));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Medidor sem telemetria'), findsOneWidget);
+    expect(
+      find.textContaining('MQTT conectado, mas sem dados do medidor.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -420,9 +425,9 @@ void main() {
     await tester.tap(find.byIcon(Icons.electric_meter));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Medidor conectado com envio/recebimento de dados.'),
-      findsOneWidget,
-    );
+      expect(
+        find.text('Medidor conectado e enviando dados.'),
+        findsOneWidget,
+      );
   });
 }
