@@ -121,17 +121,38 @@ function renderChartToCanvas(chartElement) {
   const px2uy = vbH0 / svgRect.height;
 
   // Walk every descendant element and collect their actual screen rects.
-  // This correctly captures rotated tick labels, even those clipped by the SVG viewport.
+  // getBBox+getScreenCTM bypasses SVG viewport clipping, correctly capturing
+  // rotated tick labels that extend beyond the SVG edges (e.g. angle={-24}).
   let minX = svgRect.left, minY = svgRect.top;
   let maxX = svgRect.right, maxY = svgRect.bottom;
   for (const el of svg.querySelectorAll("*")) {
     try {
-      const r = el.getBoundingClientRect();
-      if (!r.width && !r.height) continue;
-      if (r.left  < minX) minX = r.left;
-      if (r.top   < minY) minY = r.top;
-      if (r.right > maxX) maxX = r.right;
-      if (r.bottom > maxY) maxY = r.bottom;
+      if (typeof el.getBBox === "function" && typeof el.getScreenCTM === "function") {
+        const bbox = el.getBBox();
+        if (!bbox.width && !bbox.height) continue;
+        const ctm = el.getScreenCTM();
+        if (!ctm) continue;
+        for (const [bx, by] of [
+          [bbox.x, bbox.y],
+          [bbox.x + bbox.width, bbox.y],
+          [bbox.x, bbox.y + bbox.height],
+          [bbox.x + bbox.width, bbox.y + bbox.height],
+        ]) {
+          const sx = ctm.a * bx + ctm.c * by + ctm.e;
+          const sy = ctm.b * bx + ctm.d * by + ctm.f;
+          if (sx < minX) minX = sx;
+          if (sx > maxX) maxX = sx;
+          if (sy < minY) minY = sy;
+          if (sy > maxY) maxY = sy;
+        }
+      } else {
+        const r = el.getBoundingClientRect();
+        if (!r.width && !r.height) continue;
+        if (r.left  < minX) minX = r.left;
+        if (r.top   < minY) minY = r.top;
+        if (r.right > maxX) maxX = r.right;
+        if (r.bottom > maxY) maxY = r.bottom;
+      }
     } catch (_) { /* skip elements that throw */ }
   }
 
