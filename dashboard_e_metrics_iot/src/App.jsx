@@ -126,6 +126,9 @@ function renderChartToCanvas(chartElement) {
   let minX = svgRect.left, minY = svgRect.top;
   let maxX = svgRect.right, maxY = svgRect.bottom;
   for (const el of svg.querySelectorAll("*")) {
+    // Elements in <defs> are non-rendered; their getBBox coordinates are in
+    // definition space (gradients, clip paths) and corrupt the bounds math.
+    if (el.closest("defs, clipPath, mask")) continue;
     try {
       if (typeof el.getBBox === "function" && typeof el.getScreenCTM === "function") {
         const bbox = el.getBBox();
@@ -185,7 +188,12 @@ function renderChartToCanvas(chartElement) {
   const legendItems = Array.from(
     chartElement.querySelectorAll(".recharts-legend-item"),
   ).map((item) => ({
-    color: item.querySelector("path, rect, circle")?.getAttribute("fill") || C.muted,
+    color: (
+      item.querySelector(".recharts-legend-icon")?.getAttribute("fill") ||
+      item.querySelector(".recharts-legend-icon")?.getAttribute("stroke") ||
+      item.querySelector("[fill]:not([fill='none'])")?.getAttribute("fill") ||
+      C.muted
+    ),
     label: item.querySelector(".recharts-legend-item-text")?.textContent?.trim() || "",
   }));
 
