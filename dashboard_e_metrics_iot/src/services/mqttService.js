@@ -134,3 +134,10 @@ export function connectMqtt(config, handlers) {
 
   return client;
 }
+
+export function publishCommand(client, commandTopic, payload) {
+  if (!client) throw new Error("Não conectado ao MQTT.");
+  const topic = commandTopic.trim();
+  if (!topic) throw new Error("Tópico de comandos não configurado.");
+  client.publish(topic, JSON.stringify(payload), { qos: 1 });
+}

@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import {
   connectMqtt,
+  publishCommand,
   DEFAULT_MQTT_CONFIG,
 } from "./services/mqttService";
 import { err, fmt, sign, computeStats, formatDuration, parseCsvToData } from "./utils";
@@ -26,6 +27,8 @@ const C = {
 
 const MQTT_SETTINGS_KEY = "emetrics.mqtt-settings";
 const ALERT_SETTINGS_KEY = "emetrics.alert-settings";
+const COMMAND_TOPIC_KEY = "emetrics.cmd-topic";
+const DEFAULT_COMMAND_TOPIC = "emetrics/pzem/history/request";
 const DEVICE_TIMEOUT_MS = 15000;
 const MAX_ACQUISITION_DURATION_SECONDS = 24 * 60 * 60;
 const DEFAULT_ALERT_SETTINGS = {
@@ -1132,12 +1135,161 @@ function MonitorDashboard({
   );
 }
 
+// ─── Aba de configurações do dispositivo ──────────────────────────────────────
+function DeviceSettingsTab({ connectionPhase, commandTopic, onCommandTopicChange, onPublish }) {
+  const [measurementMs, setMeasurementMs] = useState("2000");
+  const [sdLogMs, setSdLogMs] = useState("2000");
+  const [mqttPublishMs, setMqttPublishMs] = useState("2000");
+  const [sdRetentionDays, setSdRetentionDays] = useState("30");
+  const [hybridEnabled, setHybridEnabled] = useState(false);
+  const [hybridAcquireMs, setHybridAcquireMs] = useState("10000");
+  const [hybridTxMs, setHybridTxMs] = useState("3000");
+  const [feedback, setFeedback] = useState({});
+
+  const isConnected = connectionPhase === "connected";
+
+  const setFeedbackFor = (key, text, ok) => {
+    setFeedback(prev => ({ ...prev, [key]: { text, ok } }));
+    window.setTimeout(() => setFeedback(prev => ({ ...prev, [key]: null })), 3500);
+  };
+
+  const validateIntervalMs = (v) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 100 && n <= 60000;
+  };
+
+  const applyIntervals = () => {
+    if (!validateIntervalMs(measurementMs) || !validateIntervalMs(sdLogMs) || !validateIntervalMs(mqttPublishMs)) {
+      setFeedbackFor("intervals", "Valores devem estar entre 100 e 60000 ms.", false);
+      return;
+    }
+    try {
+      onPublish({ command: "configureIntervals", measurementIntervalMs: Number(measurementMs), sdLogIntervalMs: Number(sdLogMs), mqttPublishIntervalMs: Number(mqttPublishMs) });
+      setFeedbackFor("intervals", "Comando enviado.", true);
+    } catch (e) {
+      setFeedbackFor("intervals", e.message, false);
+    }
+  };
+
+  const applyStorage = () => {
+    const days = Number(sdRetentionDays);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      setFeedbackFor("storage", "Retenção deve estar entre 1 e 365 dias.", false);
+      return;
+    }
+    try {
+      onPublish({ command: "configureStorage", sdRetentionDays: days });
+      setFeedbackFor("storage", "Comando enviado.", true);
+    } catch (e) {
+      setFeedbackFor("storage", e.message, false);
+    }
+  };
+
+  const applyHybridWifi = () => {
+    const acq = Number(hybridAcquireMs);
+    const tx = Number(hybridTxMs);
+    if (!Number.isFinite(acq) || acq < 0 || !Number.isFinite(tx) || tx < 0) {
+      setFeedbackFor("wifi", "Valores de tempo inválidos.", false);
+      return;
+    }
+    try {
+      onPublish({ command: "setHybridWifi", enabled: hybridEnabled, acquireMs: acq, txMs: tx });
+      setFeedbackFor("wifi", "Comando enviado.", true);
+    } catch (e) {
+      setFeedbackFor("wifi", e.message, false);
+    }
+  };
+
+  const FeedbackLine = ({ id }) => feedback[id]
+    ? <div style={{ fontSize: 11, marginTop: 10, color: feedback[id].ok ? C.green : C.red }}>{feedback[id].text}</div>
+    : null;
+
+  return (
+    <>
+      {!isConnected && (
+        <div style={{ background: `${C.amber}18`, border: `1px solid ${C.amber}55`, borderRadius: 8,
+          color: C.amber, fontSize: 12, marginBottom: 20, padding: "10px 14px" }}>
+          Conecte ao MQTT na aba <strong>Monitoramento</strong> para enviar comandos ao dispositivo.
+        </div>
+      )}
+
+      <Card title="Tópico de comandos">
+        <SettingsField
+          label="Tópico MQTT de comandos"
+          value={commandTopic}
+          onChange={e => onCommandTopicChange(e.target.value)}
+          placeholder={DEFAULT_COMMAND_TOPIC}
+          help="Tópico que o ESP32 assina para receber comandos (configurado durante o provisioning)."
+        />
+      </Card>
+
+      <Card title="Intervalos de telemetria">
+        <div className="alert-settings-row">
+          <SettingsField label="Medição (ms)" type="number" value={measurementMs}
+            onChange={e => setMeasurementMs(e.target.value)} min="100" max="60000"
+            help="100 – 60000 ms · cadência do PZEM" />
+          <SettingsField label="Gravação no SD (ms)" type="number" value={sdLogMs}
+            onChange={e => setSdLogMs(e.target.value)} min="100" max="60000"
+            help="100 – 60000 ms · append no cartão SD" />
+          <SettingsField label="Publicação MQTT (ms)" type="number" value={mqttPublishMs}
+            onChange={e => setMqttPublishMs(e.target.value)} min="100" max="60000"
+            help="100 – 60000 ms · envio de telemetria" />
+          <div className="connection-actions">
+            <button className="primary-button" onClick={applyIntervals} disabled={!isConnected}>Aplicar</button>
+          </div>
+        </div>
+        <FeedbackLine id="intervals" />
+      </Card>
+
+      <Card title="Retenção no SD card">
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "minmax(0,1fr) auto", alignItems: "end" }}>
+          <SettingsField label="Dias de retenção" type="number" value={sdRetentionDays}
+            onChange={e => setSdRetentionDays(e.target.value)} min="1" max="365"
+            help="1 – 365 dias · registros mais antigos são apagados automaticamente" />
+          <div className="connection-actions">
+            <button className="primary-button" onClick={applyStorage} disabled={!isConnected}>Aplicar</button>
+          </div>
+        </div>
+        <FeedbackLine id="storage" />
+      </Card>
+
+      <Card title="Wi-Fi híbrido">
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+          color: C.text, fontSize: 13, marginBottom: 14 }}>
+          <input type="checkbox" style={{ accentColor: C.cyan }}
+            checked={hybridEnabled} onChange={e => setHybridEnabled(e.target.checked)} />
+          Habilitar modo híbrido
+        </label>
+        <div className="settings-pair" style={{
+          display: "grid", gap: 12, alignItems: "end",
+          opacity: hybridEnabled ? 1 : 0.4,
+          pointerEvents: hybridEnabled ? "auto" : "none",
+        }}>
+          <SettingsField label="Slot de aquisição (ms)" type="number" value={hybridAcquireMs}
+            onChange={e => setHybridAcquireMs(e.target.value)} min="0"
+            help="Duração com Wi-Fi ativo para ler o PZEM" disabled={!hybridEnabled} />
+          <SettingsField label="Slot de transmissão (ms)" type="number" value={hybridTxMs}
+            onChange={e => setHybridTxMs(e.target.value)} min="0"
+            help="Duração do burst MQTT antes de desligar o Wi-Fi" disabled={!hybridEnabled} />
+        </div>
+        <div className="connection-actions" style={{ marginTop: 14 }}>
+          <button className="primary-button" onClick={applyHybridWifi} disabled={!isConnected}>Aplicar</button>
+        </div>
+        <FeedbackLine id="wifi" />
+      </Card>
+    </>
+  );
+}
+
 // ─── App principal ────────────────────────────────────────────────────────────
 export default function App() {
   const [data, setData] = useState(INITIAL_DATA);
   const [tab, setTab] = useState("monitor"); // monitor | dashboard | editor
   const [mqttConfig, setMqttConfig] = useState(() => loadSettings(MQTT_SETTINGS_KEY, DEFAULT_MQTT_CONFIG));
   const [alertSettings, setAlertSettings] = useState(() => loadSettings(ALERT_SETTINGS_KEY, DEFAULT_ALERT_SETTINGS));
+  const [commandTopic, setCommandTopic] = useState(() => {
+    try { return window.localStorage.getItem(COMMAND_TOPIC_KEY) || DEFAULT_COMMAND_TOPIC; } catch (_) { return DEFAULT_COMMAND_TOPIC; }
+  });
   const [connection, setConnection] = useState({ phase: "disconnected", label: "MQTT desconectado", message: "Configure um endpoint WebSocket para iniciar." });
   const [telemetry, setTelemetry] = useState(null);
   const [liveHistory, setLiveHistory] = useState([]);
@@ -1159,6 +1311,14 @@ export default function App() {
     alertSettingsRef.current = alertSettings;
     window.localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(alertSettings));
   }, [alertSettings]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(COMMAND_TOPIC_KEY, commandTopic); } catch (_) {}
+  }, [commandTopic]);
+
+  function publishDeviceCommand(payload) {
+    publishCommand(clientRef.current, commandTopic, payload);
+  }
 
   useEffect(() => {
     const { password, ...safeConfig } = mqttConfig;
@@ -1482,9 +1642,10 @@ export default function App() {
   }));
 
   const tabs = [
-    { id: "monitor", label: "Monitoramento" },
+    { id: "monitor",   label: "Monitoramento" },
     { id: "dashboard", label: "Análise de validação" },
     { id: "editor",    label: "Editar Dados" },
+    { id: "settings",  label: "Configurações" },
   ];
 
   const kpiColor = (v) => Math.abs(v) > 1.5 ? C.red : Math.abs(v) > 0.8 ? C.amber : C.green;
@@ -1500,11 +1661,13 @@ export default function App() {
           ESP32 + PZEM-004T
         </div>
         <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0, color: C.text }}>
-          {tab === "monitor" ? "Monitoramento de Energia" : "Validação do Medidor de Energia"}
+          {tab === "monitor" ? "Monitoramento de Energia" : tab === "settings" ? "Configurações do Dispositivo" : "Validação do Medidor de Energia"}
         </h1>
         <p style={{ color: C.muted, fontSize: 13, marginTop: 6 }}>
           {tab === "monitor"
             ? "Telemetria MQTT ao vivo · Status do ESP32 · Alertas operacionais"
+            : tab === "settings"
+            ? "Intervalos de telemetria · Retenção SD · Wi-Fi híbrido"
             : "Comparação com medidor comercial de referência · Análise de erro relativo"}
         </p>
       </div>
@@ -1527,6 +1690,15 @@ export default function App() {
           <CsvImportButton onImport={setData} />
           <DataEditor data={data} onChange={setData} />
         </Card>
+      )}
+
+      {tab === "settings" && (
+        <DeviceSettingsTab
+          connectionPhase={connection.phase}
+          commandTopic={commandTopic}
+          onCommandTopicChange={setCommandTopic}
+          onPublish={publishDeviceCommand}
+        />
       )}
 
       {tab === "monitor" && (
