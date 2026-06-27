@@ -106,9 +106,59 @@ function Card({ title, children, accent, action }) {
   );
 }
 
+const EXPORT_REVOKE_DELAY_MS = 60_000;
+const BATCH_DOWNLOAD_DELAY_MS = 180;
+
+function wait(ms) {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+function waitForChartPaint() {
+  return new Promise(resolve => {
+    const raf = window.requestAnimationFrame || (callback => window.setTimeout(callback, 16));
+    raf(() => raf(resolve));
+  });
+}
+
+function hasRenderableChartSeries(svg) {
+  const selectors = [
+    ".recharts-line-curve",
+    ".recharts-area-area",
+    ".recharts-area-curve",
+    ".recharts-bar-rectangle",
+    ".recharts-scatter-symbol",
+    ".recharts-symbols",
+    ".recharts-dot",
+  ];
+
+  const elements = selectors.flatMap(selector => Array.from(svg.querySelectorAll(selector)));
+  return elements.some(element => {
+    const style = window.getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+
+    const d = element.getAttribute("d")?.trim();
+    if (d && /\d/.test(d) && !/^M\s*0(?:[,.]\s*0)?\s*$/i.test(d)) return true;
+
+    const points = element.getAttribute("points")?.trim();
+    if (points && /\d/.test(points)) return true;
+
+    const width = Number(element.getAttribute("width"));
+    const height = Number(element.getAttribute("height"));
+    if (width > 0 || height > 0) return true;
+
+    try {
+      const box = element.getBBox?.();
+      return Boolean(box && (box.width > 0 || box.height > 0));
+    } catch (_) {
+      return false;
+    }
+  });
+}
+
 function renderChartToCanvas(chartElement) {
   const svg = chartElement?.querySelector("svg.recharts-surface");
   if (!svg) return Promise.reject(new Error("Gráfico indisponível para exportação."));
+  if (!hasRenderableChartSeries(svg)) return Promise.reject(new Error("Este gráfico ainda não tem pontos suficientes para exportação."));
 
   const svgRect = svg.getBoundingClientRect();
   if (!svgRect.width || !svgRect.height) return Promise.reject(new Error("Gráfico sem dimensões para exportação."));
@@ -232,10 +282,11 @@ function triggerBlobDownload(blob, fileName) {
   document.body.append(a);
   a.click();
   a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  window.setTimeout(() => URL.revokeObjectURL(url), EXPORT_REVOKE_DELAY_MS);
 }
 
 async function downloadChart(chartElement, baseName, format) {
+  await waitForChartPaint();
   const base = baseName.replace(/\.\w+$/, "");
   const { canvas } = await renderChartToCanvas(chartElement);
 
@@ -262,15 +313,26 @@ async function downloadChart(chartElement, baseName, format) {
           const eps = [
             "%!PS-Adobe-3.0 EPSF-3.0",
             `%%BoundingBox: 0 0 ${w} ${h}`,
+            `%%HiResBoundingBox: 0 0 ${w} ${h}`,
             "%%LanguageLevel: 3",
             "%%Pages: 1",
             "%%EndComments",
             "%%Page: 1 1",
-            `${w} ${h} 8 [${w} 0 0 ${-h} 0 ${h}]`,
-            "currentfile /ASCIIHexDecode filter /DCTDecode filter",
-            "false 3 colorimage",
+            "gsave",
+            "/DeviceRGB setcolorspace",
+            "<<",
+            "  /ImageType 1",
+            `  /Width ${w}`,
+            `  /Height ${h}`,
+            "  /BitsPerComponent 8",
+            "  /Decode [0 1 0 1 0 1]",
+            `  /ImageMatrix [${w} 0 0 ${-h} 0 ${h}]`,
+            "  /DataSource currentfile /ASCIIHexDecode filter /DCTDecode filter",
+            ">> image",
             hex,
             ">",
+            "grestore",
+            "showpage",
             "%%EOF",
           ].join("\n");
           triggerBlobDownload(new Blob([eps], { type: "application/postscript" }), `${base}.eps`);
@@ -808,17 +870,28 @@ function MonitorDashboard({
     }
 
     setExportingCharts(true);
+    const failures = [];
     try {
       for (const chart of charts) {
         const chartNode = chartNodesRef.current[chart.id];
-        if (!chartNode) throw new Error("Gráfico indisponível para exportação: " + chart.title);
+        if (!chartNode) {
+          failures.push(chart.title + ": gráfico indisponível");
+          continue;
+        }
 
         for (const format of formats) {
-          await downloadChart(chartNode, chart.fileName, format.id);
+          try {
+            await downloadChart(chartNode, chart.fileName, format.id);
+            await wait(BATCH_DOWNLOAD_DELAY_MS);
+          } catch (error) {
+            failures.push(chart.title + " (" + format.label + "): " + (error.message || "falha na exportação"));
+          }
         }
       }
-    } catch (error) {
-      window.alert(error.message || "Não foi possível baixar as figuras marcadas.");
+
+      if (failures.length) {
+        window.alert("Algumas figuras não foram baixadas:\n\n" + failures.join("\n"));
+      }
     } finally {
       setExportingCharts(false);
     }
@@ -894,7 +967,7 @@ function MonitorDashboard({
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
                 <YAxis tick={{ fill: C.cyan, fontSize: 11 }} tickFormatter={value => `${value}V`} />
                 <Tooltip content={<TT />} />
-                <Line type="monotone" dataKey="voltage" name="Tensão" stroke={C.cyan} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="voltage" name="Tensão" stroke={C.cyan} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} activeDot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -918,7 +991,7 @@ function MonitorDashboard({
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
                 <YAxis tick={{ fill: C.purple, fontSize: 11 }} tickFormatter={value => `${value}A`} />
                 <Tooltip content={<TT />} />
-                <Line type="monotone" dataKey="current" name="Corrente" stroke={C.purple} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="current" name="Corrente" stroke={C.purple} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} activeDot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de corrente." />}
@@ -941,9 +1014,9 @@ function MonitorDashboard({
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} />
                 <Tooltip content={<TT />} />
                 <Legend wrapperStyle={{ fontSize: 12, color: C.muted }} />
-                <Line type="monotone" dataKey="power" name="Ativa (W)" stroke={C.amber} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                <Line type="monotone" dataKey="apparentPower" name="Aparente (VA)" stroke={C.cyan} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="reactivePower" name="Reativa* (VAr)" stroke={C.purple} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="power" name="Ativa (W)" stroke={C.amber} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="apparentPower" name="Aparente (VA)" stroke={C.cyan} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} />
+                <Line type="monotone" dataKey="reactivePower" name="Reativa* (VAr)" stroke={C.purple} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -968,7 +1041,7 @@ function MonitorDashboard({
                 <YAxis domain={[0, 1.1]} tick={{ fill: C.green, fontSize: 11 }} />
                 <Tooltip content={<TT />} />
                 <ReferenceLine y={1} stroke={C.border} strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="pf" name="Fator de potência" stroke={C.green} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="pf" name="Fator de potência" stroke={C.green} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} />
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de fator de potência." />}
@@ -996,7 +1069,7 @@ function MonitorDashboard({
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
                 <YAxis tick={{ fill: C.green, fontSize: 11 }} tickFormatter={value => `${value} kWh`} />
                 <Tooltip content={<TT />} />
-                <Area type="monotone" dataKey="energy" name="Energia" stroke={C.green} strokeWidth={2} fill="url(#energyFill)" />
+                <Area type="monotone" dataKey="energy" name="Energia" stroke={C.green} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} fill="url(#energyFill)" />
               </AreaChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de energia acumulada." />}
@@ -1018,7 +1091,7 @@ function MonitorDashboard({
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
                 <YAxis tick={{ fill: C.amber, fontSize: 11 }} tickFormatter={v => `${v}°C`} />
                 <Tooltip content={<TT />} />
-                <Line type="monotone" dataKey="temperature" name="Temp. (°C)" stroke={C.amber} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="temperature" name="Temp. (°C)" stroke={C.amber} strokeWidth={2} dot={history.filter(h => h.temperature != null).length < 2 ? { r: 3 } : false} />
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de temperatura do ESP32." />}
