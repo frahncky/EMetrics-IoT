@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ScatterChart, Scatter, LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -298,9 +298,46 @@ const EXPORT_FORMATS = [
   { id: "eps",  label: "EPS"  },
 ];
 
-function ChartCard({ title, children, accent, fileName }) {
+const LIVE_CHARTS = [
+  { id: "voltage", fileName: "tendencia_tensao.png", title: "Tensão — tendência ao vivo" },
+  { id: "current", fileName: "tendencia_corrente.png", title: "Corrente — tendência ao vivo" },
+  { id: "power", fileName: "potencias_eletricas.png", title: "Potências elétricas — últimas leituras" },
+  { id: "pf", fileName: "tendencia_fator_potencia.png", title: "Fator de potência — tendência ao vivo" },
+  { id: "energy", fileName: "energia_acumulada.png", title: "Energia acumulada (kWh)" },
+  { id: "temperature", fileName: "temperatura_esp32.png", title: "Temperatura ESP32 — deriva térmica" },
+];
+
+const DEFAULT_LIVE_CHART_SELECTION = LIVE_CHARTS.reduce(
+  (selection, chart) => ({ ...selection, [chart.id]: true }),
+  {},
+);
+
+const DEFAULT_EXPORT_FORMAT_SELECTION = {
+  png: true,
+  jpeg: false,
+  eps: false,
+};
+
+function ChartCard({
+  title,
+  children,
+  accent,
+  fileName,
+  chartId,
+  selectable = false,
+  selected = false,
+  onSelectedChange,
+  onChartNode,
+}) {
   const chartRef = useRef(null);
   const [exporting, setExporting] = useState(null);
+
+  useEffect(() => {
+    if (!onChartNode || !chartId) return undefined;
+
+    onChartNode(chartId, chartRef.current);
+    return () => onChartNode(chartId, null);
+  }, [chartId, onChartNode]);
 
   const exportChart = async (format) => {
     setExporting(format);
@@ -317,7 +354,16 @@ function ChartCard({ title, children, accent, fileName }) {
     <Card
       title={title}
       accent={accent}
-      action={(
+      action={selectable ? (
+        <label className="chart-select-control" title="Incluir este gráfico no download em lote">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={event => onSelectedChange?.(chartId, event.target.checked)}
+          />
+          <span>Marcar</span>
+        </label>
+      ) : (
         <div className="chart-export-group">
           {EXPORT_FORMATS.map(({ id, label }) => (
             <button
@@ -325,7 +371,7 @@ function ChartCard({ title, children, accent, fileName }) {
               className="chart-download-button"
               onClick={() => exportChart(id)}
               disabled={exporting !== null}
-              title={`Baixar gráfico em ${label}`}
+              title={"Baixar gráfico em " + label}
               type="button"
             >
               {exporting === id ? "…" : label}
@@ -603,14 +649,20 @@ function AcquisitionControls({
   acquisition,
   elapsedMs,
   connectionPhase,
+  exportFormats,
+  selectedChartCount,
+  exportingCharts,
   onDurationChange,
   onStart,
   onPause,
   onStop,
+  onExportFormatChange,
+  onDownloadSelectedCharts,
 }) {
   const durationMs = acquisition.durationSeconds * 1000;
   const remainingMs = Math.max(0, durationMs - elapsedMs);
   const isConnected = connectionPhase === "connected";
+  const selectedFormatCount = EXPORT_FORMATS.filter(({ id }) => exportFormats[id]).length;
   const validDuration = Number.isInteger(acquisition.durationSeconds)
     && acquisition.durationSeconds >= 1
     && acquisition.durationSeconds <= MAX_ACQUISITION_DURATION_SECONDS;
@@ -649,6 +701,32 @@ function AcquisitionControls({
           <button className="danger-button" onClick={onStop} disabled={acquisition.phase === "stopped"}>
             Encerrar
           </button>
+        </div>
+        <div className="acquisition-export-panel">
+          <div className="export-panel-title">Formatos da imagem</div>
+          <div className="export-format-group">
+            {EXPORT_FORMATS.map(({ id, label }) => (
+              <label key={id} className="export-format-option">
+                <input
+                  type="checkbox"
+                  checked={Boolean(exportFormats[id])}
+                  onChange={event => onExportFormatChange(id, event.target.checked)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <button
+            className="primary-button"
+            onClick={onDownloadSelectedCharts}
+            disabled={exportingCharts || selectedChartCount === 0 || selectedFormatCount === 0}
+            type="button"
+          >
+            {exportingCharts ? "Baixando…" : "Baixar figuras marcadas"}
+          </button>
+          <div className="export-panel-help">
+            {selectedChartCount} gráfico(s) · {selectedFormatCount} formato(s)
+          </div>
         </div>
       </div>
       <div style={{ color: C.muted, fontSize: 11, marginTop: 12 }}>
@@ -693,6 +771,59 @@ function MonitorDashboard({
     ? latestMeasurement.toLocaleTimeString("pt-BR")
     : "Aguardando a primeira leitura";
   const mqttTone = connection.phase === "connected" ? "good" : connection.phase === "connecting" ? "warning" : connection.phase === "error" ? "bad" : "muted";
+  const chartNodesRef = useRef({});
+  const [selectedLiveCharts, setSelectedLiveCharts] = useState(DEFAULT_LIVE_CHART_SELECTION);
+  const [exportFormats, setExportFormats] = useState(DEFAULT_EXPORT_FORMAT_SELECTION);
+  const [exportingCharts, setExportingCharts] = useState(false);
+  const selectedChartCount = LIVE_CHARTS.filter(({ id }) => selectedLiveCharts[id]).length;
+
+  const registerLiveChartNode = useCallback((chartId, node) => {
+    if (node) {
+      chartNodesRef.current[chartId] = node;
+    } else {
+      delete chartNodesRef.current[chartId];
+    }
+  }, []);
+
+  const changeLiveChartSelection = useCallback((chartId, selected) => {
+    setSelectedLiveCharts(current => ({ ...current, [chartId]: selected }));
+  }, []);
+
+  const changeExportFormat = useCallback((formatId, selected) => {
+    setExportFormats(current => ({ ...current, [formatId]: selected }));
+  }, []);
+
+  const downloadSelectedLiveCharts = useCallback(async () => {
+    const charts = LIVE_CHARTS.filter(({ id }) => selectedLiveCharts[id]);
+    const formats = EXPORT_FORMATS.filter(({ id }) => exportFormats[id]);
+
+    if (!charts.length) {
+      window.alert("Marque pelo menos um gráfico para baixar.");
+      return;
+    }
+
+    if (!formats.length) {
+      window.alert("Marque pelo menos um formato de imagem.");
+      return;
+    }
+
+    setExportingCharts(true);
+    try {
+      for (const chart of charts) {
+        const chartNode = chartNodesRef.current[chart.id];
+        if (!chartNode) throw new Error("Gráfico indisponível para exportação: " + chart.title);
+
+        for (const format of formats) {
+          await downloadChart(chartNode, chart.fileName, format.id);
+        }
+      }
+    } catch (error) {
+      window.alert(error.message || "Não foi possível baixar as figuras marcadas.");
+    } finally {
+      setExportingCharts(false);
+    }
+  }, [exportFormats, selectedLiveCharts]);
+
 
   return (
     <>
@@ -722,10 +853,15 @@ function MonitorDashboard({
         acquisition={acquisition}
         elapsedMs={acquisitionElapsedMs}
         connectionPhase={connection.phase}
+        exportFormats={exportFormats}
+        selectedChartCount={selectedChartCount}
+        exportingCharts={exportingCharts}
         onDurationChange={onAcquisitionDurationChange}
         onStart={onStartAcquisition}
         onPause={onPauseAcquisition}
         onStop={onStopAcquisition}
+        onExportFormatChange={changeExportFormat}
+        onDownloadSelectedCharts={downloadSelectedLiveCharts}
       />
 
       <div className="metric-grid" style={{ marginBottom: 20 }}>
@@ -742,7 +878,15 @@ function MonitorDashboard({
       </div>
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
-        <ChartCard title="Tensão — tendência ao vivo" fileName="tendencia_tensao.png">
+        <ChartCard
+          title="Tensão — tendência ao vivo"
+          fileName="tendencia_tensao.png"
+          chartId="voltage"
+          selectable
+          selected={Boolean(selectedLiveCharts.voltage)}
+          onSelectedChange={changeLiveChartSelection}
+          onChartNode={registerLiveChartNode}
+        >
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
@@ -758,7 +902,15 @@ function MonitorDashboard({
           )}
         </ChartCard>
 
-        <ChartCard title="Corrente — tendência ao vivo" fileName="tendencia_corrente.png">
+        <ChartCard
+          title="Corrente — tendência ao vivo"
+          fileName="tendencia_corrente.png"
+          chartId="current"
+          selectable
+          selected={Boolean(selectedLiveCharts.current)}
+          onSelectedChange={changeLiveChartSelection}
+          onChartNode={registerLiveChartNode}
+        >
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
@@ -772,7 +924,15 @@ function MonitorDashboard({
           ) : <LiveChartPlaceholder label="Aguardando leituras de corrente." />}
         </ChartCard>
 
-        <ChartCard title="Potências elétricas — últimas leituras" fileName="potencias_eletricas.png">
+        <ChartCard
+          title="Potências elétricas — últimas leituras"
+          fileName="potencias_eletricas.png"
+          chartId="power"
+          selectable
+          selected={Boolean(selectedLiveCharts.power)}
+          onSelectedChange={changeLiveChartSelection}
+          onChartNode={registerLiveChartNode}
+        >
           {history.length ? (
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={history} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
@@ -791,7 +951,15 @@ function MonitorDashboard({
           )}
         </ChartCard>
 
-        <ChartCard title="Fator de potência — tendência ao vivo" fileName="tendencia_fator_potencia.png">
+        <ChartCard
+          title="Fator de potência — tendência ao vivo"
+          fileName="tendencia_fator_potencia.png"
+          chartId="pf"
+          selectable
+          selected={Boolean(selectedLiveCharts.pf)}
+          onSelectedChange={changeLiveChartSelection}
+          onChartNode={registerLiveChartNode}
+        >
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
@@ -806,7 +974,15 @@ function MonitorDashboard({
           ) : <LiveChartPlaceholder label="Aguardando leituras de fator de potência." />}
         </ChartCard>
 
-        <ChartCard title="Energia acumulada (kWh)" fileName="energia_acumulada.png">
+        <ChartCard
+          title="Energia acumulada (kWh)"
+          fileName="energia_acumulada.png"
+          chartId="energy"
+          selectable
+          selected={Boolean(selectedLiveCharts.energy)}
+          onSelectedChange={changeLiveChartSelection}
+          onChartNode={registerLiveChartNode}
+        >
           {history.length ? (
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={history} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
@@ -826,7 +1002,15 @@ function MonitorDashboard({
           ) : <LiveChartPlaceholder label="Aguardando leituras de energia acumulada." />}
         </ChartCard>
 
-        <ChartCard title="Temperatura ESP32 — deriva térmica" fileName="temperatura_esp32.png">
+        <ChartCard
+          title="Temperatura ESP32 — deriva térmica"
+          fileName="temperatura_esp32.png"
+          chartId="temperature"
+          selectable
+          selected={Boolean(selectedLiveCharts.temperature)}
+          onSelectedChange={changeLiveChartSelection}
+          onChartNode={registerLiveChartNode}
+        >
           {history.some(h => h.temperature != null) ? (
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>

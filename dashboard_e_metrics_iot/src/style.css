@@ -98,6 +98,64 @@ button:disabled {
   color: #b8e5ec;
 }
 
+
+.chart-select-control,
+.export-format-option {
+  align-items: center;
+  color: #d7dfdd;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.chart-select-control {
+  background: #121719;
+  border: 1px solid #3b474a;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.chart-select-control:hover,
+.export-format-option:hover {
+  color: #b8e5ec;
+}
+
+.chart-select-control input,
+.export-format-option input {
+  accent-color: #79aeb9;
+  cursor: pointer;
+  margin: 0;
+}
+
+.acquisition-export-panel {
+  align-self: stretch;
+  border-left: 1px solid #2b3538;
+  display: grid;
+  gap: 8px;
+  padding-left: 14px;
+}
+
+.export-panel-title {
+  color: #9aa5a4;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.export-format-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.export-panel-help {
+  color: #9aa5a4;
+  font-size: 11px;
+}
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -125,7 +183,7 @@ button:disabled {
 }
 
 .acquisition-row {
-  grid-template-columns: minmax(220px, 0.8fr) minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(190px, 0.7fr) minmax(200px, 0.8fr) auto minmax(240px, 1fr);
 }
 
 .acquisition-status {
