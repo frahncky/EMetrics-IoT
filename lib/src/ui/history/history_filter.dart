@@ -5,7 +5,11 @@ enum HistoryPeriod { hora, dia, semana, mes }
 class HistoryFilter extends StatelessWidget {
   final HistoryPeriod selected;
   final ValueChanged<HistoryPeriod> onChanged;
-  const HistoryFilter({super.key, required this.selected, required this.onChanged});
+  const HistoryFilter({
+    super.key,
+    required this.selected,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {

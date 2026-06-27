@@ -21,11 +21,19 @@ class DashboardDrawer extends StatelessWidget {
                 end: Alignment.bottomRight,
               ),
             ),
-            accountName: const Text('E-Metrics IoT', style: TextStyle(fontSize: 22)),
+            accountName: const Text(
+              'E-Metrics IoT',
+              style: TextStyle(fontSize: 22),
+            ),
             accountEmail: const Text('monitoramento@iot.com'),
             currentAccountPicture: CircleAvatar(
               backgroundColor: Colors.amber,
-              child: Icon(Icons.electric_bolt, color: Colors.white, size: 36, semanticLabel: 'Ícone do app'),
+              child: Icon(
+                Icons.electric_bolt,
+                color: Colors.white,
+                size: 36,
+                semanticLabel: 'Ícone do app',
+              ),
             ),
           ),
           const Divider(),
@@ -45,7 +53,10 @@ class DashboardDrawer extends StatelessWidget {
               leading: const Icon(Icons.history),
               title: const Text('Histórico'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HistoryPage()),
+                );
               },
             ),
           ),
@@ -56,7 +67,10 @@ class DashboardDrawer extends StatelessWidget {
               leading: const Icon(Icons.show_chart),
               title: const Text('Comparativo de Métricas'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CompareMetricsPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CompareMetricsPage()),
+                );
               },
             ),
           ),
@@ -67,7 +81,10 @@ class DashboardDrawer extends StatelessWidget {
               leading: const Icon(Icons.notifications),
               title: const Text('Alertas'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const AlertsPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AlertsPage()),
+                );
               },
             ),
           ),
@@ -78,7 +95,10 @@ class DashboardDrawer extends StatelessWidget {
               leading: const Icon(Icons.settings),
               title: const Text('Configurações'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsPage()),
+                );
               },
             ),
           ),

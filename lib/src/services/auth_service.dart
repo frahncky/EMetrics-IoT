@@ -18,10 +18,7 @@ class AuthService {
     final rawMode = prefs.getString(_authModeKey);
     final userEmail = prefs.getString(_userEmailKey);
 
-    return AuthSession(
-      mode: _fromStorage(rawMode),
-      userEmail: userEmail,
-    );
+    return AuthSession(mode: _fromStorage(rawMode), userEmail: userEmail);
   }
 
   Future<void> continueAsGuest() async {

@@ -185,8 +185,11 @@ class BackgroundMqttService {
     }
   }
 
-  static Future<void> configureDeviceStorageRetention({
+  static Future<void> configureDeviceStorage({
     required int sdRetentionDays,
+    required int measurementIntervalMs,
+    required int sdLogIntervalMs,
+    required int mqttPublishIntervalMs,
   }) async {
     final service = FlutterBackgroundService();
     final isRunning = await service.isRunning();
@@ -202,6 +205,9 @@ class BackgroundMqttService {
     service.invoke(_storageConfigEvent, {
       'requestId': requestId,
       'sdRetentionDays': sdRetentionDays,
+      'measurementIntervalMs': measurementIntervalMs,
+      'sdLogIntervalMs': sdLogIntervalMs,
+      'mqttPublishIntervalMs': mqttPublishIntervalMs,
     });
 
     final response = await service
@@ -442,7 +448,13 @@ class BackgroundMqttService {
 
       try {
         final sdRetentionDays = data['sdRetentionDays'];
-        if (sdRetentionDays is! int) {
+        final measurementIntervalMs = data['measurementIntervalMs'];
+        final sdLogIntervalMs = data['sdLogIntervalMs'];
+        final mqttPublishIntervalMs = data['mqttPublishIntervalMs'];
+        if (sdRetentionDays is! int ||
+            measurementIntervalMs is! int ||
+            sdLogIntervalMs is! int ||
+            mqttPublishIntervalMs is! int) {
           await sendResult(
             ok: false,
             error: 'Payload inválido para configuração de armazenamento.',
@@ -461,8 +473,11 @@ class BackgroundMqttService {
           return;
         }
 
-        await mqtt!.configureDeviceStorageRetention(
+        await mqtt!.configureDeviceStorage(
           sdRetentionDays: sdRetentionDays,
+          measurementIntervalMs: measurementIntervalMs,
+          sdLogIntervalMs: sdLogIntervalMs,
+          mqttPublishIntervalMs: mqttPublishIntervalMs,
         );
         await sendResult(ok: true);
       } catch (e, stackTrace) {

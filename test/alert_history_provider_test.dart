@@ -36,16 +36,18 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      await container.read(alertHistoryProvider.notifier).add(
-        AlertRecord(
-          id: 'energy_1',
-          title: 'Consumo excessivo',
-          message: 'Energia acumulada: 12.50 kWh',
-          type: 'energy',
-          severity: AlertSeverity.critical,
-          createdAt: DateTime(2026, 5, 1, 11, 0),
-        ),
-      );
+      await container
+          .read(alertHistoryProvider.notifier)
+          .add(
+            AlertRecord(
+              id: 'energy_1',
+              title: 'Consumo excessivo',
+              message: 'Energia acumulada: 12.50 kWh',
+              type: 'energy',
+              severity: AlertSeverity.critical,
+              createdAt: DateTime(2026, 5, 1, 11, 0),
+            ),
+          );
 
       final reloaded = ProviderContainer();
       addTearDown(reloaded.dispose);

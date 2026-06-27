@@ -13,11 +13,7 @@ class AuthState {
     this.userEmail,
   });
 
-  AuthState copyWith({
-    bool? isLoading,
-    AuthMode? mode,
-    String? userEmail,
-  }) {
+  AuthState copyWith({bool? isLoading, AuthMode? mode, String? userEmail}) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
       mode: mode ?? this.mode,
@@ -38,7 +34,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final AuthService _authService;
 
   AuthNotifier(this._authService)
-      : super(const AuthState(isLoading: true, mode: AuthMode.undecided)) {
+    : super(const AuthState(isLoading: true, mode: AuthMode.undecided)) {
     _restoreSession();
   }
 

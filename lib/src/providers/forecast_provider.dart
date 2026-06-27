@@ -51,7 +51,9 @@ ForecastSnapshot? buildForecastForMetrics(List<Metric> metrics) {
   final slope = _linearRegressionSlope(x, y);
   final averagePower = y.reduce((left, right) => left + right) / y.length;
   final lastMetric = recent.last;
-  final projectedPower = math.max(lastMetric.power + (slope * 30), 0).toDouble();
+  final projectedPower = math
+      .max(lastMetric.power + (slope * 30), 0)
+      .toDouble();
   final projectedEnergy = (averagePower / 1000) * 1;
 
   return ForecastSnapshot(
@@ -69,10 +71,12 @@ double _linearRegressionSlope(List<double> x, List<double> y) {
   final count = x.length.toDouble();
   final sumX = x.reduce((left, right) => left + right);
   final sumY = y.reduce((left, right) => left + right);
-  final sumXY = Iterable<int>.generate(x.length)
-      .map((index) => x[index] * y[index])
+  final sumXY = Iterable<int>.generate(
+    x.length,
+  ).map((index) => x[index] * y[index]).reduce((left, right) => left + right);
+  final sumXX = x
+      .map((value) => value * value)
       .reduce((left, right) => left + right);
-  final sumXX = x.map((value) => value * value).reduce((left, right) => left + right);
   final denominator = (count * sumXX) - (sumX * sumX);
   if (denominator == 0) {
     return 0;

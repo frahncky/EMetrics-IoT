@@ -17,6 +17,7 @@ import '../../services/oauth_device_service.dart';
 import '../../services/background_mqtt_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/device_storage_status_store.dart';
+import '../../services/storage_settings_store.dart';
 import '../auth/login_page.dart';
 import '../shared/mqtt_connection_status_icon.dart';
 import 'esp_provisioning_page.dart';
@@ -42,6 +43,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   final _profileNameController = TextEditingController();
   final _localRetentionDaysController = TextEditingController(text: '30');
   final _deviceRetentionDaysController = TextEditingController(text: '30');
+  final _measurementIntervalMsController = TextEditingController(text: '2000');
+  final _sdLogIntervalMsController = TextEditingController(text: '2000');
+  final _mqttPublishIntervalMsController = TextEditingController(text: '2000');
   final _voltageMinController = TextEditingController();
   final _voltageMaxController = TextEditingController();
   final _energyLimitController = TextEditingController();
@@ -156,6 +160,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         .toString();
     _deviceRetentionDaysController.text = storageSettings.deviceRetentionDays
         .toString();
+    _measurementIntervalMsController.text = storageSettings
+        .measurementIntervalMs
+        .toString();
+    _sdLogIntervalMsController.text = storageSettings.sdLogIntervalMs
+        .toString();
+    _mqttPublishIntervalMsController.text = storageSettings
+        .mqttPublishIntervalMs
+        .toString();
   }
 
   /// Persiste todas as configurações do formulário nos providers correspondentes.
@@ -227,6 +239,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           deviceRetentionDays: _parseRetentionDays(
             _deviceRetentionDaysController.text,
           ),
+          measurementIntervalMs: _parseTelemetryIntervalMs(
+            _measurementIntervalMsController.text,
+          ),
+          sdLogIntervalMs: _parseTelemetryIntervalMs(
+            _sdLogIntervalMsController.text,
+          ),
+          mqttPublishIntervalMs: _parseTelemetryIntervalMs(
+            _mqttPublishIntervalMsController.text,
+          ),
         );
 
     final removed = await _applyLocalRetention(
@@ -234,15 +255,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     );
 
     if (sendToDevice) {
-      await _sendDeviceStorageRetention(storageSettings.deviceRetentionDays);
+      await _sendDeviceStorageConfig(storageSettings);
     }
 
     return removed;
   }
 
-  Future<void> _sendDeviceStorageRetention(int retentionDays) async {
+  Future<void> _sendDeviceStorageConfig(StorageSettings storageSettings) async {
     await ref.read(deviceStorageConfigHandlerProvider)(
-      sdRetentionDays: retentionDays,
+      DeviceStorageConfigRequest(
+        sdRetentionDays: storageSettings.deviceRetentionDays,
+        measurementIntervalMs: storageSettings.measurementIntervalMs,
+        sdLogIntervalMs: storageSettings.sdLogIntervalMs,
+        mqttPublishIntervalMs: storageSettings.mqttPublishIntervalMs,
+      ),
     );
   }
 
@@ -376,6 +402,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
 
   int _parseRetentionDays(String value) {
     return int.tryParse(value.trim()) ?? 30;
+  }
+
+  int _parseTelemetryIntervalMs(String value) {
+    return int.tryParse(value.trim()) ?? 2000;
   }
 
   /// Formata [value] sem casas decimais se for inteiro; caso contrário 2 casas.
@@ -664,6 +694,61 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                     labelText: 'Retenção no SD do medidor (dias)',
                     border: OutlineInputBorder(),
                   ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _ResponsiveFieldPair(
+              first: Semantics(
+                label: 'Campo intervalo de medição do PZEM',
+                child: TextFormField(
+                  controller: _measurementIntervalMsController,
+                  keyboardType: TextInputType.number,
+                  validator: (value) =>
+                      SettingsValidators.validateTelemetryIntervalMs(
+                        value,
+                        fieldLabel: 'o intervalo de medição',
+                      ),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.sensors_outlined),
+                    labelText: 'Intervalo de medição (ms)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              second: Semantics(
+                label: 'Campo intervalo de gravação no SD card',
+                child: TextFormField(
+                  controller: _sdLogIntervalMsController,
+                  keyboardType: TextInputType.number,
+                  validator: (value) =>
+                      SettingsValidators.validateTelemetryIntervalMs(
+                        value,
+                        fieldLabel: 'o intervalo de gravação no SD',
+                      ),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.sd_storage_outlined),
+                    labelText: 'Intervalo SD (ms)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Semantics(
+              label: 'Campo intervalo de publicação MQTT',
+              child: TextFormField(
+                controller: _mqttPublishIntervalMsController,
+                keyboardType: TextInputType.number,
+                validator: (value) =>
+                    SettingsValidators.validateTelemetryIntervalMs(
+                      value,
+                      fieldLabel: 'o intervalo de publicação MQTT',
+                    ),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.cloud_upload_outlined),
+                  labelText: 'Intervalo MQTT (ms)',
+                  border: OutlineInputBorder(),
                 ),
               ),
             ),
@@ -1062,10 +1147,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                                 await mqttService.connect();
                                 mqttService.subscribe();
                                 statusNotifier.setBackgroundActive(false);
-                                await _sendDeviceStorageRetention(
-                                  _parseRetentionDays(
-                                    _deviceRetentionDaysController.text,
-                                  ),
+                                await _sendDeviceStorageConfig(
+                                  ref.read(storageSettingsProvider),
                                 );
                                 if (!context.mounted) {
                                   return;
@@ -1212,6 +1295,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     _profileNameController.dispose();
     _localRetentionDaysController.dispose();
     _deviceRetentionDaysController.dispose();
+    _measurementIntervalMsController.dispose();
+    _sdLogIntervalMsController.dispose();
+    _mqttPublishIntervalMsController.dispose();
     _voltageMinController.dispose();
     _voltageMaxController.dispose();
     _energyLimitController.dispose();

@@ -31,7 +31,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     setState(() => _isSubmitting = true);
     try {
-      await ref.read(authProvider.notifier).signIn(
+      await ref
+          .read(authProvider.notifier)
+          .signIn(
             email: _emailController.text,
             password: _passwordController.text,
           );
@@ -44,9 +46,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         return;
       }
       final message = e.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);

@@ -75,11 +75,9 @@ class AlertHistoryNotifier extends StateNotifier<List<AlertRecord>> {
     }
 
     final decoded = jsonDecode(raw) as List<dynamic>;
-    state = decoded
-        .cast<Map<String, dynamic>>()
-        .map(AlertRecord.fromMap)
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    state =
+        decoded.cast<Map<String, dynamic>>().map(AlertRecord.fromMap).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   Future<void> add(AlertRecord record) async {

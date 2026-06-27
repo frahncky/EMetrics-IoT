@@ -30,7 +30,9 @@ class LocalMeasurementService {
     final uri = buildMetricsUri(espHost);
     final response = await http.get(uri).timeout(timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Falha ao obter métricas locais (HTTP ${response.statusCode}).');
+      throw Exception(
+        'Falha ao obter métricas locais (HTTP ${response.statusCode}).',
+      );
     }
     return response.body;
   }

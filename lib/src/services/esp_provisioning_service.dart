@@ -693,7 +693,8 @@ class EspProvisioningService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return EspProvisioningResult(
           ok: true,
-          message: _extractMessage(response.body) ?? 'Energia acumulada zerada.',
+          message:
+              _extractMessage(response.body) ?? 'Energia acumulada zerada.',
         );
       }
       return EspProvisioningResult(

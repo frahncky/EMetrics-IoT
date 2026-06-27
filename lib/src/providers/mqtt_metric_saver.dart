@@ -65,46 +65,50 @@ final mqttMetricSaverProvider = Provider<void>((ref) {
     // Encadeia a nova operação após a anterior para garantir ordem de escrita.
     // ref.read() é seguro aqui pois o callback só executa quando o provider
     // ainda está ativo (preso pela cadeia lastOperation).
-    lastOperation = lastOperation.then((_) async {
-      final last = messages.last;
-      final publishMsg = last.payload as MqttPublishMessage;
-      if (publishMsg.header?.retain == true) return;
-      final payloadString = String.fromCharCodes(publishMsg.payload.message);
-      final metric = parseMetricFromMqtt(payloadString);
-      if (metric != null) {
-        final repo = ref.read(metricRepositoryProvider);
-        final activeProfile = ref.read(mqttSettingsProvider);
-        await repo.insertMetric(metric);
-        final now = DateTime.now();
-        if (lastRetentionCleanupAt == null ||
-            now.difference(lastRetentionCleanupAt!) >=
-                AppConfig.retentionCleanupInterval) {
-          final storageSettings = await const StorageSettingsStore().load();
-          final cutoff = now.subtract(
-            Duration(days: storageSettings.localRetentionDays),
+    lastOperation = lastOperation
+        .then((_) async {
+          final last = messages.last;
+          final publishMsg = last.payload as MqttPublishMessage;
+          if (publishMsg.header?.retain == true) return;
+          final payloadString = String.fromCharCodes(
+            publishMsg.payload.message,
           );
-          await repo.deleteMetricsOlderThan(cutoff);
-          lastRetentionCleanupAt = now;
-        }
-        await ref
-            .read(integrationServiceProvider)
-            .submitMetric(metric, profileId: activeProfile.profileId);
+          final metric = parseMetricFromMqtt(payloadString);
+          if (metric != null) {
+            final repo = ref.read(metricRepositoryProvider);
+            final activeProfile = ref.read(mqttSettingsProvider);
+            await repo.insertMetric(metric);
+            final now = DateTime.now();
+            if (lastRetentionCleanupAt == null ||
+                now.difference(lastRetentionCleanupAt!) >=
+                    AppConfig.retentionCleanupInterval) {
+              final storageSettings = await const StorageSettingsStore().load();
+              final cutoff = now.subtract(
+                Duration(days: storageSettings.localRetentionDays),
+              );
+              await repo.deleteMetricsOlderThan(cutoff);
+              lastRetentionCleanupAt = now;
+            }
+            await ref
+                .read(integrationServiceProvider)
+                .submitMetric(metric, profileId: activeProfile.profileId);
 
-        // Debounce: cancela e reagenda para que um burst de mensagens
-        // dispare apenas uma invalidação ao final da ráfaga.
-        debounceTimer?.cancel();
-        debounceTimer = Timer(AppConfig.mqttSaverDebounce, () {
-          ref.invalidate(metricsProvider);
-          ref.invalidate(metricsByRangeProvider);
+            // Debounce: cancela e reagenda para que um burst de mensagens
+            // dispare apenas uma invalidação ao final da ráfaga.
+            debounceTimer?.cancel();
+            debounceTimer = Timer(AppConfig.mqttSaverDebounce, () {
+              ref.invalidate(metricsProvider);
+              ref.invalidate(metricsByRangeProvider);
+            });
+          }
+        })
+        .catchError((Object e, StackTrace st) {
+          developer.log(
+            'Falha ao persistir métrica MQTT',
+            name: 'mqttMetricSaverProvider',
+            error: e,
+            stackTrace: st,
+          );
         });
-      }
-    }).catchError((Object e, StackTrace st) {
-      developer.log(
-        'Falha ao persistir métrica MQTT',
-        name: 'mqttMetricSaverProvider',
-        error: e,
-        stackTrace: st,
-      );
-    });
   });
 });

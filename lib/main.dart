@@ -13,4 +13,3 @@ Future<void> main() async {
   await BackgroundMqttService.initialize();
   runApp(const EmetricsApp());
 }
-

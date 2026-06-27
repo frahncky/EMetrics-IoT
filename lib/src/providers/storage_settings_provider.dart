@@ -14,6 +14,11 @@ class StorageSettingsNotifier extends StateNotifier<StorageSettings> {
         const StorageSettings(
           localRetentionDays: StorageSettingsStore.defaultLocalRetentionDays,
           deviceRetentionDays: StorageSettingsStore.defaultDeviceRetentionDays,
+          measurementIntervalMs:
+              StorageSettingsStore.defaultMeasurementIntervalMs,
+          sdLogIntervalMs: StorageSettingsStore.defaultSdLogIntervalMs,
+          mqttPublishIntervalMs:
+              StorageSettingsStore.defaultMqttPublishIntervalMs,
         ),
       ) {
     load();
@@ -27,6 +32,9 @@ class StorageSettingsNotifier extends StateNotifier<StorageSettings> {
   Future<StorageSettings> update({
     required int localRetentionDays,
     required int deviceRetentionDays,
+    required int measurementIntervalMs,
+    required int sdLogIntervalMs,
+    required int mqttPublishIntervalMs,
   }) async {
     state = StorageSettings(
       localRetentionDays: StorageSettingsStore.normalizeRetentionDays(
@@ -34,6 +42,15 @@ class StorageSettingsNotifier extends StateNotifier<StorageSettings> {
       ),
       deviceRetentionDays: StorageSettingsStore.normalizeRetentionDays(
         deviceRetentionDays,
+      ),
+      measurementIntervalMs: StorageSettingsStore.normalizeTelemetryIntervalMs(
+        measurementIntervalMs,
+      ),
+      sdLogIntervalMs: StorageSettingsStore.normalizeTelemetryIntervalMs(
+        sdLogIntervalMs,
+      ),
+      mqttPublishIntervalMs: StorageSettingsStore.normalizeTelemetryIntervalMs(
+        mqttPublishIntervalMs,
       ),
     );
     await _store.save(state);

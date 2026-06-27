@@ -31,7 +31,15 @@ Future<Uint8List> buildHistoryPdfBytes(List<Metric> metrics) async {
   }
 
   final rows = [
-    <String>['Data/Hora', 'Tensão', 'Corrente', 'Potência', 'FP', 'Frequência', 'Energia'],
+    <String>[
+      'Data/Hora',
+      'Tensão',
+      'Corrente',
+      'Potência',
+      'FP',
+      'Frequência',
+      'Energia',
+    ],
     ...sortedMetrics.map(
       (m) => [
         formatDate(m.timestamp),
@@ -47,11 +55,14 @@ Future<Uint8List> buildHistoryPdfBytes(List<Metric> metrics) async {
 
   final totalConsumption = sortedMetrics.isEmpty
       ? 0.0
-      : (sortedMetrics.last.energy - sortedMetrics.first.energy).clamp(0, double.infinity);
+      : (sortedMetrics.last.energy - sortedMetrics.first.energy).clamp(
+          0,
+          double.infinity,
+        );
   final averagePower = sortedMetrics.isEmpty
       ? 0.0
       : sortedMetrics.map((metric) => metric.power).reduce((a, b) => a + b) /
-          sortedMetrics.length;
+            sortedMetrics.length;
 
   pdf.addPage(
     pw.MultiPage(
@@ -74,18 +85,30 @@ Future<Uint8List> buildHistoryPdfBytes(List<Metric> metrics) async {
           spacing: 12,
           runSpacing: 12,
           children: [
-            _pdfSummaryCard('Consumo', '${totalConsumption.toStringAsFixed(3)} kWh'),
-            _pdfSummaryCard('Potência média', '${averagePower.toStringAsFixed(1)} W'),
+            _pdfSummaryCard(
+              'Consumo',
+              '${totalConsumption.toStringAsFixed(3)} kWh',
+            ),
+            _pdfSummaryCard(
+              'Potência média',
+              '${averagePower.toStringAsFixed(1)} W',
+            ),
           ],
         ),
         pw.SizedBox(height: 16),
         pw.TableHelper.fromTextArray(
           headers: rows.first,
           data: rows.skip(1).toList(),
-          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+          headerStyle: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.white,
+          ),
           headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
           cellAlignment: pw.Alignment.centerLeft,
-          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          cellPadding: const pw.EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: 6,
+          ),
           cellStyle: const pw.TextStyle(fontSize: 9),
           rowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
           oddRowDecoration: const pw.BoxDecoration(color: PdfColors.white),
@@ -107,9 +130,15 @@ pw.Widget _pdfSummaryCard(String label, String value) {
     child: pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(label, style: const pw.TextStyle(fontSize: 10, color: PdfColors.blueGrey700)),
+        pw.Text(
+          label,
+          style: const pw.TextStyle(fontSize: 10, color: PdfColors.blueGrey700),
+        ),
         pw.SizedBox(height: 4),
-        pw.Text(value, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+        pw.Text(
+          value,
+          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+        ),
       ],
     ),
   );

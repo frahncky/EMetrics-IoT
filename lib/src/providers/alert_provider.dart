@@ -39,9 +39,10 @@ class _AlertGateNotifier extends StateNotifier<_AlertGateState> {
   }
 }
 
-final _alertGateProvider = StateNotifierProvider<_AlertGateNotifier, _AlertGateState>(
-  (ref) => _AlertGateNotifier(),
-);
+final _alertGateProvider =
+    StateNotifierProvider<_AlertGateNotifier, _AlertGateState>(
+      (ref) => _AlertGateNotifier(),
+    );
 
 final alertProvider = Provider<void>((ref) {
   final settings = ref.watch(measurementSettingsProvider);
@@ -73,7 +74,8 @@ final alertProvider = Provider<void>((ref) {
     }
 
     final voltageOutOfRange =
-        last.voltage < settings.voltageMin || last.voltage > settings.voltageMax;
+        last.voltage < settings.voltageMin ||
+        last.voltage > settings.voltageMax;
     if (voltageOutOfRange && !gate.voltageOutOfRange) {
       ref.read(_alertGateProvider.notifier).setVoltageOutOfRange(true);
       await registerAlert(
@@ -95,8 +97,8 @@ final alertProvider = Provider<void>((ref) {
         message: 'Energia acumulada: ${last.energy.toStringAsFixed(2)} kWh',
         severity: AlertSeverity.critical,
       );
-    } else if (
-        last.energy <= settings.energyLimitKwh * 0.95 && gate.energyExceeded) {
+    } else if (last.energy <= settings.energyLimitKwh * 0.95 &&
+        gate.energyExceeded) {
       ref.read(_alertGateProvider.notifier).setEnergyExceeded(false);
     }
   });

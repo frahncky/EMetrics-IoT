@@ -3,7 +3,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 abstract class MqttCredentialsStore {
   Future<String> readUsername();
   Future<String> readPassword();
-  Future<void> writeCredentials({required String username, required String password});
+  Future<void> writeCredentials({
+    required String username,
+    required String password,
+  });
   Future<void> clear();
   Future<String> readUsernameForProfile(String profileId);
   Future<String> readPasswordForProfile(String profileId);
@@ -22,11 +25,13 @@ class SecureMqttCredentialsStore implements MqttCredentialsStore {
   final FlutterSecureStorage _storage;
 
   SecureMqttCredentialsStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
-  String _usernameKeyForProfile(String profileId) => '${_usernameKey}_$profileId';
+  String _usernameKeyForProfile(String profileId) =>
+      '${_usernameKey}_$profileId';
 
-  String _passwordKeyForProfile(String profileId) => '${_passwordKey}_$profileId';
+  String _passwordKeyForProfile(String profileId) =>
+      '${_passwordKey}_$profileId';
 
   @override
   Future<String> readUsername() async {
@@ -69,8 +74,14 @@ class SecureMqttCredentialsStore implements MqttCredentialsStore {
     required String username,
     required String password,
   }) async {
-    await _storage.write(key: _usernameKeyForProfile(profileId), value: username);
-    await _storage.write(key: _passwordKeyForProfile(profileId), value: password);
+    await _storage.write(
+      key: _usernameKeyForProfile(profileId),
+      value: username,
+    );
+    await _storage.write(
+      key: _passwordKeyForProfile(profileId),
+      value: password,
+    );
   }
 
   @override

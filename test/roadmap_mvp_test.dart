@@ -74,7 +74,8 @@ class _MemoryMetricRepository extends MetricRepository {
         id: _nextId++,
         createdAt: DateTime(2026, 5, 3),
         metricTimestamp: metric.timestamp,
-        payload: '{"timestamp":${metric.timestamp.millisecondsSinceEpoch},"power":${metric.power}}',
+        payload:
+            '{"timestamp":${metric.timestamp.millisecondsSinceEpoch},"power":${metric.power}}',
         profileId: profileId,
         attempts: 0,
         lastError: null,
@@ -83,7 +84,9 @@ class _MemoryMetricRepository extends MetricRepository {
   }
 
   @override
-  Future<List<IntegrationSyncItem>> getPendingMetricSyncItems({int limit = 50}) async {
+  Future<List<IntegrationSyncItem>> getPendingMetricSyncItems({
+    int limit = 50,
+  }) async {
     return pending.take(limit).toList();
   }
 
@@ -161,66 +164,72 @@ void main() {
     expect(selectedCreated.useTls, isTrue);
   });
 
-  test('integrationService enfileira falha e limpa fila ao sincronizar', () async {
-    final repository = _MemoryMetricRepository();
-    final metric = Metric(
-      timestamp: DateTime(2026, 5, 3, 12),
-      voltage: 220,
-      current: 1.2,
-      power: 180,
-      pf: 0.97,
-      frequency: 60,
-      energy: 12.3,
-    );
+  test(
+    'integrationService enfileira falha e limpa fila ao sincronizar',
+    () async {
+      final repository = _MemoryMetricRepository();
+      final metric = Metric(
+        timestamp: DateTime(2026, 5, 3, 12),
+        voltage: 220,
+        current: 1.2,
+        power: 180,
+        pf: 0.97,
+        frequency: 60,
+        energy: 12.3,
+      );
 
-    final failingService = IntegrationService(
-      repository: repository,
-      loadSettings: () async => const IntegrationSettings(
-        enabled: true,
-        baseUrl: 'https://api.example.com/',
-        metricsPath: '/metrics',
-        apiKey: '',
-        oauthEnabled: false,
-        oauthClientId: '',
-        oauthScope: '',
-        oauthDeviceEndpoint: '',
-        oauthTokenEndpoint: '',
-        oauthAccessToken: '',
-        oauthTokenType: 'Bearer',
-        oauthExpiresAt: null,
-      ),
-      client: MockClient((request) async => http.Response('offline', 503)),
-    );
+      final failingService = IntegrationService(
+        repository: repository,
+        loadSettings: () async => const IntegrationSettings(
+          enabled: true,
+          baseUrl: 'https://api.example.com/',
+          metricsPath: '/metrics',
+          apiKey: '',
+          oauthEnabled: false,
+          oauthClientId: '',
+          oauthScope: '',
+          oauthDeviceEndpoint: '',
+          oauthTokenEndpoint: '',
+          oauthAccessToken: '',
+          oauthTokenType: 'Bearer',
+          oauthExpiresAt: null,
+        ),
+        client: MockClient((request) async => http.Response('offline', 503)),
+      );
 
-    final submit = await failingService.submitMetric(metric, profileId: 'device-a');
-    expect(submit.delivered, isFalse);
-    expect(submit.queued, isTrue);
-    expect(repository.pending, hasLength(1));
+      final submit = await failingService.submitMetric(
+        metric,
+        profileId: 'device-a',
+      );
+      expect(submit.delivered, isFalse);
+      expect(submit.queued, isTrue);
+      expect(repository.pending, hasLength(1));
 
-    final successService = IntegrationService(
-      repository: repository,
-      loadSettings: () async => const IntegrationSettings(
-        enabled: true,
-        baseUrl: 'https://api.example.com/',
-        metricsPath: '/metrics',
-        apiKey: '',
-        oauthEnabled: false,
-        oauthClientId: '',
-        oauthScope: '',
-        oauthDeviceEndpoint: '',
-        oauthTokenEndpoint: '',
-        oauthAccessToken: '',
-        oauthTokenType: 'Bearer',
-        oauthExpiresAt: null,
-      ),
-      client: MockClient((request) async => http.Response('{}', 200)),
-    );
+      final successService = IntegrationService(
+        repository: repository,
+        loadSettings: () async => const IntegrationSettings(
+          enabled: true,
+          baseUrl: 'https://api.example.com/',
+          metricsPath: '/metrics',
+          apiKey: '',
+          oauthEnabled: false,
+          oauthClientId: '',
+          oauthScope: '',
+          oauthDeviceEndpoint: '',
+          oauthTokenEndpoint: '',
+          oauthAccessToken: '',
+          oauthTokenType: 'Bearer',
+          oauthExpiresAt: null,
+        ),
+        client: MockClient((request) async => http.Response('{}', 200)),
+      );
 
-    final flush = await successService.flushPendingQueue();
-    expect(flush.deliveredCount, 1);
-    expect(flush.failedCount, 0);
-    expect(repository.pending, isEmpty);
-  });
+      final flush = await successService.flushPendingQueue();
+      expect(flush.deliveredCount, 1);
+      expect(flush.failedCount, 0);
+      expect(repository.pending, isEmpty);
+    },
+  );
 
   test('forecastProvider calcula tendência com leituras recentes', () {
     final metrics = List<Metric>.generate(6, (index) {

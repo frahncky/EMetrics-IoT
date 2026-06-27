@@ -27,7 +27,10 @@ class AlertsPage extends ConsumerWidget {
       body: alerts.isEmpty
           ? Center(
               child: Card(
-                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 32,
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
@@ -37,7 +40,10 @@ class AlertsPage extends ConsumerWidget {
                       SizedBox(height: 12),
                       Text(
                         'Nenhum alerta registrado até agora.',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                       SizedBox(height: 8),
@@ -60,7 +66,9 @@ class AlertsPage extends ConsumerWidget {
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(16),
                     leading: CircleAvatar(
-                      backgroundColor: _severityColor(alert.severity).withValues(alpha: 0.18),
+                      backgroundColor: _severityColor(
+                        alert.severity,
+                      ).withValues(alpha: 0.18),
                       child: Icon(
                         _severityIcon(alert.severity),
                         color: _severityColor(alert.severity),
@@ -79,7 +87,9 @@ class AlertsPage extends ConsumerWidget {
                           runSpacing: 8,
                           children: [
                             Chip(label: Text(_severityLabel(alert.severity))),
-                            Chip(label: Text(_formatTimestamp(alert.createdAt))),
+                            Chip(
+                              label: Text(_formatTimestamp(alert.createdAt)),
+                            ),
                             if (alert.acknowledged)
                               const Chip(label: Text('Reconhecido')),
                           ],

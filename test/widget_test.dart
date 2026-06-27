@@ -18,7 +18,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('App inicia sem faixa debug e exibe navegação principal', (WidgetTester tester) async {
+  testWidgets('App inicia sem faixa debug e exibe navegação principal', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const EmetricsApp());
     await tester.pumpAndSettle();
 

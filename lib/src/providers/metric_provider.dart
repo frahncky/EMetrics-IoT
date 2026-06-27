@@ -30,17 +30,21 @@ final metricsProvider = FutureProvider<List<Metric>>((ref) async {
 
 final metricsByRangeProvider =
     FutureProvider.family<List<Metric>, MetricsRangeQuery>((ref, query) async {
-  final repo = ref.watch(metricRepositoryProvider);
-  return repo.getMetrics(from: query.from, to: query.to);
-});
+      final repo = ref.watch(metricRepositoryProvider);
+      return repo.getMetrics(from: query.from, to: query.to);
+    });
 
 /// Última métrica recebida diretamente do stream MQTT, sem passar pelo banco.
 /// Mensagens retidas (retain=true) são ignoradas — são dados antigos do broker.
 final latestMqttMetricProvider = Provider<Metric?>((ref) {
-  return ref.watch(mqttStreamProvider).whenOrNull(data: (messages) {
-    if (messages.isEmpty) return null;
-    final msg = messages.last.payload as MqttPublishMessage;
-    if (msg.header?.retain == true) return null;
-    return parseMetricFromMqtt(String.fromCharCodes(msg.payload.message));
-  });
+  return ref
+      .watch(mqttStreamProvider)
+      .whenOrNull(
+        data: (messages) {
+          if (messages.isEmpty) return null;
+          final msg = messages.last.payload as MqttPublishMessage;
+          if (msg.header?.retain == true) return null;
+          return parseMetricFromMqtt(String.fromCharCodes(msg.payload.message));
+        },
+      );
 });

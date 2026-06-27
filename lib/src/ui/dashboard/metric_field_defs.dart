@@ -114,6 +114,7 @@ const kAllMetricFields = <MetricFieldDef>[
   ),
 ];
 
-MetricFieldDef fieldByKey(String key) =>
-    kAllMetricFields.firstWhere((f) => f.key == key,
-        orElse: () => kAllMetricFields.first);
+MetricFieldDef fieldByKey(String key) => kAllMetricFields.firstWhere(
+  (f) => f.key == key,
+  orElse: () => kAllMetricFields.first,
+);

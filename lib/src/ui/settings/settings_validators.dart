@@ -85,6 +85,27 @@ class SettingsValidators {
     return null;
   }
 
+  static String? validateTelemetryIntervalMs(
+    String? value, {
+    required String fieldLabel,
+  }) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return 'Informe $fieldLabel.';
+    }
+    final parsed = int.tryParse(text);
+    if (parsed == null) {
+      return 'Intervalo inválido. Use apenas números inteiros.';
+    }
+    if (parsed < 100) {
+      return 'O intervalo mínimo é de 100 ms.';
+    }
+    if (parsed > 60000) {
+      return 'O intervalo máximo é de 60000 ms.';
+    }
+    return null;
+  }
+
   static String? validateRetentionDays(
     String? value, {
     required String fieldLabel,

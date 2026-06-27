@@ -53,6 +53,9 @@ struct DeviceConfig {
   char otaPassword[65];
   bool useTls;
   uint16_t sdRetentionDays;
+  uint32_t measurementIntervalMs;
+  uint32_t sdLogIntervalMs;
+  uint32_t mqttPublishIntervalMs;
   uint16_t wifiInitialConnectTimeoutSeconds;
   uint16_t wifiRetryIntervalSeconds;
   uint16_t wifiFallbackApDelaySeconds;
@@ -79,6 +82,9 @@ DeviceConfig config = {
   "",
   false,
   30,
+  2000,
+  2000,
+  2000,
   20,
   15,
   60,
@@ -88,7 +94,13 @@ DeviceConfig config = {
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTES E VARIAVEIS GLOBAIS
 // ═══════════════════════════════════════════════════════════════════════════
-constexpr unsigned long PUBLISH_INTERVAL_MS_DEFAULT = 2000; // intervalo padrao entre leituras PZEM
+constexpr unsigned long PUBLISH_INTERVAL_MS_DEFAULT = 2000; // legado: intervalo unico padrao
+constexpr unsigned long MEASUREMENT_INTERVAL_MS_DEFAULT = PUBLISH_INTERVAL_MS_DEFAULT;
+constexpr unsigned long SD_LOG_INTERVAL_MS_DEFAULT = PUBLISH_INTERVAL_MS_DEFAULT;
+constexpr unsigned long MQTT_PUBLISH_INTERVAL_MS_DEFAULT = PUBLISH_INTERVAL_MS_DEFAULT;
+constexpr unsigned long MIN_TELEMETRY_INTERVAL_MS = 100;
+constexpr unsigned long MAX_TELEMETRY_INTERVAL_MS = 60000;
+constexpr unsigned long PZEM_REFRESH_FLOOR_MS = 200;
 constexpr uint16_t DEFAULT_WIFI_INITIAL_CONNECT_TIMEOUT_SECONDS = 20;
 constexpr uint16_t DEFAULT_WIFI_RETRY_INTERVAL_SECONDS = 15;
 constexpr uint16_t DEFAULT_WIFI_FALLBACK_AP_DELAY_SECONDS = 60;
@@ -289,8 +301,12 @@ String networkNameScrollSource = "";
 constexpr unsigned long LCD_UPDATE_INTERVAL_MS = 700;   // atualizacao visual do LCD
 constexpr unsigned long LCD_METRIC_ROTATE_INTERVAL_MS = 4000;  // troca de informacao a cada 4 segundos
 
-unsigned long lastPublishMs = 0;
-unsigned long publishIntervalMs = PUBLISH_INTERVAL_MS_DEFAULT; // E7: configuravel via MQTT
+unsigned long lastMeasurementMs = 0;
+unsigned long lastSdLogMs = 0;
+unsigned long lastMqttPublishMs = 0;
+unsigned long measurementIntervalMs = MEASUREMENT_INTERVAL_MS_DEFAULT;
+unsigned long sdLogIntervalMs = SD_LOG_INTERVAL_MS_DEFAULT;
+unsigned long mqttPublishIntervalMs = MQTT_PUBLISH_INTERVAL_MS_DEFAULT;
 unsigned long lastWifiAttemptMs = 0;
 unsigned long wifiDisconnectedSinceMs = 0;
 unsigned long lastMqttAttemptMs = 0;
@@ -350,12 +366,30 @@ struct DeviceStorageUsage {
   uint64_t totalBytes = 0;
   float usagePercent = 0.0f;
 };
+struct PzemReading {
+  float voltage = 0.0f;
+  float current = 0.0f;
+  float power = 0.0f;
+  float energy = 0.0f;
+  float frequency = 0.0f;
+  float pf = 0.0f;
+  float apparentPower = 0.0f;
+  float reactivePower = 0.0f;
+  bool valid = false;
+};
+PzemReading latestReading;
+unsigned long lastPzemRefreshMs = 0;
 
 uint64_t currentEpochMs();
 void appendHistoryRecord(const char* payload, uint64_t timestampMs);
 void replayHistoryRange(uint64_t fromMs, uint64_t toMs);
 HistoryRequest parseHistoryRequest(const char* payload, unsigned int length);
 DeviceStorageUsage readDeviceStorageUsage();
+bool refreshPzemReading(bool force = false);
+bool isValidTelemetryIntervalMs(uint64_t value);
+unsigned long normalizeTelemetryIntervalMs(uint64_t value, unsigned long fallback);
+bool parseTelemetryIntervalsCommand(const String& raw, unsigned long& measurementMs, unsigned long& sdLogMs, unsigned long& mqttPublishMs);
+void applyTelemetryIntervals(unsigned long measurementMs, unsigned long sdLogMs, unsigned long mqttPublishMs);
 bool parseStorageConfigCommand(const char* payload, unsigned int length, uint16_t& sdRetentionDays);
 void applyStorageConfigCommand(uint16_t sdRetentionDays);
 void pruneHistoryByRetentionIfNeeded(uint64_t nowMs, bool force);
@@ -363,6 +397,7 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length);
 File openHistoryFile(const char* mode);
 bool removeHistoryFile();
 bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize);
+void emitLatestMetrics(bool enqueueForMqtt, bool appendToHistory);
 void saveConfig();
 void saveWifiNetworks(Preferences& prefs);
 void loadWifiNetworks(Preferences& prefs);
@@ -655,6 +690,63 @@ HistoryRequest parseHistoryRequest(const char* payload, unsigned int length) {
   return request;
 }
 
+bool isValidTelemetryIntervalMs(uint64_t value) {
+  return value >= MIN_TELEMETRY_INTERVAL_MS && value <= MAX_TELEMETRY_INTERVAL_MS;
+}
+
+unsigned long normalizeTelemetryIntervalMs(uint64_t value, unsigned long fallback) {
+  return isValidTelemetryIntervalMs(value) ? static_cast<unsigned long>(value) : fallback;
+}
+
+bool parseTelemetryIntervalsCommand(const String& raw,
+                                    unsigned long& measurementMs,
+                                    unsigned long& sdLogMs,
+                                    unsigned long& mqttPublishMs) {
+  const bool isIntervalCommand = raw.indexOf("\"configureIntervals\"") >= 0 ||
+                                 raw.indexOf("\"configureStorage\"") >= 0 ||
+                                 raw.indexOf("\"measurementIntervalMs\"") >= 0 ||
+                                 raw.indexOf("\"sdLogIntervalMs\"") >= 0 ||
+                                 raw.indexOf("\"mqttPublishIntervalMs\"") >= 0;
+  if (!isIntervalCommand) {
+    return false;
+  }
+
+  bool changed = false;
+  uint64_t value = 0;
+  measurementMs = config.measurementIntervalMs;
+  sdLogMs = config.sdLogIntervalMs;
+  mqttPublishMs = config.mqttPublishIntervalMs;
+
+  if (extractUInt64Field(raw, "measurementIntervalMs", value)) {
+    if (!isValidTelemetryIntervalMs(value)) return false;
+    measurementMs = static_cast<unsigned long>(value);
+    changed = true;
+  }
+  if (extractUInt64Field(raw, "sdLogIntervalMs", value)) {
+    if (!isValidTelemetryIntervalMs(value)) return false;
+    sdLogMs = static_cast<unsigned long>(value);
+    changed = true;
+  }
+  if (extractUInt64Field(raw, "mqttPublishIntervalMs", value)) {
+    if (!isValidTelemetryIntervalMs(value)) return false;
+    mqttPublishMs = static_cast<unsigned long>(value);
+    changed = true;
+  }
+
+  return changed;
+}
+
+void applyTelemetryIntervals(unsigned long measurementMs,
+                             unsigned long sdLogMs,
+                             unsigned long mqttPublishMs) {
+  config.measurementIntervalMs = measurementMs;
+  config.sdLogIntervalMs = sdLogMs;
+  config.mqttPublishIntervalMs = mqttPublishMs;
+  measurementIntervalMs = measurementMs;
+  sdLogIntervalMs = sdLogMs;
+  mqttPublishIntervalMs = mqttPublishMs;
+  saveConfig();
+}
 bool parseStorageConfigCommand(const char* payload, unsigned int length, uint16_t& sdRetentionDays) {
   String raw;
   raw.reserve(length + 1);
@@ -752,16 +844,25 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
       return;
     }
 
-    // E7: configura intervalo de publicacao
+    // E7 legado: configura a cadencia unica usada antes da separacao dos intervalos.
     // payload: {"command":"setPublishInterval","intervalMs":500}
     if (raw.indexOf("\"setPublishInterval\"") >= 0) {
       uint64_t intervalVal = 0;
-      if (extractUInt64Field(raw, "intervalMs", intervalVal) && intervalVal >= 100 && intervalVal <= 60000) {
-        publishIntervalMs = static_cast<unsigned long>(intervalVal);
+      if (extractUInt64Field(raw, "intervalMs", intervalVal) && isValidTelemetryIntervalMs(intervalVal)) {
+        const unsigned long intervalMs = static_cast<unsigned long>(intervalVal);
+        applyTelemetryIntervals(intervalMs, intervalMs, intervalMs);
       }
       return;
     }
 
+    unsigned long parsedMeasurementMs = measurementIntervalMs;
+    unsigned long parsedSdLogMs = sdLogIntervalMs;
+    unsigned long parsedMqttPublishMs = mqttPublishIntervalMs;
+    if (raw.indexOf("\"configureIntervals\"") >= 0 &&
+        parseTelemetryIntervalsCommand(raw, parsedMeasurementMs, parsedSdLogMs, parsedMqttPublishMs)) {
+      applyTelemetryIntervals(parsedMeasurementMs, parsedSdLogMs, parsedMqttPublishMs);
+      return;
+    }
     // E11: configura modo hibrido Wi-Fi
     // payload: {"command":"setHybridWifi","enabled":true,"acquireMs":10000,"txMs":3000}
     if (raw.indexOf("\"setHybridWifi\"") >= 0) {
@@ -792,12 +893,24 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     }
   }
 
-  uint16_t sdRetentionDays = 0;
-  if (parseStorageConfigCommand(reinterpret_cast<char*>(payload), length, sdRetentionDays)) {
-    applyStorageConfigCommand(sdRetentionDays);
+  String storageRaw;
+  storageRaw.reserve(length + 1);
+  for (unsigned int i = 0; i < length; i++) {
+    storageRaw += static_cast<char>(payload[i]);
+  }
+  if (storageRaw.indexOf("\"configureStorage\"") >= 0 || storageRaw.indexOf("\"sdRetentionDays\"") >= 0) {
+    uint16_t sdRetentionDays = 0;
+    if (parseStorageConfigCommand(reinterpret_cast<char*>(payload), length, sdRetentionDays)) {
+      applyStorageConfigCommand(sdRetentionDays);
+    }
+    unsigned long parsedMeasurementMs = measurementIntervalMs;
+    unsigned long parsedSdLogMs = sdLogIntervalMs;
+    unsigned long parsedMqttPublishMs = mqttPublishIntervalMs;
+    if (parseTelemetryIntervalsCommand(storageRaw, parsedMeasurementMs, parsedSdLogMs, parsedMqttPublishMs)) {
+      applyTelemetryIntervals(parsedMeasurementMs, parsedSdLogMs, parsedMqttPublishMs);
+    }
     return;
   }
-
   const HistoryRequest request = parseHistoryRequest(reinterpret_cast<char*>(payload), length);
   if (!request.valid) {
     return;
@@ -1022,6 +1135,12 @@ void loadConfig() {
     const bool useTls = preferences.getBool("mqtt_tls", false);
     const uint16_t sdRetentionDays =
         preferences.getUShort("sd_ret_days", DEFAULT_SD_RETENTION_DAYS);
+    const uint32_t measurementMs =
+        preferences.getUInt("measure_ms", MEASUREMENT_INTERVAL_MS_DEFAULT);
+    const uint32_t sdLogMs =
+        preferences.getUInt("sd_log_ms", SD_LOG_INTERVAL_MS_DEFAULT);
+    const uint32_t mqttPublishMs =
+        preferences.getUInt("mqtt_pub_ms", MQTT_PUBLISH_INTERVAL_MS_DEFAULT);
     const uint16_t wifiInitialConnectTimeoutSeconds = preferences.getUShort(
         "wifi_init_s", DEFAULT_WIFI_INITIAL_CONNECT_TIMEOUT_SECONDS);
     const uint16_t wifiRetryIntervalSeconds = preferences.getUShort(
@@ -1044,6 +1163,9 @@ void loadConfig() {
     config.sdRetentionDays = sdRetentionDays == 0 || sdRetentionDays > MAX_SD_RETENTION_DAYS
                                  ? DEFAULT_SD_RETENTION_DAYS
                                  : sdRetentionDays;
+    config.measurementIntervalMs = normalizeTelemetryIntervalMs(measurementMs, MEASUREMENT_INTERVAL_MS_DEFAULT);
+    config.sdLogIntervalMs = normalizeTelemetryIntervalMs(sdLogMs, SD_LOG_INTERVAL_MS_DEFAULT);
+    config.mqttPublishIntervalMs = normalizeTelemetryIntervalMs(mqttPublishMs, MQTT_PUBLISH_INTERVAL_MS_DEFAULT);
     config.wifiInitialConnectTimeoutSeconds =
         wifiInitialConnectTimeoutSeconds < MIN_WIFI_CONNECTION_DELAY_SECONDS ||
                 wifiInitialConnectTimeoutSeconds > MAX_WIFI_CONNECTION_DELAY_SECONDS
@@ -1062,6 +1184,9 @@ void loadConfig() {
   }
   loadWifiNetworks(preferences);
   config.valid = wifiNetworkCount > 0 && strlen(config.mqttHost) > 0;
+  measurementIntervalMs = config.measurementIntervalMs;
+  sdLogIntervalMs = config.sdLogIntervalMs;
+  mqttPublishIntervalMs = config.mqttPublishIntervalMs;
 
   preferences.end();
 }
@@ -1081,6 +1206,9 @@ void saveConfig() {
   preferences.putString("ota_pwd", config.otaPassword);
   preferences.putBool("mqtt_tls", config.useTls);
   preferences.putUShort("sd_ret_days", config.sdRetentionDays);
+  preferences.putUInt("measure_ms", config.measurementIntervalMs);
+  preferences.putUInt("sd_log_ms", config.sdLogIntervalMs);
+  preferences.putUInt("mqtt_pub_ms", config.mqttPublishIntervalMs);
   preferences.putUShort("wifi_init_s", config.wifiInitialConnectTimeoutSeconds);
   preferences.putUShort("wifi_retry_s", config.wifiRetryIntervalSeconds);
   preferences.putUShort("wifi_fallback_s", config.wifiFallbackApDelaySeconds);
@@ -1111,6 +1239,7 @@ void handleHealth() {
 }
 
 void handleMetrics() {
+  refreshPzemReading(true);
   char payload[TELEMETRY_PAYLOAD_SIZE];
   if (!buildMetricsPayload(payload, sizeof(payload))) {
     provisionServer.send(
@@ -1773,6 +1902,25 @@ bool readPzem(float& voltage, float& current, float& power, float& energy, float
   return true;
 }
 
+bool refreshPzemReading(bool force) {
+  const unsigned long now = millis();
+  if (!force && lastPzemRefreshMs != 0) {
+    unsigned long minInterval = measurementIntervalMs;
+    if (minInterval < PZEM_REFRESH_FLOOR_MS) minInterval = PZEM_REFRESH_FLOOR_MS;
+    if (now - lastPzemRefreshMs < minInterval) {
+      return latestReading.valid;
+    }
+  }
+  lastPzemRefreshMs = now;
+
+  PzemReading r;
+  r.valid = readPzem(r.voltage, r.current, r.power, r.energy, r.frequency, r.pf);
+  r.apparentPower = r.voltage * r.current;
+  const float reactiveSquared = r.apparentPower * r.apparentPower - r.power * r.power;
+  r.reactivePower = reactiveSquared > 0.0f ? sqrtf(reactiveSquared) : 0.0f;
+  latestReading = r;
+  return r.valid;
+}
 void enqueuePayload(const char* payload) {
   if (queueCount == TELEMETRY_QUEUE_CAPACITY) {
     queueHead = (queueHead + 1) % TELEMETRY_QUEUE_CAPACITY;
@@ -1786,17 +1934,16 @@ void enqueuePayload(const char* payload) {
 }
 
 bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize) {
-  float voltage = 0.0f;
-  float current = 0.0f;
-  float power = 0.0f;
-  float energy = 0.0f;
-  float frequency = 0.0f;
-  float pf = 0.0f;
-
-  if (!readPzem(voltage, current, power, energy, frequency, pf)) {
+  if (!latestReading.valid) {
     return false;
   }
 
+  const float voltage = latestReading.voltage;
+  const float current = latestReading.current;
+  const float energy = latestReading.energy;
+  const float frequency = latestReading.frequency;
+  const float pf = latestReading.pf;
+  float power = latestReading.power;
   // E10: subtrai consumo proprio do sistema se habilitado
   if (selfConsumptionEnabled && selfConsumptionWatts > 0.0f && power >= selfConsumptionWatts) {
     power -= selfConsumptionWatts;
@@ -1840,16 +1987,23 @@ bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize) {
   return payloadLength > 0 && static_cast<size_t>(payloadLength) < payloadBufferSize;
 }
 
-void queueLatestMetrics() {
+void emitLatestMetrics(bool enqueueForMqtt, bool appendToHistory) {
+  if (!enqueueForMqtt && !appendToHistory) {
+    return;
+  }
+
   char payload[TELEMETRY_PAYLOAD_SIZE];
   if (!buildMetricsPayload(payload, sizeof(payload))) {
     return;
   }
 
-  enqueuePayload(payload);
-  appendHistoryRecord(payload, currentEpochMs());
+  if (enqueueForMqtt) {
+    enqueuePayload(payload);
+  }
+  if (appendToHistory) {
+    appendHistoryRecord(payload, currentEpochMs());
+  }
 }
-
 bool publishFrontPayload() {
   if (queueCount == 0 || !mqttClient.connected()) {
     return false;
@@ -1969,16 +2123,14 @@ void updateLcdDisplay() {
     lcdDisplayIndex = (lcdDisplayIndex + 1) % 4;
   }
 
-  // Le os dados atuais do PZEM
-  float voltage = pzem.voltage();
-  float current = pzem.current();
-  float power = pzem.power();
-  float energy = pzem.energy();
-  float frequency = pzem.frequency();
-  float pf = pzem.pf();
-  float apparentPower = voltage * current;
-  float reactivePowerSquared = apparentPower * apparentPower - power * power;
-  float reactivePower = reactivePowerSquared > 0.0f ? sqrtf(reactivePowerSquared) : 0.0f;
+  const float voltage = latestReading.voltage;
+  const float current = latestReading.current;
+  const float power = latestReading.power;
+  const float energy = latestReading.energy;
+  const float frequency = latestReading.frequency;
+  const float pf = latestReading.pf;
+  const float apparentPower = latestReading.apparentPower;
+  const float reactivePower = latestReading.reactivePower;
   if (lcdDisplayIndex == 3) {
     String wifiStatus;
     if (WiFi.status() == WL_CONNECTED) {
@@ -2109,6 +2261,7 @@ void setup() {
 
   ensureHistoryStorageReady();
   loadConfig();
+  refreshPzemReading(true);
   if (!config.valid) {
     startProvisioningMode();
     return;
@@ -2157,6 +2310,11 @@ void loop() {
   }
 
   if (provisioningMode) {
+    const unsigned long now = millis();
+    if (lastMeasurementMs == 0 || now - lastMeasurementMs >= measurementIntervalMs) {
+      lastMeasurementMs = now;
+      refreshPzemReading(true);
+    }
     updateLcdDisplay();
     return;
   }
@@ -2209,9 +2367,21 @@ void loop() {
   }
 
   const unsigned long now = millis();
-  if (now - lastPublishMs >= publishIntervalMs) {  // E7: usa intervalo configuravel
-    lastPublishMs = now;
-    queueLatestMetrics();
+  if (lastMeasurementMs == 0 || now - lastMeasurementMs >= measurementIntervalMs) {
+    lastMeasurementMs = now;
+    refreshPzemReading(true);
+  }
+
+  const bool mqttDue = lastMqttPublishMs == 0 || now - lastMqttPublishMs >= mqttPublishIntervalMs;
+  const bool sdDue = lastSdLogMs == 0 || now - lastSdLogMs >= sdLogIntervalMs;
+  if (mqttDue || sdDue) {
+    if (mqttDue) {
+      lastMqttPublishMs = now;
+    }
+    if (sdDue) {
+      lastSdLogMs = now;
+    }
+    emitLatestMetrics(mqttDue, sdDue);
   }
 
   if (WiFi.status() == WL_CONNECTED && mqttClient.connected() && !hybridWifiEnabled) {

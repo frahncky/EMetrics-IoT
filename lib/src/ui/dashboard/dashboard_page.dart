@@ -325,9 +325,13 @@ String _resolveValue(
         hasMeasurement: hasMeasurement,
       );
     case 'energy_apparent':
-      return hasHistory ? (kvah ?? 0.0).toStringAsFixed(def.fractionDigits) : '--';
+      return hasHistory
+          ? (kvah ?? 0.0).toStringAsFixed(def.fractionDigits)
+          : '--';
     case 'energy_reactive':
-      return hasHistory ? (kvarh ?? 0.0).toStringAsFixed(def.fractionDigits) : '--';
+      return hasHistory
+          ? (kvarh ?? 0.0).toStringAsFixed(def.fractionDigits)
+          : '--';
     case 'temperature':
       return formatIndicatorValue(
         metric?.temperature,
@@ -430,7 +434,13 @@ class _MainIndicators extends ConsumerWidget {
                 key: ValueKey('slot_$i'),
                 width: cardWidth,
                 child: _cardForSlot(
-                  context, ref, i, layout[i], hasHistory, kvah, kvarh,
+                  context,
+                  ref,
+                  i,
+                  layout[i],
+                  hasHistory,
+                  kvah,
+                  kvarh,
                 ),
               ),
           ],
@@ -532,106 +542,112 @@ class _IndicatorCardState extends State<_IndicatorCard>
         child: Semantics(
           label: 'Indicador de ${widget.label}: ${widget.value}',
           child: Align(
-          alignment: Alignment.center,
-          child: Container(
-            margin: EdgeInsets.symmetric(
-              horizontal: widget.compact ? 2 : 6,
-              vertical: widget.compact ? 2 : 8,
-            ),
-            width: double.infinity,
-            constraints: BoxConstraints(minHeight: widget.compact ? 90 : 128),
-            padding: EdgeInsets.symmetric(
-              vertical: isExtraCompact ? 6 : (widget.compact ? 8 : 16),
-              horizontal: isExtraCompact ? 6 : (widget.compact ? 8 : 10),
-            ),
-            decoration: BoxDecoration(
-              color: cardBgColor,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: widget.color.withValues(alpha: 0.6),
-                width: 1.5,
+            alignment: Alignment.center,
+            child: Container(
+              margin: EdgeInsets.symmetric(
+                horizontal: widget.compact ? 2 : 6,
+                vertical: widget.compact ? 2 : 8,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.color.withValues(
-                    alpha: isDarkMode ? 0.14 : 0.16,
+              width: double.infinity,
+              constraints: BoxConstraints(minHeight: widget.compact ? 90 : 128),
+              padding: EdgeInsets.symmetric(
+                vertical: isExtraCompact ? 6 : (widget.compact ? 8 : 16),
+                horizontal: isExtraCompact ? 6 : (widget.compact ? 8 : 10),
+              ),
+              decoration: BoxDecoration(
+                color: cardBgColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: widget.color.withValues(alpha: 0.6),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.color.withValues(
+                      alpha: isDarkMode ? 0.14 : 0.16,
+                    ),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  widget.icon,
-                  color: widget.color,
-                  size: isExtraCompact ? 20 : (widget.compact ? 24 : 30),
-                  semanticLabel: 'Ícone de ${widget.label}',
-                ),
-                SizedBox(height: isExtraCompact ? 3 : (widget.compact ? 4 : 8)),
-                Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: isExtraCompact ? 11 : (widget.compact ? 12 : 15),
-                    color: textColor,
-                    fontWeight: FontWeight.w600,
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    widget.icon,
+                    color: widget.color,
+                    size: isExtraCompact ? 20 : (widget.compact ? 24 : 30),
+                    semanticLabel: 'Ícone de ${widget.label}',
                   ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                SizedBox(height: isExtraCompact ? 1 : (widget.compact ? 2 : 6)),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        widget.value,
-                        style: TextStyle(
-                          fontSize: isExtraCompact
-                              ? 14
-                              : (widget.compact ? 16 : 20),
-                          fontWeight: FontWeight.bold,
-                          color: widget.color,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (widget.unit != null) ...[
-                        const SizedBox(width: 3),
-                        Padding(
-                          padding: EdgeInsets.only(
-                            bottom: isExtraCompact
-                                ? 0
-                                : (widget.compact ? 1 : 2),
+                  SizedBox(
+                    height: isExtraCompact ? 3 : (widget.compact ? 4 : 8),
+                  ),
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: isExtraCompact
+                          ? 11
+                          : (widget.compact ? 12 : 15),
+                      color: textColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(
+                    height: isExtraCompact ? 1 : (widget.compact ? 2 : 6),
+                  ),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          widget.value,
+                          style: TextStyle(
+                            fontSize: isExtraCompact
+                                ? 14
+                                : (widget.compact ? 16 : 20),
+                            fontWeight: FontWeight.bold,
+                            color: widget.color,
                           ),
-                          child: Text(
-                            widget.unit!,
-                            style: TextStyle(
-                              fontSize: isExtraCompact
-                                  ? 9
-                                  : (widget.compact ? 10 : 13),
-                              color: isDarkMode
-                                  ? Colors.white70
-                                  : AppColors.lightUnselected,
-                              fontWeight: FontWeight.w500,
+                          textAlign: TextAlign.center,
+                        ),
+                        if (widget.unit != null) ...[
+                          const SizedBox(width: 3),
+                          Padding(
+                            padding: EdgeInsets.only(
+                              bottom: isExtraCompact
+                                  ? 0
+                                  : (widget.compact ? 1 : 2),
+                            ),
+                            child: Text(
+                              widget.unit!,
+                              style: TextStyle(
+                                fontSize: isExtraCompact
+                                    ? 9
+                                    : (widget.compact ? 10 : 13),
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : AppColors.lightUnselected,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 }

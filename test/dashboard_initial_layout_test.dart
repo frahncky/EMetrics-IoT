@@ -77,9 +77,7 @@ List<Override> _baseOverrides({
     if (latestMetric != null)
       latestMqttMetricProvider.overrideWith((ref) => latestMetric),
     mqttMetricSaverProvider.overrideWith((ref) {}),
-    mqttSettingsProvider.overrideWith(
-      (ref) => _TestMqttSettingsNotifier(),
-    ),
+    mqttSettingsProvider.overrideWith((ref) => _TestMqttSettingsNotifier()),
     mqttStatusProvider.overrideWith(
       (ref) => MqttStatusNotifier(() async => false),
     ),

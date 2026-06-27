@@ -37,7 +37,9 @@ void main() {
       expect(find.byType(MaterialApp), findsOneWidget);
     });
 
-    testWidgets('Bottom navigation bar é renderizado', (WidgetTester tester) async {
+    testWidgets('Bottom navigation bar é renderizado', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(const EmetricsApp());
       await tester.pumpAndSettle();
 
@@ -48,7 +50,9 @@ void main() {
       expect(find.text('Configurações'), findsOneWidget);
     });
 
-    testWidgets('Dashboard é renderizado inicialmente', (WidgetTester tester) async {
+    testWidgets('Dashboard é renderizado inicialmente', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(const EmetricsApp());
       await tester.pumpAndSettle();
 

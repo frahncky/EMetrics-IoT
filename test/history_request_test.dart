@@ -8,17 +8,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FailingMqttService extends MqttService {
-  _FailingMqttService() : super(broker: 'test.mosquitto.org', clientId: 'test', topic: 't');
+  _FailingMqttService()
+    : super(broker: 'test.mosquitto.org', clientId: 'test', topic: 't');
 
   @override
-  Future<void> requestHistory({required DateTime from, required DateTime to}) async {
+  Future<void> requestHistory({
+    required DateTime from,
+    required DateTime to,
+  }) async {
     throw const MqttServiceException('erro de teste');
   }
 }
 
 class _FakeMqttStatusNotifier extends MqttStatusNotifier {
   _FakeMqttStatusNotifier({required bool backgroundActive})
-      : super(() async => backgroundActive) {
+    : super(() async => backgroundActive) {
     if (backgroundActive) {
       setBackgroundActive(true);
       markConnected();
@@ -27,28 +31,32 @@ class _FakeMqttStatusNotifier extends MqttStatusNotifier {
 }
 
 void main() {
-  testWidgets('HistoryPage exibe feedback quando solicitação de histórico falha', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          mqttServiceProvider.overrideWith((ref) => _FailingMqttService()),
-          metricsByRangeProvider.overrideWith((ref, query) async => const []),
-        ],
-        child: const MaterialApp(home: HistoryPage()),
-      ),
-    );
+  testWidgets(
+    'HistoryPage exibe feedback quando solicitação de histórico falha',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mqttServiceProvider.overrideWith((ref) => _FailingMqttService()),
+            metricsByRangeProvider.overrideWith((ref, query) async => const []),
+          ],
+          child: const MaterialApp(home: HistoryPage()),
+        ),
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    expect(find.text('Solicitar do medidor'), findsOneWidget);
-    await tester.tap(find.text('Solicitar do medidor'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Solicitar do medidor'), findsOneWidget);
+      await tester.tap(find.text('Solicitar do medidor'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.textContaining('Falha ao solicitar histórico'), findsOneWidget);
-  });
+      expect(
+        find.textContaining('Falha ao solicitar histórico'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('HistoryPage usa o handler de segundo plano quando ativo', (
     WidgetTester tester,

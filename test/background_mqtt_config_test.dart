@@ -24,15 +24,15 @@ class _InMemoryCredentialsStore implements MqttCredentialsStore {
   @override
   Future<String> readPassword() async => password;
 
-    @override
-    Future<String> readPasswordForProfile(String profileId) async =>
+  @override
+  Future<String> readPasswordForProfile(String profileId) async =>
       profilePasswords[profileId] ?? '';
 
   @override
   Future<String> readUsername() async => username;
 
-    @override
-    Future<String> readUsernameForProfile(String profileId) async =>
+  @override
+  Future<String> readUsernameForProfile(String profileId) async =>
       profileUsernames[profileId] ?? '';
 
   @override

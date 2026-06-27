@@ -12,7 +12,10 @@ class IntegrationSubmitResult {
   final bool delivered;
   final bool queued;
 
-  const IntegrationSubmitResult({required this.delivered, required this.queued});
+  const IntegrationSubmitResult({
+    required this.delivered,
+    required this.queued,
+  });
 }
 
 class IntegrationFlushResult {
@@ -128,9 +131,7 @@ class IntegrationService {
     IntegrationSettings settings,
     Map<String, dynamic> payload,
   ) async {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
     if (settings.apiKey.isNotEmpty) {
       headers['x-api-key'] = settings.apiKey;
     }
@@ -140,11 +141,7 @@ class IntegrationService {
     }
 
     final response = await _client
-        .post(
-          _buildUri(settings),
-          headers: headers,
-          body: jsonEncode(payload),
-        )
+        .post(_buildUri(settings), headers: headers, body: jsonEncode(payload))
         .timeout(const Duration(seconds: 8));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {

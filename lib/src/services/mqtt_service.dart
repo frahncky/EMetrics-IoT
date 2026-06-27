@@ -243,12 +243,15 @@ class MqttService {
     }
   }
 
-  /// Publica a configuracao de retencao do historico salvo no SD do medidor.
+  /// Publica a configuracao de armazenamento e cadencia do medidor.
   ///
   /// O firmware ESP32 consome esse comando no mesmo [requestTopic] usado por
   /// solicitacoes de historico.
-  Future<void> configureDeviceStorageRetention({
+  Future<void> configureDeviceStorage({
     required int sdRetentionDays,
+    required int measurementIntervalMs,
+    required int sdLogIntervalMs,
+    required int mqttPublishIntervalMs,
   }) async {
     if (!isConnected) {
       throw const MqttServiceException(
@@ -260,11 +263,24 @@ class MqttService {
         'A retenção do SD deve estar entre 1 e 3650 dias.',
       );
     }
+    final intervals = [
+      measurementIntervalMs,
+      sdLogIntervalMs,
+      mqttPublishIntervalMs,
+    ];
+    if (intervals.any((value) => value < 100 || value > 60000)) {
+      throw const MqttServiceException(
+        'Os intervalos do medidor devem estar entre 100 e 60000 ms.',
+      );
+    }
 
     try {
       final payload = jsonEncode({
         'command': 'configureStorage',
         'sdRetentionDays': sdRetentionDays,
+        'measurementIntervalMs': measurementIntervalMs,
+        'sdLogIntervalMs': sdLogIntervalMs,
+        'mqttPublishIntervalMs': mqttPublishIntervalMs,
         'requestedAt': DateTime.now().millisecondsSinceEpoch,
       });
       final builder = MqttClientPayloadBuilder()..addString(payload);
@@ -346,7 +362,11 @@ class MqttService {
     var delay = AppConfig.mqttRetryBaseDelay;
     MqttServiceException? last;
 
-    for (var attempt = 1; attempt <= AppConfig.mqttRetryMaxAttempts; attempt++) {
+    for (
+      var attempt = 1;
+      attempt <= AppConfig.mqttRetryMaxAttempts;
+      attempt++
+    ) {
       try {
         await connect();
         return;

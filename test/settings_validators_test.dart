@@ -79,6 +79,36 @@ void main() {
       expect(SettingsValidators.validateInterval('3600'), isNull);
     });
 
+    test('validateTelemetryIntervalMs exige faixa válida', () {
+      expect(
+        SettingsValidators.validateTelemetryIntervalMs(
+          '',
+          fieldLabel: 'o intervalo',
+        ),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateTelemetryIntervalMs(
+          '99',
+          fieldLabel: 'o intervalo',
+        ),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateTelemetryIntervalMs(
+          '60001',
+          fieldLabel: 'o intervalo',
+        ),
+        isNotNull,
+      );
+      expect(
+        SettingsValidators.validateTelemetryIntervalMs(
+          '1000',
+          fieldLabel: 'o intervalo',
+        ),
+        isNull,
+      );
+    });
     test('validateRetentionDays exige inteiro na faixa válida', () {
       expect(
         SettingsValidators.validateRetentionDays('', fieldLabel: 'a retenção'),

@@ -68,7 +68,10 @@ class _NoopCredentialsStore implements MqttCredentialsStore {
   Future<String> readUsernameForProfile(String profileId) async => '';
 
   @override
-  Future<void> writeCredentials({required String username, required String password}) async {}
+  Future<void> writeCredentials({
+    required String username,
+    required String password,
+  }) async {}
 
   @override
   Future<void> writeCredentialsForProfile({
@@ -80,7 +83,9 @@ class _NoopCredentialsStore implements MqttCredentialsStore {
 
 MqttReceivedMessage<MqttMessage> _buildMessage(String payload) {
   final builder = MqttClientPayloadBuilder()..addString(payload);
-  final publish = MqttPublishMessage().toTopic('emetrics/pzem').publishData(builder.payload!);
+  final publish = MqttPublishMessage()
+      .toTopic('emetrics/pzem')
+      .publishData(builder.payload!);
   return MqttReceivedMessage<MqttMessage>('emetrics/pzem', publish);
 }
 
@@ -91,50 +96,61 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('mqttMetricSaver não persiste no foreground com background ativo', () async {
-    final spyRepo = _SpyMetricRepository();
-    final integrationDisabledService = IntegrationService(
-      repository: spyRepo,
-      loadSettings: () async => const IntegrationSettings(
-        enabled: false,
-        baseUrl: '',
-        metricsPath: '/api/metrics',
-        apiKey: '',
-        oauthEnabled: false,
-        oauthClientId: '',
-        oauthScope: '',
-        oauthDeviceEndpoint: '',
-        oauthTokenEndpoint: '',
-        oauthAccessToken: '',
-        oauthTokenType: 'Bearer',
-        oauthExpiresAt: null,
-      ),
-      client: MockClient((request) async => http.Response('{}', 200)),
-    );
-    final controller = StreamController<List<MqttReceivedMessage<MqttMessage>>>();
-    final message = _buildMessage(
-      '{"voltage":220.1,"current":0.51,"power":112,"pf":0.98,"frequency":60,"energy":1.23}',
-    );
+  test(
+    'mqttMetricSaver não persiste no foreground com background ativo',
+    () async {
+      final spyRepo = _SpyMetricRepository();
+      final integrationDisabledService = IntegrationService(
+        repository: spyRepo,
+        loadSettings: () async => const IntegrationSettings(
+          enabled: false,
+          baseUrl: '',
+          metricsPath: '/api/metrics',
+          apiKey: '',
+          oauthEnabled: false,
+          oauthClientId: '',
+          oauthScope: '',
+          oauthDeviceEndpoint: '',
+          oauthTokenEndpoint: '',
+          oauthAccessToken: '',
+          oauthTokenType: 'Bearer',
+          oauthExpiresAt: null,
+        ),
+        client: MockClient((request) async => http.Response('{}', 200)),
+      );
+      final controller =
+          StreamController<List<MqttReceivedMessage<MqttMessage>>>();
+      final message = _buildMessage(
+        '{"voltage":220.1,"current":0.51,"power":112,"pf":0.98,"frequency":60,"energy":1.23}',
+      );
 
-    final container = ProviderContainer(
-      overrides: [
-        metricRepositoryProvider.overrideWithValue(spyRepo),
-        mqttStreamProvider.overrideWith((ref) => controller.stream),
-        backgroundRunningCheckProvider.overrideWithValue(() async => true),
-        mqttSettingsProvider.overrideWith((ref) => _FakeMqttSettingsNotifier()),
-        integrationServiceProvider.overrideWithValue(integrationDisabledService),
-      ],
-    );
-    addTearDown(controller.close);
-    addTearDown(container.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          metricRepositoryProvider.overrideWithValue(spyRepo),
+          mqttStreamProvider.overrideWith((ref) => controller.stream),
+          backgroundRunningCheckProvider.overrideWithValue(() async => true),
+          mqttSettingsProvider.overrideWith(
+            (ref) => _FakeMqttSettingsNotifier(),
+          ),
+          integrationServiceProvider.overrideWithValue(
+            integrationDisabledService,
+          ),
+        ],
+      );
+      addTearDown(controller.close);
+      addTearDown(container.dispose);
 
-    final saverSub = container.listen(mqttMetricSaverProvider, (previous, next) {});
-    addTearDown(saverSub.close);
-    controller.add([message]);
-    await Future<void>.delayed(const Duration(milliseconds: 30));
+      final saverSub = container.listen(
+        mqttMetricSaverProvider,
+        (previous, next) {},
+      );
+      addTearDown(saverSub.close);
+      controller.add([message]);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
 
-    expect(spyRepo.insertCalls, 0);
-  });
+      expect(spyRepo.insertCalls, 0);
+    },
+  );
 
   test('mqttMetricSaver persiste no foreground com background inativo', () async {
     final spyRepo = _SpyMetricRepository();
@@ -156,7 +172,8 @@ void main() {
       ),
       client: MockClient((request) async => http.Response('{}', 200)),
     );
-    final controller = StreamController<List<MqttReceivedMessage<MqttMessage>>>();
+    final controller =
+        StreamController<List<MqttReceivedMessage<MqttMessage>>>();
     final message = _buildMessage(
       '{"voltage":220.1,"current":0.51,"power":112,"pf":0.98,"frequency":60,"energy":1.23}',
     );
@@ -167,13 +184,18 @@ void main() {
         mqttStreamProvider.overrideWith((ref) => controller.stream),
         backgroundRunningCheckProvider.overrideWithValue(() async => false),
         mqttSettingsProvider.overrideWith((ref) => _FakeMqttSettingsNotifier()),
-        integrationServiceProvider.overrideWithValue(integrationDisabledService),
+        integrationServiceProvider.overrideWithValue(
+          integrationDisabledService,
+        ),
       ],
     );
     addTearDown(controller.close);
     addTearDown(container.dispose);
 
-    final saverSub = container.listen(mqttMetricSaverProvider, (previous, next) {});
+    final saverSub = container.listen(
+      mqttMetricSaverProvider,
+      (previous, next) {},
+    );
     addTearDown(saverSub.close);
     controller.add([message]);
     await Future<void>.delayed(const Duration(milliseconds: 30));

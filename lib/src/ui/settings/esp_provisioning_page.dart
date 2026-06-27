@@ -226,7 +226,6 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     return null;
   }
 
-
   Future<void> _testWifiConnection() async {
     setState(() => _isTestingWifi = true);
     await _saveCurrentEspHost();
@@ -236,7 +235,10 @@ class _EspProvisioningPageState extends ConsumerState<EspProvisioningPage> {
     setState(() => _isTestingWifi = false);
     if (!reconnect.ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(reconnect.message), backgroundColor: Colors.redAccent),
+        SnackBar(
+          content: Text(reconnect.message),
+          backgroundColor: Colors.redAccent,
+        ),
       );
       return;
     }
@@ -1271,7 +1273,9 @@ class _WifiTestDialogState extends State<_WifiTestDialog> {
 
   Future<void> _checkStatus() async {
     try {
-      final status = await widget.service.getWifiStatus(espHost: widget.espHost);
+      final status = await widget.service.getWifiStatus(
+        espHost: widget.espHost,
+      );
       if (!mounted) return;
       setState(() {
         _status = status;
@@ -1325,7 +1329,10 @@ class _WifiTestDialogState extends State<_WifiTestDialog> {
         icon: Icons.check_circle,
         iconColor: Colors.green,
         title: 'Conexão bem-sucedida',
-        lines: const ['O ESP32 conectou à rede e saiu do AP.', 'Reconecte o celular à rede Wi-Fi normal.'],
+        lines: const [
+          'O ESP32 conectou à rede e saiu do AP.',
+          'Reconecte o celular à rede Wi-Fi normal.',
+        ],
       );
     }
 
@@ -1388,12 +1395,18 @@ class _ResultContent extends StatelessWidget {
       children: [
         Icon(icon, color: iconColor, size: 48),
         const SizedBox(height: 12),
-        Text(title,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center),
+        Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 8),
         for (final line in lines) ...[
-          Text(line, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)),
+          Text(
+            line,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13),
+          ),
           const SizedBox(height: 4),
         ],
       ],

@@ -21,17 +21,17 @@ class AlertService {
   /// Retorna `true` se a permissão foi concedida ou se a plataforma não
   /// requer solicitação explícita.
   static Future<bool> ensurePermissionGranted() async {
-    final androidImplementation =
-        _notifications.resolvePlatformSpecificImplementation<
+    final androidImplementation = _notifications
+        .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
-    final iosImplementation =
-        _notifications.resolvePlatformSpecificImplementation<
+    final iosImplementation = _notifications
+        .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
         >();
 
-    final androidGranted =
-        await androidImplementation?.requestNotificationsPermission();
+    final androidGranted = await androidImplementation
+        ?.requestNotificationsPermission();
     final iosGranted = await iosImplementation?.requestPermissions(
       alert: true,
       badge: true,
