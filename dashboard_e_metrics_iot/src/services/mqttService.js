@@ -67,6 +67,7 @@ export function parseTelemetry(payload) {
     sequence: optionalFiniteNumber(decoded.sequence),
     measuredAt,
     storage: decoded.storage ?? null,
+    config: decoded.config ?? null,
     receivedAt,
   };
 }

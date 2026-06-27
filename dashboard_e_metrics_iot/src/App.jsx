@@ -1136,7 +1136,7 @@ function MonitorDashboard({
 }
 
 // ─── Aba de configurações do dispositivo ──────────────────────────────────────
-function DeviceSettingsTab({ connectionPhase, commandTopic, onCommandTopicChange, onPublish }) {
+function DeviceSettingsTab({ connectionPhase, commandTopic, onCommandTopicChange, onPublish, deviceConfig }) {
   const [measurementMs, setMeasurementMs] = useState("2000");
   const [sdLogMs, setSdLogMs] = useState("2000");
   const [mqttPublishMs, setMqttPublishMs] = useState("2000");
@@ -1145,6 +1145,19 @@ function DeviceSettingsTab({ connectionPhase, commandTopic, onCommandTopicChange
   const [hybridAcquireMs, setHybridAcquireMs] = useState("10000");
   const [hybridTxMs, setHybridTxMs] = useState("3000");
   const [feedback, setFeedback] = useState({});
+  const syncedRef = useRef(false);
+
+  useEffect(() => {
+    if (!deviceConfig || syncedRef.current) return;
+    syncedRef.current = true;
+    if (deviceConfig.measurementIntervalMs != null) setMeasurementMs(String(deviceConfig.measurementIntervalMs));
+    if (deviceConfig.sdLogIntervalMs != null) setSdLogMs(String(deviceConfig.sdLogIntervalMs));
+    if (deviceConfig.mqttPublishIntervalMs != null) setMqttPublishMs(String(deviceConfig.mqttPublishIntervalMs));
+    if (deviceConfig.sdRetentionDays != null) setSdRetentionDays(String(deviceConfig.sdRetentionDays));
+    if (deviceConfig.hybridWifiEnabled != null) setHybridEnabled(deviceConfig.hybridWifiEnabled);
+    if (deviceConfig.hybridAcquireMs != null) setHybridAcquireMs(String(deviceConfig.hybridAcquireMs));
+    if (deviceConfig.hybridTxMs != null) setHybridTxMs(String(deviceConfig.hybridTxMs));
+  }, [deviceConfig]);
 
   const isConnected = connectionPhase === "connected";
 
@@ -1698,6 +1711,7 @@ export default function App() {
           commandTopic={commandTopic}
           onCommandTopicChange={setCommandTopic}
           onPublish={publishDeviceCommand}
+          deviceConfig={telemetry?.config ?? null}
         />
       )}
 

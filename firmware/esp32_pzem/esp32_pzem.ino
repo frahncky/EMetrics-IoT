@@ -114,8 +114,8 @@ constexpr bool MQTT_RETAINED = true;
 // O payload inclui metadados de rastreabilidade (E13) e estado do SD. O
 // PubSubClient conta tópico e cabeçalhos dentro do próprio buffer, por isso o
 // buffer MQTT precisa ser maior que o JSON isolado.
-constexpr size_t TELEMETRY_PAYLOAD_SIZE = 512;            // bytes por payload JSON
-constexpr size_t MQTT_BUFFER_SIZE = 768;                  // payload + tópico MQTT + cabeçalhos
+constexpr size_t TELEMETRY_PAYLOAD_SIZE = 768;            // bytes por payload JSON
+constexpr size_t MQTT_BUFFER_SIZE = 1024;                 // payload + tópico MQTT + cabeçalhos
 constexpr size_t TELEMETRY_QUEUE_CAPACITY = 30;           // capacidade do buffer circular offline
 constexpr uint8_t FLUSH_BATCH_LIMIT = 5;                  // publicacoes por iteracao do loop
 constexpr uint16_t HISTORY_REPLAY_LIMIT = 300;            // linhas maximas por resposta de historico
@@ -1966,7 +1966,9 @@ bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize) {
       payloadBufferSize,
       "{\"voltage\":%.2f,\"current\":%.3f,\"power\":%.2f,\"pf\":%.3f,\"frequency\":%.2f,\"energy\":%.3f,"
       "\"temperature\":%s,\"crcErrors\":%lu,\"timestamp\":%llu,\"sequence\":%lu,\"timeSynced\":%s,"
-      "\"storage\":{\"usingSd\":%s,\"sdAvailable\":%s,\"sdUsedBytes\":%llu,\"sdTotalBytes\":%llu,\"sdUsagePercent\":%.2f}}",
+      "\"storage\":{\"usingSd\":%s,\"sdAvailable\":%s,\"sdUsedBytes\":%llu,\"sdTotalBytes\":%llu,\"sdUsagePercent\":%.2f},"
+      "\"config\":{\"measurementIntervalMs\":%lu,\"sdLogIntervalMs\":%lu,\"mqttPublishIntervalMs\":%lu,"
+      "\"sdRetentionDays\":%u,\"hybridWifiEnabled\":%s,\"hybridAcquireMs\":%lu,\"hybridTxMs\":%lu}}",
       voltage,
       current,
       power,
@@ -1982,7 +1984,14 @@ bool buildMetricsPayload(char* payloadBuffer, size_t payloadBufferSize) {
       storage.sdAvailable ? "true" : "false",
       static_cast<unsigned long long>(storage.usedBytes),
       static_cast<unsigned long long>(storage.totalBytes),
-      storage.usagePercent);
+      storage.usagePercent,
+      static_cast<unsigned long>(measurementIntervalMs),
+      static_cast<unsigned long>(sdLogIntervalMs),
+      static_cast<unsigned long>(mqttPublishIntervalMs),
+      static_cast<unsigned int>(config.sdRetentionDays),
+      hybridWifiEnabled ? "true" : "false",
+      static_cast<unsigned long>(hybridAcquireWindowMs),
+      static_cast<unsigned long>(hybridTxWindowMs));
 
   return payloadLength > 0 && static_cast<size_t>(payloadLength) < payloadBufferSize;
 }
