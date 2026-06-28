@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ScatterChart, Scatter, LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine, Brush
 } from "recharts";
 import {
   connectMqtt,
   publishCommand,
   DEFAULT_MQTT_CONFIG,
 } from "./services/mqttService";
-import { err, fmt, sign, computeStats, formatDuration, parseCsvToData } from "./utils";
+import { err, fmt, sign, computeStats, parseCsvToData } from "./utils";
 
 // ─── Paleta de cores (tema instrumento técnico) ───────────────────────────────
 const C = {
@@ -30,7 +30,6 @@ const ALERT_SETTINGS_KEY = "emetrics.alert-settings";
 const COMMAND_TOPIC_KEY = "emetrics.cmd-topic";
 const DEFAULT_COMMAND_TOPIC = "emetrics/pzem/history/request";
 const DEVICE_TIMEOUT_MS = 15000;
-const MAX_ACQUISITION_DURATION_SECONDS = 24 * 60 * 60;
 const DEFAULT_ALERT_SETTINGS = {
   voltageMin: 200,
   voltageMax: 240,
@@ -363,46 +362,9 @@ const EXPORT_FORMATS = [
   { id: "eps",  label: "EPS"  },
 ];
 
-const LIVE_CHARTS = [
-  { id: "voltage", fileName: "tendencia_tensao.png", title: "Tensão — tendência ao vivo" },
-  { id: "current", fileName: "tendencia_corrente.png", title: "Corrente — tendência ao vivo" },
-  { id: "power", fileName: "potencias_eletricas.png", title: "Potências elétricas — últimas leituras" },
-  { id: "pf", fileName: "tendencia_fator_potencia.png", title: "Fator de potência — tendência ao vivo" },
-  { id: "energy", fileName: "energia_acumulada.png", title: "Energia acumulada (kWh)" },
-  { id: "temperature", fileName: "temperatura_esp32.png", title: "Temperatura ESP32 — deriva térmica" },
-];
-
-const DEFAULT_LIVE_CHART_SELECTION = LIVE_CHARTS.reduce(
-  (selection, chart) => ({ ...selection, [chart.id]: true }),
-  {},
-);
-
-const DEFAULT_EXPORT_FORMAT_SELECTION = {
-  png: true,
-  jpeg: false,
-  eps: false,
-};
-
-function ChartCard({
-  title,
-  children,
-  accent,
-  fileName,
-  chartId,
-  selectable = false,
-  selected = false,
-  onSelectedChange,
-  onChartNode,
-}) {
+function ChartCard({ title, children, accent, fileName }) {
   const chartRef = useRef(null);
   const [exporting, setExporting] = useState(null);
-
-  useEffect(() => {
-    if (!onChartNode || !chartId) return undefined;
-
-    onChartNode(chartId, chartRef.current);
-    return () => onChartNode(chartId, null);
-  }, [chartId, onChartNode]);
 
   const exportChart = async (format) => {
     setExporting(format);
@@ -419,16 +381,7 @@ function ChartCard({
     <Card
       title={title}
       accent={accent}
-      action={selectable ? (
-        <label className="chart-select-control" title="Incluir este gráfico no download em lote">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={event => onSelectedChange?.(chartId, event.target.checked)}
-          />
-          <span>Marcar</span>
-        </label>
-      ) : (
+      action={
         <div className="chart-export-group">
           {EXPORT_FORMATS.map(({ id, label }) => (
             <button
@@ -443,7 +396,7 @@ function ChartCard({
             </button>
           ))}
         </div>
-      )}
+      }
     >
       <div ref={chartRef}>{children}</div>
     </Card>
@@ -710,97 +663,6 @@ function SettingsField({ label, type = "text", value, onChange, placeholder, hel
 }
 
 
-function AcquisitionControls({
-  acquisition,
-  elapsedMs,
-  connectionPhase,
-  exportFormats,
-  selectedChartCount,
-  exportingCharts,
-  onDurationChange,
-  onStart,
-  onPause,
-  onStop,
-  onExportFormatChange,
-  onDownloadSelectedCharts,
-}) {
-  const durationMs = acquisition.durationSeconds * 1000;
-  const remainingMs = Math.max(0, durationMs - elapsedMs);
-  const isConnected = connectionPhase === "connected";
-  const selectedFormatCount = EXPORT_FORMATS.filter(({ id }) => exportFormats[id]).length;
-  const validDuration = Number.isInteger(acquisition.durationSeconds)
-    && acquisition.durationSeconds >= 1
-    && acquisition.durationSeconds <= MAX_ACQUISITION_DURATION_SECONDS;
-  const status = {
-    running: { label: "Coleta em andamento", tone: "good" },
-    paused: { label: "Coleta pausada", tone: "warning" },
-    stopped: { label: "Coleta encerrada", tone: "muted" },
-  }[acquisition.phase];
-
-  return (
-    <Card title="Controle de coleta">
-      <div className="acquisition-row">
-        <SettingsField
-          label="Período da coleta (segundos)"
-          type="number"
-          value={acquisition.durationSeconds}
-          min="1"
-          max={String(MAX_ACQUISITION_DURATION_SECONDS)}
-          disabled={acquisition.phase === "running"}
-          onChange={event => onDurationChange(event.target.value)}
-          help="Defina a duração antes de iniciar; limite de 24 horas."
-        />
-        <div className="acquisition-status">
-          <StatusBadge label={status.label} tone={status.tone} />
-          <span>Decorrido: {formatDuration(elapsedMs)}</span>
-          <span>Restante: {formatDuration(remainingMs)}</span>
-          <span>Amostras registradas: {acquisition.samples}</span>
-        </div>
-        <div className="connection-actions">
-          <button className="primary-button" onClick={onStart} disabled={!isConnected || !validDuration || acquisition.phase === "running"}>
-            {acquisition.phase === "paused" ? "Retomar" : "Iniciar"}
-          </button>
-          <button className="secondary-button" onClick={onPause} disabled={acquisition.phase !== "running"}>
-            Pausar
-          </button>
-          <button className="danger-button" onClick={onStop} disabled={acquisition.phase === "stopped"}>
-            Encerrar
-          </button>
-        </div>
-        <div className="acquisition-export-panel">
-          <div className="export-panel-title">Formatos da imagem</div>
-          <div className="export-format-group">
-            {EXPORT_FORMATS.map(({ id, label }) => (
-              <label key={id} className="export-format-option">
-                <input
-                  type="checkbox"
-                  checked={Boolean(exportFormats[id])}
-                  onChange={event => onExportFormatChange(id, event.target.checked)}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
-          </div>
-          <button
-            className="primary-button"
-            onClick={onDownloadSelectedCharts}
-            disabled={exportingCharts || selectedChartCount === 0 || selectedFormatCount === 0}
-            type="button"
-          >
-            {exportingCharts ? "Baixando…" : "Baixar figuras marcadas"}
-          </button>
-          <div className="export-panel-help">
-            {selectedChartCount} gráfico(s) · {selectedFormatCount} formato(s)
-          </div>
-        </div>
-      </div>
-      <div style={{ color: C.muted, fontSize: 11, marginTop: 12 }}>
-        O controle registra as leituras deste painel durante o período definido; o ESP32 continua publicando MQTT para não acumular leituras na fila.
-      </div>
-    </Card>
-  );
-}
-
 function LiveChartPlaceholder({ label }) {
   return (
     <div style={{ color: C.muted, display: "grid", minHeight: 240, placeItems: "center", fontSize: 13, textAlign: "center" }}>
@@ -822,13 +684,7 @@ function MonitorDashboard({
   onConnect,
   onDisconnect,
   onRequestNotifications,
-  onStartNewMeasurement,
-  acquisition,
-  acquisitionElapsedMs,
-  onAcquisitionDurationChange,
-  onStartAcquisition,
-  onPauseAcquisition,
-  onStopAcquisition,
+  onClearHistory,
 }) {
   const format = (value, digits = 2) => Number.isFinite(value) ? value.toFixed(digits) : "—";
   const latestMeasurement = telemetry?.measuredAt ?? telemetry?.receivedAt;
@@ -836,70 +692,7 @@ function MonitorDashboard({
     ? latestMeasurement.toLocaleTimeString("pt-BR")
     : "Aguardando a primeira leitura";
   const mqttTone = connection.phase === "connected" ? "good" : connection.phase === "connecting" ? "warning" : connection.phase === "error" ? "bad" : "muted";
-  const chartNodesRef = useRef({});
-  const [selectedLiveCharts, setSelectedLiveCharts] = useState(DEFAULT_LIVE_CHART_SELECTION);
-  const [exportFormats, setExportFormats] = useState(DEFAULT_EXPORT_FORMAT_SELECTION);
-  const [exportingCharts, setExportingCharts] = useState(false);
-  const selectedChartCount = LIVE_CHARTS.filter(({ id }) => selectedLiveCharts[id]).length;
-
-  const registerLiveChartNode = useCallback((chartId, node) => {
-    if (node) {
-      chartNodesRef.current[chartId] = node;
-    } else {
-      delete chartNodesRef.current[chartId];
-    }
-  }, []);
-
-  const changeLiveChartSelection = useCallback((chartId, selected) => {
-    setSelectedLiveCharts(current => ({ ...current, [chartId]: selected }));
-  }, []);
-
-  const changeExportFormat = useCallback((formatId, selected) => {
-    setExportFormats(current => ({ ...current, [formatId]: selected }));
-  }, []);
-
-  const downloadSelectedLiveCharts = useCallback(async () => {
-    const charts = LIVE_CHARTS.filter(({ id }) => selectedLiveCharts[id]);
-    const formats = EXPORT_FORMATS.filter(({ id }) => exportFormats[id]);
-
-    if (!charts.length) {
-      window.alert("Marque pelo menos um gráfico para baixar.");
-      return;
-    }
-
-    if (!formats.length) {
-      window.alert("Marque pelo menos um formato de imagem.");
-      return;
-    }
-
-    setExportingCharts(true);
-    const failures = [];
-    try {
-      for (const chart of charts) {
-        const chartNode = chartNodesRef.current[chart.id];
-        if (!chartNode) {
-          failures.push(chart.title + ": gráfico indisponível");
-          continue;
-        }
-
-        for (const format of formats) {
-          try {
-            await downloadChart(chartNode, chart.fileName, format.id);
-            await wait(BATCH_DOWNLOAD_DELAY_MS);
-          } catch (error) {
-            failures.push(chart.title + " (" + format.label + "): " + (error.message || "falha na exportação"));
-          }
-        }
-      }
-
-      if (failures.length) {
-        window.alert("Algumas figuras não foram baixadas:\n\n" + failures.join("\n"));
-      }
-    } finally {
-      setExportingCharts(false);
-    }
-  }, [exportFormats, selectedLiveCharts]);
-
+  const brushProps = { height: 20, stroke: C.border, travellerWidth: 8, fill: C.bg };
 
   return (
     <>
@@ -907,8 +700,8 @@ function MonitorDashboard({
         <div className="status-row">
           <StatusBadge label={connection.label} tone={mqttTone} />
           <StatusBadge label={deviceOnline ? "ESP32 online" : telemetry ? "ESP32 sem telemetria" : "ESP32 aguardando"} tone={deviceOnline ? "good" : telemetry ? "bad" : "warning"} />
-          <button className="primary-button" onClick={onStartNewMeasurement} style={{ marginLeft: "auto" }}>
-            Iniciar nova leitura
+          <button className="secondary-button" onClick={onClearHistory} style={{ marginLeft: "auto" }}>
+            Limpar histórico
           </button>
           <span style={{ color: C.muted, fontSize: 12 }}>Última leitura: {lastUpdate}</span>
         </div>
@@ -925,21 +718,6 @@ function MonitorDashboard({
         </div>
       </Card>
 
-      <AcquisitionControls
-        acquisition={acquisition}
-        elapsedMs={acquisitionElapsedMs}
-        connectionPhase={connection.phase}
-        exportFormats={exportFormats}
-        selectedChartCount={selectedChartCount}
-        exportingCharts={exportingCharts}
-        onDurationChange={onAcquisitionDurationChange}
-        onStart={onStartAcquisition}
-        onPause={onPauseAcquisition}
-        onStop={onStopAcquisition}
-        onExportFormatChange={changeExportFormat}
-        onDownloadSelectedCharts={downloadSelectedLiveCharts}
-      />
-
       <div className="metric-grid" style={{ marginBottom: 20 }}>
         <MetricCard label="Tensão" value={format(telemetry?.voltage)} unit="V" accent={telemetry && (telemetry.voltage < alertSettings.voltageMin || telemetry.voltage > alertSettings.voltageMax) ? C.red : C.cyan} />
         <MetricCard label="Corrente" value={format(telemetry?.current, 3)} unit="A" accent={C.purple} />
@@ -954,23 +732,16 @@ function MonitorDashboard({
       </div>
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
-        <ChartCard
-          title="Tensão — tendência ao vivo"
-          fileName="tendencia_tensao.png"
-          chartId="voltage"
-          selectable
-          selected={Boolean(selectedLiveCharts.voltage)}
-          onSelectedChange={changeLiveChartSelection}
-          onChartNode={registerLiveChartNode}
-        >
+        <ChartCard title="Tensão — tendência ao vivo" fileName="tendencia_tensao.png">
           {history.length ? (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={260}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
-                <YAxis tick={{ fill: C.cyan, fontSize: 11 }} tickFormatter={value => `${value}V`} />
+                <YAxis tick={{ fill: C.cyan, fontSize: 11 }} tickFormatter={v => `${v}V`} />
                 <Tooltip content={<TT />} />
-                <Line type="monotone" dataKey="voltage" name="Tensão" stroke={C.cyan} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="voltage" name="Tensão" stroke={C.cyan} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Brush dataKey="time" {...brushProps} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -978,48 +749,34 @@ function MonitorDashboard({
           )}
         </ChartCard>
 
-        <ChartCard
-          title="Corrente — tendência ao vivo"
-          fileName="tendencia_corrente.png"
-          chartId="current"
-          selectable
-          selected={Boolean(selectedLiveCharts.current)}
-          onSelectedChange={changeLiveChartSelection}
-          onChartNode={registerLiveChartNode}
-        >
+        <ChartCard title="Corrente — tendência ao vivo" fileName="tendencia_corrente.png">
           {history.length ? (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={260}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
-                <YAxis tick={{ fill: C.purple, fontSize: 11 }} tickFormatter={value => `${value}A`} />
+                <YAxis tick={{ fill: C.purple, fontSize: 11 }} tickFormatter={v => `${v}A`} />
                 <Tooltip content={<TT />} />
-                <Line type="monotone" dataKey="current" name="Corrente" stroke={C.purple} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="current" name="Corrente" stroke={C.purple} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Brush dataKey="time" {...brushProps} />
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de corrente." />}
         </ChartCard>
 
-        <ChartCard
-          title="Potências elétricas — últimas leituras"
-          fileName="potencias_eletricas.png"
-          chartId="power"
-          selectable
-          selected={Boolean(selectedLiveCharts.power)}
-          onSelectedChange={changeLiveChartSelection}
-          onChartNode={registerLiveChartNode}
-        >
+        <ChartCard title="Potências elétricas — últimas leituras" fileName="potencias_eletricas.png">
           {history.length ? (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={280}>
               <LineChart data={history} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} />
                 <Tooltip content={<TT />} />
                 <Legend wrapperStyle={{ fontSize: 12, color: C.muted }} />
-                <Line type="monotone" dataKey="power" name="Ativa (W)" stroke={C.amber} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} activeDot={{ r: 4 }} />
-                <Line type="monotone" dataKey="apparentPower" name="Aparente (VA)" stroke={C.cyan} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} />
-                <Line type="monotone" dataKey="reactivePower" name="Reativa* (VAr)" stroke={C.purple} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} />
+                <Line type="monotone" dataKey="power" name="Ativa (W)" stroke={C.amber} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="apparentPower" name="Aparente (VA)" stroke={C.cyan} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="reactivePower" name="Reativa* (VAr)" stroke={C.purple} strokeWidth={2} dot={false} />
+                <Brush dataKey="time" {...brushProps} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -1027,40 +784,25 @@ function MonitorDashboard({
           )}
         </ChartCard>
 
-        <ChartCard
-          title="Fator de potência — tendência ao vivo"
-          fileName="tendencia_fator_potencia.png"
-          chartId="pf"
-          selectable
-          selected={Boolean(selectedLiveCharts.pf)}
-          onSelectedChange={changeLiveChartSelection}
-          onChartNode={registerLiveChartNode}
-        >
+        <ChartCard title="Fator de potência — tendência ao vivo" fileName="tendencia_fator_potencia.png">
           {history.length ? (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={260}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
                 <YAxis domain={[0, 1.1]} tick={{ fill: C.green, fontSize: 11 }} />
                 <Tooltip content={<TT />} />
                 <ReferenceLine y={1} stroke={C.border} strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="pf" name="Fator de potência" stroke={C.green} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} />
+                <Line type="monotone" dataKey="pf" name="Fator de potência" stroke={C.green} strokeWidth={2} dot={false} />
+                <Brush dataKey="time" {...brushProps} />
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de fator de potência." />}
         </ChartCard>
 
-        <ChartCard
-          title="Energia acumulada (kWh)"
-          fileName="energia_acumulada.png"
-          chartId="energy"
-          selectable
-          selected={Boolean(selectedLiveCharts.energy)}
-          onSelectedChange={changeLiveChartSelection}
-          onChartNode={registerLiveChartNode}
-        >
+        <ChartCard title="Energia acumulada (kWh)" fileName="energia_acumulada.png">
           {history.length ? (
-            <ResponsiveContainer width="100%" height={240}>
+            <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={history} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="energyFill" x1="0" x2="0" y1="0" y2="1">
@@ -1070,31 +812,25 @@ function MonitorDashboard({
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
-                <YAxis tick={{ fill: C.green, fontSize: 11 }} tickFormatter={value => `${value} kWh`} />
+                <YAxis tick={{ fill: C.green, fontSize: 11 }} tickFormatter={v => `${v} kWh`} />
                 <Tooltip content={<TT />} />
-                <Area type="monotone" dataKey="energy" name="Energia" stroke={C.green} strokeWidth={2} dot={history.length < 2 ? { r: 3 } : false} fill="url(#energyFill)" />
+                <Area type="monotone" dataKey="energy" name="Energia" stroke={C.green} strokeWidth={2} dot={false} fill="url(#energyFill)" />
+                <Brush dataKey="time" {...brushProps} />
               </AreaChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de energia acumulada." />}
         </ChartCard>
 
-        <ChartCard
-          title="Temperatura ESP32 — deriva térmica"
-          fileName="temperatura_esp32.png"
-          chartId="temperature"
-          selectable
-          selected={Boolean(selectedLiveCharts.temperature)}
-          onSelectedChange={changeLiveChartSelection}
-          onChartNode={registerLiveChartNode}
-        >
+        <ChartCard title="Temperatura ESP32 — deriva térmica" fileName="temperatura_esp32.png">
           {history.some(h => h.temperature != null) ? (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={220}>
               <LineChart data={history} margin={{ top: 8, right: 14, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
                 <XAxis dataKey="time" tick={{ fill: C.muted, fontSize: 10 }} minTickGap={28} />
                 <YAxis tick={{ fill: C.amber, fontSize: 11 }} tickFormatter={v => `${v}°C`} />
                 <Tooltip content={<TT />} />
-                <Line type="monotone" dataKey="temperature" name="Temp. (°C)" stroke={C.amber} strokeWidth={2} dot={history.filter(h => h.temperature != null).length < 2 ? { r: 3 } : false} />
+                <Line type="monotone" dataKey="temperature" name="Temp. (°C)" stroke={C.amber} strokeWidth={2} dot={false} />
+                <Brush dataKey="time" {...brushProps} />
               </LineChart>
             </ResponsiveContainer>
           ) : <LiveChartPlaceholder label="Aguardando leituras de temperatura do ESP32." />}
@@ -1307,18 +1043,10 @@ export default function App() {
   const [telemetry, setTelemetry] = useState(null);
   const [liveHistory, setLiveHistory] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [acquisition, setAcquisition] = useState({
-    phase: "stopped",
-    durationSeconds: 60,
-    elapsedMs: 0,
-    startedAtMs: null,
-    samples: 0,
-  });
   const [clock, setClock] = useState(Date.now());
   const clientRef = useRef(null);
   const alertSettingsRef = useRef(alertSettings);
   const alertGateRef = useRef({ voltage: false, energy: false, offline: false });
-  const acquisitionRef = useRef(acquisition);
 
   useEffect(() => {
     alertSettingsRef.current = alertSettings;
@@ -1337,10 +1065,6 @@ export default function App() {
     const { password, ...safeConfig } = mqttConfig;
     window.localStorage.setItem(MQTT_SETTINGS_KEY, JSON.stringify(safeConfig));
   }, [mqttConfig]);
-
-  useEffect(() => {
-    acquisitionRef.current = acquisition;
-  }, [acquisition]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
@@ -1364,119 +1088,12 @@ export default function App() {
     [clock, connection.phase, telemetry],
   );
 
-  function elapsedAcquisitionMs(session, now = Date.now()) {
-    if (session.phase !== "running" || session.startedAtMs == null) {
-      return session.elapsedMs;
-    }
-    return session.elapsedMs + Math.max(0, now - session.startedAtMs);
-  }
-
-  function updateAcquisition(updater) {
-    setAcquisition(current => {
-      const next = updater(current);
-      acquisitionRef.current = next;
-      return next;
-    });
-  }
-
-  const acquisitionElapsedMs = elapsedAcquisitionMs(acquisition, clock);
-
-  function changeAcquisitionDuration(value) {
-    const durationSeconds = Number(value);
-    updateAcquisition(current => ({
-      ...current,
-      durationSeconds: Number.isInteger(durationSeconds) ? durationSeconds : 0,
-    }));
-  }
-
-  function startAcquisition() {
-    if (connection.phase !== "connected") {
-      setConnection(current => ({ ...current, message: "Conecte ao MQTT antes de iniciar a coleta." }));
-      return;
-    }
-
-    const now = Date.now();
-    const current = acquisitionRef.current;
-    if (!Number.isInteger(current.durationSeconds)
-      || current.durationSeconds < 1
-      || current.durationSeconds > MAX_ACQUISITION_DURATION_SECONDS) {
-      setConnection(state => ({ ...state, message: "Defina um período de coleta entre 1 segundo e 24 horas." }));
-      return;
-    }
-
-    if (current.phase === "paused") {
-      updateAcquisition(state => ({ ...state, phase: "running", startedAtMs: now }));
-      return;
-    }
-
-    setLiveHistory([]);
-    updateAcquisition(state => ({
-      ...state,
-      phase: "running",
-      elapsedMs: 0,
-      startedAtMs: now,
-      samples: 0,
-    }));
-  }
-
-  function pauseAcquisition() {
-    updateAcquisition(current => {
-      if (current.phase !== "running") return current;
-      return {
-        ...current,
-        phase: "paused",
-        elapsedMs: elapsedAcquisitionMs(current),
-        startedAtMs: null,
-      };
-    });
-  }
-
-  function stopAcquisition(message = "Coleta encerrada.") {
-    updateAcquisition(current => {
-      if (current.phase === "stopped") return current;
-      return {
-        ...current,
-        phase: "stopped",
-        elapsedMs: Math.min(
-          elapsedAcquisitionMs(current),
-          current.durationSeconds * 1000,
-        ),
-        startedAtMs: null,
-      };
-    });
-    setConnection(current => ({ ...current, message }));
-  }
-
-  function startNewMeasurement() {
-    if (connection.phase !== "connected") {
-      setConnection(current => ({ ...current, message: "Conecte ao MQTT antes de iniciar uma nova leitura." }));
-      return;
-    }
-
-    const current = acquisitionRef.current;
-    if (!Number.isInteger(current.durationSeconds)
-      || current.durationSeconds < 1
-      || current.durationSeconds > MAX_ACQUISITION_DURATION_SECONDS) {
-      setConnection(state => ({ ...state, message: "Defina um período de coleta entre 1 segundo e 24 horas." }));
-      return;
-    }
-
-    if (!window.confirm("Iniciar uma nova leitura? Os valores e gráficos atuais deste painel serão limpos.")) {
-      return;
-    }
-
+  function clearHistory() {
+    if (!window.confirm("Limpar histórico? Os valores e gráficos atuais serão apagados.")) return;
     setTelemetry(null);
     setLiveHistory([]);
     setAlerts([]);
     alertGateRef.current = { voltage: false, energy: false, offline: false };
-    updateAcquisition(state => ({
-      ...state,
-      phase: "running",
-      elapsedMs: 0,
-      startedAtMs: Date.now(),
-      samples: 0,
-    }));
-    setConnection(current => ({ ...current, message: "Nova leitura iniciada." }));
   }
 
   function appendAlert({ key, title, message, severity }) {
@@ -1543,12 +1160,7 @@ export default function App() {
             pf: nextTelemetry.pf,
             energy: nextTelemetry.energy,
             temperature: nextTelemetry.temperature,
-          }].slice(-60));
-          if (acquisitionRef.current.phase === "running") {
-            updateAcquisition(current => current.phase === "running"
-              ? { ...current, samples: current.samples + 1 }
-              : current);
-          }
+          }].slice(-300));
           clearAlertGate("offline");
           evaluateTelemetryAlerts(nextTelemetry);
         },
@@ -1564,7 +1176,6 @@ export default function App() {
   }
 
   function disconnect() {
-    pauseAcquisition();
     clientRef.current?.removeAllListeners();
     clientRef.current?.end(true);
     clientRef.current = null;
@@ -1600,22 +1211,6 @@ export default function App() {
       });
     }
   }, [clock, connection.phase, deviceOnline, telemetry]);
-
-  useEffect(() => {
-    if (acquisition.phase !== "running" || connection.phase === "connected") {
-      return;
-    }
-    pauseAcquisition();
-  }, [connection.phase]);
-
-  useEffect(() => {
-    if (acquisition.phase !== "running") {
-      return;
-    }
-    if (acquisitionElapsedMs >= acquisition.durationSeconds * 1000) {
-      stopAcquisition("Período de coleta concluído.");
-    }
-  }, [acquisition.phase, acquisition.durationSeconds, acquisitionElapsedMs]);
 
   const derived = data.map(d => ({
     ...d,
@@ -1729,13 +1324,7 @@ export default function App() {
           onConnect={connect}
           onDisconnect={disconnect}
           onRequestNotifications={requestNotifications}
-          onStartNewMeasurement={startNewMeasurement}
-          acquisition={acquisition}
-          acquisitionElapsedMs={acquisitionElapsedMs}
-          onAcquisitionDurationChange={changeAcquisitionDuration}
-          onStartAcquisition={startAcquisition}
-          onPauseAcquisition={pauseAcquisition}
-          onStopAcquisition={() => stopAcquisition()}
+          onClearHistory={clearHistory}
         />
       )}
 
