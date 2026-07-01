@@ -872,8 +872,6 @@ function PhasorDiagram({ telemetry }) {
             ))}
             <line x1="20" y1={cy} x2="400" y2={cy} stroke={axisTone} strokeOpacity="0.95" strokeWidth="1.3" />
             <line x1={cx} y1="18" x2={cx} y2="402" stroke={axisTone} strokeOpacity="0.95" strokeWidth="1.3" />
-            <text x="386" y={cy - 8} fill="#7fb5ff" fontSize="11" fontWeight="700">Re</text>
-            <text x="24" y="22" fill="#7fb5ff" fontSize="11" fontWeight="700">Im</text>
 
             {phasor.phaseAngleDeg > 0.4 && (
               <>
@@ -912,7 +910,7 @@ function PhasorDiagram({ telemetry }) {
             />
             <circle cx={cx} cy={cy} r="4" fill="#00d0b6" />
             <text x={Math.min(voltageLabel.x, 348)} y={voltageLabel.y - 8} fill={voltageTone} fontSize="12" fontWeight="800">
-              V {fmt(phasor.voltage, 1)}
+              V
             </text>
             <text
               x={currentLabel.x}
@@ -922,7 +920,7 @@ function PhasorDiagram({ telemetry }) {
               fontSize="12"
               fontWeight="800"
             >
-              I {fmt(phasor.current, 2)}
+              I
             </text>
           </svg>
         </div>
