@@ -22,3 +22,14 @@ test("não trata timestamp sem sincronização como uma medição atual", () => 
 
   assert.equal(telemetry.measuredAt, null);
 });
+
+test("preserva angulos fasoriais opcionais do payload", () => {
+  const telemetry = parseTelemetry(
+    '{"voltage":220.1,"current":0.51,"power":112,"pf":0.98,' +
+    '"frequency":60,"energy":1.23,"phase_angle_deg":11.48,' +
+    '"currentAngleDeg":-11.48}',
+  );
+
+  assert.equal(telemetry.phaseAngleDeg, 11.48);
+  assert.equal(telemetry.currentAngleDeg, -11.48);
+});

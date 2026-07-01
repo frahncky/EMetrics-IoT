@@ -671,6 +671,204 @@ function LiveChartPlaceholder({ label }) {
   );
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeDegrees(value) {
+  if (!Number.isFinite(value)) return 0;
+  const normalized = ((((value + 180) % 360) + 360) % 360) - 180;
+  return normalized === -180 ? 180 : normalized;
+}
+
+function phasorPoint(cx, cy, length, angleDeg) {
+  const radians = angleDeg * Math.PI / 180;
+  return {
+    x: cx + Math.cos(radians) * length,
+    y: cy - Math.sin(radians) * length,
+  };
+}
+
+function signedAngle(value) {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.05) return "0.0°";
+  return `${value > 0 ? "+" : ""}${fmt(value, 1)}°`;
+}
+
+function resolvePhasor(telemetry) {
+  if (!telemetry) return null;
+
+  const voltage = Number(telemetry.voltage);
+  const current = Number(telemetry.current);
+  if (!Number.isFinite(voltage) || !Number.isFinite(current)) return null;
+
+  const apparentPower = Number.isFinite(telemetry.apparentPower)
+    ? telemetry.apparentPower
+    : voltage * current;
+  const activePower = Number(telemetry.power);
+  const pfFromPower = apparentPower > 0 && Number.isFinite(activePower)
+    ? activePower / apparentPower
+    : null;
+  const rawPf = Number.isFinite(telemetry.pf) ? telemetry.pf : pfFromPower;
+  const pf = rawPf == null ? null : clampNumber(Math.abs(rawPf), 0, 1);
+  const derivedPhase = pf == null ? null : Math.acos(pf) * 180 / Math.PI;
+  const hasExplicitAngle = Number.isFinite(telemetry.currentAngleDeg)
+    || Number.isFinite(telemetry.phaseAngleDeg);
+  const currentAngleDeg = normalizeDegrees(
+    Number.isFinite(telemetry.currentAngleDeg)
+      ? telemetry.currentAngleDeg
+      : Number.isFinite(telemetry.phaseAngleDeg)
+        ? telemetry.phaseAngleDeg
+        : -(derivedPhase ?? 0),
+  );
+  const phaseAngleDeg = Math.abs(currentAngleDeg);
+  const reactivePower = Number.isFinite(telemetry.reactivePower)
+    ? telemetry.reactivePower
+    : Math.sqrt(Math.max(0, apparentPower ** 2 - activePower ** 2));
+  const relation = currentAngleDeg < -0.05
+    ? "Corrente em atraso"
+    : currentAngleDeg > 0.05
+      ? "Corrente adiantada"
+      : "Tensão e corrente em fase";
+
+  return {
+    voltage,
+    current,
+    apparentPower,
+    activePower,
+    reactivePower,
+    pf,
+    phaseAngleDeg,
+    currentAngleDeg,
+    relation,
+    source: hasExplicitAngle ? "Ângulo informado pelo payload" : "Ângulo estimado pelo FP",
+  };
+}
+
+function PhasorStat({ label, value, unit, color = C.text, sub }) {
+  return (
+    <div className="phasor-stat">
+      <div className="phasor-stat-label">{label}</div>
+      <div className="phasor-stat-value" style={{ color }}>
+        {value}<span>{unit}</span>
+      </div>
+      {sub && <div className="phasor-stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
+function PhasorDiagram({ telemetry }) {
+  const phasor = useMemo(() => resolvePhasor(telemetry), [telemetry]);
+
+  if (!phasor) {
+    return (
+      <Card title="Diagrama fasorial em tempo real" accent={`${C.cyan}44`}>
+        <LiveChartPlaceholder label="Aguardando telemetria para desenhar tensão e corrente." />
+      </Card>
+    );
+  }
+
+  const cx = 160;
+  const cy = 130;
+  const voltageLength = phasor.voltage > 0 ? 102 : 0;
+  const currentLength = phasor.current > 0 ? 88 : 0;
+  const voltageEnd = phasorPoint(cx, cy, voltageLength, 0);
+  const currentEnd = phasorPoint(cx, cy, currentLength, phasor.currentAngleDeg);
+  const arcRadius = 42;
+  const arcStart = phasorPoint(cx, cy, arcRadius, 0);
+  const arcEnd = phasorPoint(cx, cy, arcRadius, phasor.currentAngleDeg);
+  const arcLabel = phasorPoint(cx, cy, arcRadius + 20, phasor.currentAngleDeg / 2);
+  const sweepFlag = phasor.currentAngleDeg < 0 ? 1 : 0;
+
+  return (
+    <Card title="Diagrama fasorial em tempo real" accent={`${C.cyan}44`}>
+      <div className="phasor-card-grid">
+        <div className="phasor-plot-shell">
+          <svg
+            className="phasor-svg"
+            viewBox="0 0 320 260"
+            role="img"
+            aria-label={`Diagrama fasorial com tensão em 0 graus e corrente em ${signedAngle(phasor.currentAngleDeg)}`}
+          >
+            <defs>
+              <marker id="phasorVoltageArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                <path d="M 0 0 L 8 4 L 0 8 z" fill={C.cyan} />
+              </marker>
+              <marker id="phasorCurrentArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                <path d="M 0 0 L 8 4 L 0 8 z" fill={C.purple} />
+              </marker>
+            </defs>
+
+            {[36, 72, 108].map(radius => (
+              <circle key={radius} cx={cx} cy={cy} r={radius} fill="none" stroke={C.border} strokeDasharray="4 6" strokeWidth="1" />
+            ))}
+            <line x1="38" y1={cy} x2="282" y2={cy} stroke={C.border} strokeWidth="1" />
+            <line x1={cx} y1="24" x2={cx} y2="236" stroke={C.border} strokeWidth="1" />
+            <text x="284" y={cy - 8} fill={C.muted} fontSize="10">0°</text>
+            <text x={cx + 8} y="28" fill={C.muted} fontSize="10">90°</text>
+            <text x="22" y={cy - 8} fill={C.muted} fontSize="10">180°</text>
+            <text x={cx + 8} y="238" fill={C.muted} fontSize="10">-90°</text>
+
+            {phasor.phaseAngleDeg > 0.4 && (
+              <>
+                <path
+                  d={`M ${arcStart.x} ${arcStart.y} A ${arcRadius} ${arcRadius} 0 0 ${sweepFlag} ${arcEnd.x} ${arcEnd.y}`}
+                  fill="none"
+                  stroke={C.amber}
+                  strokeWidth="2"
+                />
+                <text x={arcLabel.x} y={arcLabel.y} textAnchor="middle" fill={C.amber} fontSize="12" fontWeight="700">
+                  {fmt(phasor.phaseAngleDeg, 1)}°
+                </text>
+              </>
+            )}
+
+            <line
+              x1={cx}
+              y1={cy}
+              x2={voltageEnd.x}
+              y2={voltageEnd.y}
+              stroke={C.cyan}
+              strokeWidth="5"
+              strokeLinecap="round"
+              markerEnd="url(#phasorVoltageArrow)"
+            />
+            <line
+              x1={cx}
+              y1={cy}
+              x2={currentEnd.x}
+              y2={currentEnd.y}
+              stroke={C.purple}
+              strokeWidth="5"
+              strokeLinecap="round"
+              markerEnd="url(#phasorCurrentArrow)"
+            />
+            <circle cx={cx} cy={cy} r="4" fill={C.text} />
+            <text x={voltageEnd.x + 10} y={voltageEnd.y - 8} fill={C.cyan} fontSize="13" fontWeight="800">V</text>
+            <text x={currentEnd.x + 10} y={currentEnd.y + (phasor.currentAngleDeg < 0 ? 16 : -8)} fill={C.purple} fontSize="13" fontWeight="800">I</text>
+          </svg>
+        </div>
+
+        <div className="phasor-details">
+          <div>
+            <div className="phasor-relation">{phasor.relation}</div>
+            <div className="phasor-source">{phasor.source} · tensão usada como referência em 0°.</div>
+          </div>
+          <div className="phasor-stat-grid">
+            <PhasorStat label="Ângulo I" value={signedAngle(phasor.currentAngleDeg)} unit="" color={C.amber} sub={`|φ| = ${fmt(phasor.phaseAngleDeg, 1)}°`} />
+            <PhasorStat label="Fator de potência" value={phasor.pf == null ? "—" : fmt(phasor.pf, 3)} unit="" color={C.green} />
+            <PhasorStat label="Tensão RMS" value={fmt(phasor.voltage, 2)} unit="V" color={C.cyan} />
+            <PhasorStat label="Corrente RMS" value={fmt(phasor.current, 3)} unit="A" color={C.purple} />
+            <PhasorStat label="Potência ativa" value={fmt(phasor.activePower, 2)} unit="W" color={C.amber} />
+            <PhasorStat label="Potência aparente" value={fmt(phasor.apparentPower, 2)} unit="VA" color={C.cyan} />
+          </div>
+          <div className="phasor-note">
+            Comprimentos de V e I usam escalas independentes para manter os fasores legíveis no painel.
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
 function MonitorDashboard({
   telemetry,
   history,
@@ -730,6 +928,8 @@ function MonitorDashboard({
         <MetricCard label="Fator de potência" value={format(telemetry?.pf)} unit="" accent={C.green} />
         <MetricCard label="Erros CRC" value={telemetry?.crcErrors != null ? String(telemetry.crcErrors) : "—"} unit="" accent={telemetry?.crcErrors > 0 ? C.red : C.green} />
       </div>
+
+      <PhasorDiagram telemetry={telemetry} />
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
         <ChartCard title="Tensão — tendência ao vivo" fileName="tendencia_tensao.png">
@@ -1158,6 +1358,8 @@ export default function App() {
             current: nextTelemetry.current,
             frequency: nextTelemetry.frequency,
             pf: nextTelemetry.pf,
+            phaseAngleDeg: nextTelemetry.phaseAngleDeg,
+            currentAngleDeg: nextTelemetry.currentAngleDeg,
             energy: nextTelemetry.energy,
             temperature: nextTelemetry.temperature,
           }].slice(-300));

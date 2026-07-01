@@ -249,3 +249,97 @@ button:disabled {
     width: 100%;
   }
 }
+
+.phasor-card-grid {
+  align-items: center;
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(280px, 1.1fr) minmax(240px, 0.9fr);
+}
+
+.phasor-plot-shell {
+  background: #121719;
+  border: 1px solid #2b3538;
+  border-radius: 8px;
+  display: grid;
+  min-height: 280px;
+  overflow: hidden;
+  place-items: center;
+}
+
+.phasor-svg {
+  max-width: 520px;
+  min-height: 260px;
+  width: 100%;
+}
+
+.phasor-details {
+  align-content: center;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.phasor-relation {
+  color: #edf1ef;
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.phasor-source,
+.phasor-note,
+.phasor-stat-sub {
+  color: #9aa5a4;
+  font-size: 12px;
+}
+
+.phasor-source {
+  margin-top: 4px;
+}
+
+.phasor-stat-grid {
+  border-top: 1px solid #2b3538;
+  display: grid;
+  gap: 0 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.phasor-stat {
+  border-bottom: 1px solid #2b3538;
+  min-width: 0;
+  padding: 10px 0;
+}
+
+.phasor-stat-label {
+  color: #9aa5a4;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.phasor-stat-value {
+  font-family: monospace;
+  font-size: 20px;
+  font-weight: 750;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.phasor-stat-value span {
+  color: #9aa5a4;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+@media (max-width: 900px) {
+  .phasor-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .phasor-stat-grid {
+    grid-template-columns: 1fr;
+  }
+}

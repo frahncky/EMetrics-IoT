@@ -24,6 +24,14 @@ function optionalFiniteNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function firstOptionalFiniteNumber(...values) {
+  for (const value of values) {
+    const number = optionalFiniteNumber(value);
+    if (number != null) return number;
+  }
+  return null;
+}
+
 function measuredAtFromPayload(decoded) {
   if (decoded.timeSynced === false) return null;
 
@@ -49,6 +57,18 @@ export function parseTelemetry(payload) {
   const power = Number(decoded.power);
   const apparentPower = voltage * current;
   const reactivePower = Math.sqrt(Math.max(0, apparentPower ** 2 - power ** 2));
+  const phaseAngleDeg = firstOptionalFiniteNumber(
+    decoded.phaseAngleDeg,
+    decoded.phase_angle_deg,
+    decoded.phaseAngle,
+    decoded.phase_angle,
+  );
+  const currentAngleDeg = firstOptionalFiniteNumber(
+    decoded.currentAngleDeg,
+    decoded.current_angle_deg,
+    decoded.currentPhaseDeg,
+    decoded.current_phase_deg,
+  );
   const receivedAt = new Date();
   const measuredAt = measuredAtFromPayload(decoded);
 
@@ -60,6 +80,8 @@ export function parseTelemetry(payload) {
     // O payload não diferencia carga indutiva de capacitiva; portanto Q é módulo.
     reactivePower,
     pf: Number(decoded.pf),
+    phaseAngleDeg,
+    currentAngleDeg,
     frequency: Number(decoded.frequency),
     energy: Number(decoded.energy),
     temperature: optionalFiniteNumber(decoded.temperature),
