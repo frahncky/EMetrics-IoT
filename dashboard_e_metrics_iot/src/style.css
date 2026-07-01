@@ -280,6 +280,13 @@ button:disabled {
   min-width: 0;
 }
 
+.phasor-header-row {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .phasor-relation {
   color: #edf1ef;
   font-size: 18px;
@@ -295,6 +302,34 @@ button:disabled {
 
 .phasor-source {
   margin-top: 4px;
+}
+
+.phasor-mode-toggle {
+  background: #121719;
+  border: 1px solid #2b3538;
+  border-radius: 6px;
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.phasor-mode-toggle button {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid #2b3538;
+  color: #9aa5a4;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 9px;
+}
+
+.phasor-mode-toggle button:first-child {
+  border-left: 0;
+}
+
+.phasor-mode-toggle button.active {
+  background: #c5a16c;
+  color: #121719;
 }
 
 .phasor-stat-grid {
@@ -339,6 +374,18 @@ button:disabled {
 }
 
 @media (max-width: 640px) {
+  .phasor-header-row {
+    grid-template-columns: 1fr;
+  }
+
+  .phasor-mode-toggle {
+    width: 100%;
+  }
+
+  .phasor-mode-toggle button {
+    flex: 1;
+  }
+
   .phasor-stat-grid {
     grid-template-columns: 1fr;
   }

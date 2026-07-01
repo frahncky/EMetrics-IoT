@@ -32,6 +32,15 @@ function firstOptionalFiniteNumber(...values) {
   return null;
 }
 
+function firstOptionalText(...values) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const text = value.trim();
+    if (text) return text;
+  }
+  return null;
+}
+
 function measuredAtFromPayload(decoded) {
   if (decoded.timeSynced === false) return null;
 
@@ -56,7 +65,15 @@ export function parseTelemetry(payload) {
   const current = Number(decoded.current);
   const power = Number(decoded.power);
   const apparentPower = voltage * current;
-  const reactivePower = Math.sqrt(Math.max(0, apparentPower ** 2 - power ** 2));
+  const estimatedReactivePower = Math.sqrt(Math.max(0, apparentPower ** 2 - power ** 2));
+  const reportedReactivePower = firstOptionalFiniteNumber(
+    decoded.reactivePower,
+    decoded.reactive_power,
+    decoded.reactive,
+    decoded.q,
+    decoded.var,
+  );
+  const reactivePower = reportedReactivePower ?? estimatedReactivePower;
   const phaseAngleDeg = firstOptionalFiniteNumber(
     decoded.phaseAngleDeg,
     decoded.phase_angle_deg,
@@ -77,11 +94,19 @@ export function parseTelemetry(payload) {
     current,
     power,
     apparentPower,
-    // O payload não diferencia carga indutiva de capacitiva; portanto Q é módulo.
     reactivePower,
+    reactivePowerSource: reportedReactivePower == null ? "estimated" : "payload",
     pf: Number(decoded.pf),
     phaseAngleDeg,
     currentAngleDeg,
+    loadType: firstOptionalText(
+      decoded.loadType,
+      decoded.load_type,
+      decoded.reactiveType,
+      decoded.reactive_type,
+      decoded.powerType,
+      decoded.power_type,
+    ),
     frequency: Number(decoded.frequency),
     energy: Number(decoded.energy),
     temperature: optionalFiniteNumber(decoded.temperature),

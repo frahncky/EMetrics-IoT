@@ -33,3 +33,15 @@ test("preserva angulos fasoriais opcionais do payload", () => {
   assert.equal(telemetry.phaseAngleDeg, 11.48);
   assert.equal(telemetry.currentAngleDeg, -11.48);
 });
+
+test("preserva potencia reativa assinada e tipo de carga", () => {
+  const telemetry = parseTelemetry(
+    '{"voltage":220.1,"current":0.51,"power":112,"pf":0.98,' +
+    '"frequency":60,"energy":1.23,"reactivePower":-24.5,' +
+    '"loadType":"capacitiva"}',
+  );
+
+  assert.equal(telemetry.reactivePower, -24.5);
+  assert.equal(telemetry.reactivePowerSource, "payload");
+  assert.equal(telemetry.loadType, "capacitiva");
+});
