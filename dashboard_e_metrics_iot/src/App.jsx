@@ -823,20 +823,24 @@ function PhasorDiagram({ telemetry }) {
     );
   }
 
-  const cx = 180;
-  const cy = 142;
-  const voltageLength = phasor.voltage > 0 ? 124 : 0;
-  const currentLength = phasor.current > 0 ? 106 : 0;
+  const cx = 210;
+  const cy = 210;
+  const outerRadius = 170;
+  const voltageLength = phasor.voltage > 0 ? outerRadius : 0;
+  const currentLength = phasor.current > 0 ? 118 : 0;
   const voltageEnd = phasorPoint(cx, cy, voltageLength, 0);
   const currentEnd = phasorPoint(cx, cy, currentLength, phasor.currentAngleDeg);
-  const voltageLabelX = Math.min(voltageEnd.x - 18, 292);
-  const currentLabelX = Math.min(currentEnd.x + 12, 306);
-  const arcRadius = 52;
+  const voltageLabel = phasorPoint(cx, cy, voltageLength + 16, 0);
+  const currentLabel = phasorPoint(cx, cy, currentLength + 22, phasor.currentAngleDeg);
+  const arcRadius = 55;
   const arcStart = phasorPoint(cx, cy, arcRadius, 0);
   const arcEnd = phasorPoint(cx, cy, arcRadius, phasor.currentAngleDeg);
-  const arcLabel = phasorPoint(cx, cy, arcRadius + 24, phasor.currentAngleDeg / 2);
+  const arcLabel = phasorPoint(cx, cy, arcRadius + 20, phasor.currentAngleDeg / 2);
   const sweepFlag = phasor.currentAngleDeg < 0 ? 1 : 0;
-  const currentTone = phasor.direction === "capacitive" ? C.purple : C.green;
+  const currentTone = phasor.direction === "capacitive" ? "#a35cff" : "#ff9f1c";
+  const voltageTone = "#2f6bff";
+  const gridTone = "#edf5ff";
+  const axisTone = "#f4f8ff";
   const modeOptions = [
     ["auto", "Auto"],
     ["inductive", "Indutiva"],
@@ -849,33 +853,27 @@ function PhasorDiagram({ telemetry }) {
         <div className="phasor-plot-shell">
           <svg
             className="phasor-svg"
-            viewBox="0 0 360 300"
+            viewBox="0 0 420 420"
             role="img"
             aria-label={`Diagrama fasorial com tensão em 0 graus e corrente em ${signedAngle(phasor.currentAngleDeg)}`}
           >
             <defs>
-              <marker id="phasorVoltageArrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
-                <path d="M 0 0 L 9 4.5 L 0 9 z" fill={C.cyan} />
+              <marker id="phasorVoltageArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={voltageTone} />
               </marker>
-              <marker id="phasorCurrentArrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
-                <path d="M 0 0 L 9 4.5 L 0 9 z" fill={currentTone} />
+              <marker id="phasorCurrentArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={currentTone} />
               </marker>
             </defs>
 
-            <rect x="0" y="0" width="360" height="300" rx="8" fill={C.bg} />
-            <path d={`M ${cx} ${cy} L ${cx + 126} ${cy}`} stroke={C.cyan} strokeOpacity="0.14" strokeWidth="16" strokeLinecap="round" />
-            <path d={`M ${cx} ${cy - 126} A 126 126 0 0 1 ${cx} ${cy + 126}`} fill="none" stroke={C.purple} strokeOpacity="0.1" strokeWidth="24" strokeLinecap="round" />
-            <path d={`M ${cx} ${cy + 126} A 126 126 0 0 1 ${cx} ${cy - 126}`} fill="none" stroke={C.green} strokeOpacity="0.09" strokeWidth="24" strokeLinecap="round" />
-
-            {[42, 84, 126].map(radius => (
-              <circle key={radius} cx={cx} cy={cy} r={radius} fill="none" stroke={C.border} strokeDasharray="2 8" strokeWidth="1" />
+            <rect x="0" y="0" width="420" height="420" fill="#162238" />
+            {[42.5, 85, 127.5, 170].map(radius => (
+              <circle key={radius} cx={cx} cy={cy} r={radius} fill="none" stroke={gridTone} strokeOpacity="0.88" strokeWidth="1.2" />
             ))}
-            <line x1="38" y1={cy} x2="322" y2={cy} stroke={C.border} strokeWidth="1" />
-            <line x1={cx} y1="24" x2={cx} y2="260" stroke={C.border} strokeWidth="1" />
-            <text x="315" y={cy - 10} fill={C.muted} fontSize="10">0°</text>
-            <text x={cx + 9} y="32" fill={C.muted} fontSize="10">+90°</text>
-            <text x="24" y={cy - 10} fill={C.muted} fontSize="10">180°</text>
-            <text x={cx + 9} y="260" fill={C.muted} fontSize="10">-90°</text>
+            <line x1="20" y1={cy} x2="400" y2={cy} stroke={axisTone} strokeOpacity="0.95" strokeWidth="1.3" />
+            <line x1={cx} y1="18" x2={cx} y2="402" stroke={axisTone} strokeOpacity="0.95" strokeWidth="1.3" />
+            <text x="386" y={cy - 8} fill="#7fb5ff" fontSize="11" fontWeight="700">Re</text>
+            <text x="24" y="22" fill="#7fb5ff" fontSize="11" fontWeight="700">Im</text>
 
             {phasor.phaseAngleDeg > 0.4 && (
               <>
@@ -883,10 +881,10 @@ function PhasorDiagram({ telemetry }) {
                   d={`M ${arcStart.x} ${arcStart.y} A ${arcRadius} ${arcRadius} 0 0 ${sweepFlag} ${arcEnd.x} ${arcEnd.y}`}
                   fill="none"
                   stroke={C.amber}
-                  strokeWidth="3"
+                  strokeWidth="2.6"
                   strokeLinecap="round"
                 />
-                <text x={arcLabel.x} y={arcLabel.y} textAnchor="middle" fill={C.amber} fontSize="13" fontWeight="800">
+                <text x={arcLabel.x} y={arcLabel.y} textAnchor="middle" fill={C.amber} fontSize="12" fontWeight="800">
                   {fmt(phasor.phaseAngleDeg, 1)}°
                 </text>
               </>
@@ -897,8 +895,8 @@ function PhasorDiagram({ telemetry }) {
               y1={cy}
               x2={voltageEnd.x}
               y2={voltageEnd.y}
-              stroke={C.cyan}
-              strokeWidth="5"
+              stroke={voltageTone}
+              strokeWidth="3.4"
               strokeLinecap="round"
               markerEnd="url(#phasorVoltageArrow)"
             />
@@ -908,25 +906,24 @@ function PhasorDiagram({ telemetry }) {
               x2={currentEnd.x}
               y2={currentEnd.y}
               stroke={currentTone}
-              strokeWidth="5"
+              strokeWidth="3.4"
               strokeLinecap="round"
               markerEnd="url(#phasorCurrentArrow)"
             />
-            <circle cx={cx} cy={cy} r="6" fill={C.surface} stroke={C.text} strokeWidth="2" />
-            <g transform={`translate(${voltageLabelX} ${voltageEnd.y - 34})`}>
-              <rect x="0" y="0" width="58" height="24" rx="5" fill={C.surface} stroke={C.cyan} strokeOpacity="0.55" />
-              <text x="29" y="16" textAnchor="middle" fill={C.cyan} fontSize="12" fontWeight="800">V ref</text>
-            </g>
-            <g transform={`translate(${currentLabelX} ${currentEnd.y + (phasor.currentAngleDeg < 0 ? 2 : -28)})`}>
-              <rect x="0" y="0" width="42" height="24" rx="5" fill={C.surface} stroke={currentTone} strokeOpacity="0.6" />
-              <text x="21" y="16" textAnchor="middle" fill={currentTone} fontSize="12" fontWeight="800">I</text>
-            </g>
-            <g transform="translate(28 272)">
-              <line x1="0" y1="0" x2="20" y2="0" stroke={C.cyan} strokeWidth="4" strokeLinecap="round" />
-              <text x="28" y="4" fill={C.muted} fontSize="11">Tensão</text>
-              <line x1="92" y1="0" x2="112" y2="0" stroke={currentTone} strokeWidth="4" strokeLinecap="round" />
-              <text x="120" y="4" fill={C.muted} fontSize="11">Corrente</text>
-            </g>
+            <circle cx={cx} cy={cy} r="4" fill="#00d0b6" />
+            <text x={Math.min(voltageLabel.x, 348)} y={voltageLabel.y - 8} fill={voltageTone} fontSize="12" fontWeight="800">
+              V {fmt(phasor.voltage, 1)}
+            </text>
+            <text
+              x={currentLabel.x}
+              y={currentLabel.y + (phasor.currentAngleDeg < 0 ? 14 : -4)}
+              textAnchor={currentLabel.x < cx ? "end" : "start"}
+              fill={currentTone}
+              fontSize="12"
+              fontWeight="800"
+            >
+              I {fmt(phasor.current, 2)}
+            </text>
           </svg>
         </div>
 
