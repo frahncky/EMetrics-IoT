@@ -253,30 +253,31 @@ button:disabled {
 .phasor-card-grid {
   align-items: center;
   display: grid;
-  gap: 22px;
-  grid-template-columns: minmax(280px, 1.1fr) minmax(240px, 0.9fr);
+  gap: 24px;
+  grid-template-columns: minmax(330px, 1.15fr) minmax(260px, 0.85fr);
 }
 
 .phasor-plot-shell {
   background: #121719;
-  border: 1px solid #2b3538;
+  border: 1px solid #344043;
   border-radius: 8px;
   display: grid;
-  min-height: 280px;
+  min-height: 330px;
   overflow: hidden;
   place-items: center;
+  position: relative;
 }
 
 .phasor-svg {
-  max-width: 520px;
-  min-height: 260px;
+  aspect-ratio: 6 / 5;
+  max-width: 560px;
   width: 100%;
 }
 
 .phasor-details {
   align-content: center;
   display: grid;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -289,7 +290,7 @@ button:disabled {
 
 .phasor-relation {
   color: #edf1ef;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 750;
 }
 
@@ -310,6 +311,7 @@ button:disabled {
   border-radius: 6px;
   display: inline-flex;
   overflow: hidden;
+  white-space: nowrap;
 }
 
 .phasor-mode-toggle button {
@@ -320,7 +322,7 @@ button:disabled {
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
-  padding: 8px 9px;
+  padding: 8px 10px;
 }
 
 .phasor-mode-toggle button:first-child {
@@ -330,6 +332,48 @@ button:disabled {
 .phasor-mode-toggle button.active {
   background: #c5a16c;
   color: #121719;
+}
+
+.phasor-angle-panel {
+  align-items: center;
+  background: #121719;
+  border: 1px solid #344043;
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.phasor-angle-label {
+  color: #9aa5a4;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.phasor-angle-value {
+  color: #c5a16c;
+  font-family: monospace;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.05;
+  margin-top: 4px;
+}
+
+.phasor-direction-pill {
+  border: 1px solid #79aeb9;
+  border-radius: 999px;
+  color: #79aeb9;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 10px;
+}
+
+.phasor-direction-pill[data-direction="capacitive"] {
+  border-color: #a89abc;
+  color: #c6b9d6;
 }
 
 .phasor-stat-grid {
@@ -342,7 +386,7 @@ button:disabled {
 .phasor-stat {
   border-bottom: 1px solid #2b3538;
   min-width: 0;
-  padding: 10px 0;
+  padding: 11px 0;
 }
 
 .phasor-stat-label {
@@ -376,6 +420,19 @@ button:disabled {
 @media (max-width: 640px) {
   .phasor-header-row {
     grid-template-columns: 1fr;
+  }
+
+  .phasor-plot-shell {
+    min-height: 260px;
+  }
+
+  .phasor-angle-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .phasor-angle-value {
+    font-size: 28px;
   }
 
   .phasor-mode-toggle {

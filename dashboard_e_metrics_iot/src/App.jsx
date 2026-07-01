@@ -823,17 +823,25 @@ function PhasorDiagram({ telemetry }) {
     );
   }
 
-  const cx = 160;
-  const cy = 130;
-  const voltageLength = phasor.voltage > 0 ? 102 : 0;
-  const currentLength = phasor.current > 0 ? 88 : 0;
+  const cx = 180;
+  const cy = 142;
+  const voltageLength = phasor.voltage > 0 ? 124 : 0;
+  const currentLength = phasor.current > 0 ? 106 : 0;
   const voltageEnd = phasorPoint(cx, cy, voltageLength, 0);
   const currentEnd = phasorPoint(cx, cy, currentLength, phasor.currentAngleDeg);
-  const arcRadius = 42;
+  const voltageLabelX = Math.min(voltageEnd.x - 18, 292);
+  const currentLabelX = Math.min(currentEnd.x + 12, 306);
+  const arcRadius = 52;
   const arcStart = phasorPoint(cx, cy, arcRadius, 0);
   const arcEnd = phasorPoint(cx, cy, arcRadius, phasor.currentAngleDeg);
-  const arcLabel = phasorPoint(cx, cy, arcRadius + 20, phasor.currentAngleDeg / 2);
+  const arcLabel = phasorPoint(cx, cy, arcRadius + 24, phasor.currentAngleDeg / 2);
   const sweepFlag = phasor.currentAngleDeg < 0 ? 1 : 0;
+  const currentTone = phasor.direction === "capacitive" ? C.purple : C.green;
+  const modeOptions = [
+    ["auto", "Auto"],
+    ["inductive", "Indutiva"],
+    ["capacitive", "Capacitiva"],
+  ];
 
   return (
     <Card title="Diagrama fasorial em tempo real" accent={`${C.cyan}44`}>
@@ -841,28 +849,33 @@ function PhasorDiagram({ telemetry }) {
         <div className="phasor-plot-shell">
           <svg
             className="phasor-svg"
-            viewBox="0 0 320 260"
+            viewBox="0 0 360 300"
             role="img"
             aria-label={`Diagrama fasorial com tensão em 0 graus e corrente em ${signedAngle(phasor.currentAngleDeg)}`}
           >
             <defs>
-              <marker id="phasorVoltageArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
-                <path d="M 0 0 L 8 4 L 0 8 z" fill={C.cyan} />
+              <marker id="phasorVoltageArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={C.cyan} />
               </marker>
-              <marker id="phasorCurrentArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
-                <path d="M 0 0 L 8 4 L 0 8 z" fill={C.purple} />
+              <marker id="phasorCurrentArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={currentTone} />
               </marker>
             </defs>
 
-            {[36, 72, 108].map(radius => (
-              <circle key={radius} cx={cx} cy={cy} r={radius} fill="none" stroke={C.border} strokeDasharray="4 6" strokeWidth="1" />
+            <rect x="0" y="0" width="360" height="300" rx="8" fill={C.bg} />
+            <path d={`M ${cx} ${cy} L ${cx + 126} ${cy}`} stroke={C.cyan} strokeOpacity="0.14" strokeWidth="16" strokeLinecap="round" />
+            <path d={`M ${cx} ${cy - 126} A 126 126 0 0 1 ${cx} ${cy + 126}`} fill="none" stroke={C.purple} strokeOpacity="0.1" strokeWidth="24" strokeLinecap="round" />
+            <path d={`M ${cx} ${cy + 126} A 126 126 0 0 1 ${cx} ${cy - 126}`} fill="none" stroke={C.green} strokeOpacity="0.09" strokeWidth="24" strokeLinecap="round" />
+
+            {[42, 84, 126].map(radius => (
+              <circle key={radius} cx={cx} cy={cy} r={radius} fill="none" stroke={C.border} strokeDasharray="2 8" strokeWidth="1" />
             ))}
-            <line x1="38" y1={cy} x2="282" y2={cy} stroke={C.border} strokeWidth="1" />
-            <line x1={cx} y1="24" x2={cx} y2="236" stroke={C.border} strokeWidth="1" />
-            <text x="284" y={cy - 8} fill={C.muted} fontSize="10">0°</text>
-            <text x={cx + 8} y="28" fill={C.muted} fontSize="10">90°</text>
-            <text x="22" y={cy - 8} fill={C.muted} fontSize="10">180°</text>
-            <text x={cx + 8} y="238" fill={C.muted} fontSize="10">-90°</text>
+            <line x1="38" y1={cy} x2="322" y2={cy} stroke={C.border} strokeWidth="1" />
+            <line x1={cx} y1="24" x2={cx} y2="260" stroke={C.border} strokeWidth="1" />
+            <text x="315" y={cy - 10} fill={C.muted} fontSize="10">0°</text>
+            <text x={cx + 9} y="32" fill={C.muted} fontSize="10">+90°</text>
+            <text x="24" y={cy - 10} fill={C.muted} fontSize="10">180°</text>
+            <text x={cx + 9} y="260" fill={C.muted} fontSize="10">-90°</text>
 
             {phasor.phaseAngleDeg > 0.4 && (
               <>
@@ -870,9 +883,10 @@ function PhasorDiagram({ telemetry }) {
                   d={`M ${arcStart.x} ${arcStart.y} A ${arcRadius} ${arcRadius} 0 0 ${sweepFlag} ${arcEnd.x} ${arcEnd.y}`}
                   fill="none"
                   stroke={C.amber}
-                  strokeWidth="2"
+                  strokeWidth="3"
+                  strokeLinecap="round"
                 />
-                <text x={arcLabel.x} y={arcLabel.y} textAnchor="middle" fill={C.amber} fontSize="12" fontWeight="700">
+                <text x={arcLabel.x} y={arcLabel.y} textAnchor="middle" fill={C.amber} fontSize="13" fontWeight="800">
                   {fmt(phasor.phaseAngleDeg, 1)}°
                 </text>
               </>
@@ -884,7 +898,7 @@ function PhasorDiagram({ telemetry }) {
               x2={voltageEnd.x}
               y2={voltageEnd.y}
               stroke={C.cyan}
-              strokeWidth="5"
+              strokeWidth="6"
               strokeLinecap="round"
               markerEnd="url(#phasorVoltageArrow)"
             />
@@ -893,14 +907,26 @@ function PhasorDiagram({ telemetry }) {
               y1={cy}
               x2={currentEnd.x}
               y2={currentEnd.y}
-              stroke={C.purple}
-              strokeWidth="5"
+              stroke={currentTone}
+              strokeWidth="6"
               strokeLinecap="round"
               markerEnd="url(#phasorCurrentArrow)"
             />
-            <circle cx={cx} cy={cy} r="4" fill={C.text} />
-            <text x={voltageEnd.x + 10} y={voltageEnd.y - 8} fill={C.cyan} fontSize="13" fontWeight="800">V</text>
-            <text x={currentEnd.x + 10} y={currentEnd.y + (phasor.currentAngleDeg < 0 ? 16 : -8)} fill={C.purple} fontSize="13" fontWeight="800">I</text>
+            <circle cx={cx} cy={cy} r="6" fill={C.surface} stroke={C.text} strokeWidth="2" />
+            <g transform={`translate(${voltageLabelX} ${voltageEnd.y - 34})`}>
+              <rect x="0" y="0" width="58" height="24" rx="5" fill={C.surface} stroke={C.cyan} strokeOpacity="0.55" />
+              <text x="29" y="16" textAnchor="middle" fill={C.cyan} fontSize="12" fontWeight="800">V ref</text>
+            </g>
+            <g transform={`translate(${currentLabelX} ${currentEnd.y + (phasor.currentAngleDeg < 0 ? 2 : -28)})`}>
+              <rect x="0" y="0" width="42" height="24" rx="5" fill={C.surface} stroke={currentTone} strokeOpacity="0.6" />
+              <text x="21" y="16" textAnchor="middle" fill={currentTone} fontSize="12" fontWeight="800">I</text>
+            </g>
+            <g transform="translate(28 272)">
+              <line x1="0" y1="0" x2="20" y2="0" stroke={C.cyan} strokeWidth="4" strokeLinecap="round" />
+              <text x="28" y="4" fill={C.muted} fontSize="11">Tensão</text>
+              <line x1="92" y1="0" x2="112" y2="0" stroke={currentTone} strokeWidth="4" strokeLinecap="round" />
+              <text x="120" y="4" fill={C.muted} fontSize="11">Corrente</text>
+            </g>
           </svg>
         </div>
 
@@ -927,16 +953,20 @@ function PhasorDiagram({ telemetry }) {
               ))}
             </div>
           </div>
+          <div className="phasor-angle-panel">
+            <div>
+              <div className="phasor-angle-label">Ângulo da corrente</div>
+              <div className="phasor-angle-value">{signedAngle(phasor.currentAngleDeg)}</div>
+            </div>
+            <div className="phasor-direction-pill" data-direction={phasor.direction}>
+              {directionLabel(phasor.direction)}
+            </div>
+          </div>
           <div className="phasor-stat-grid">
-            <PhasorStat label="Ângulo I" value={signedAngle(phasor.currentAngleDeg)} unit="" color={C.amber} sub={`|φ| = ${fmt(phasor.phaseAngleDeg, 1)}°`} />
-            <PhasorStat label="Carga" value={directionLabel(phasor.direction)} unit="" color={phasor.direction === "capacitive" ? C.purple : C.cyan} />
             <PhasorStat label="Fator de potência" value={phasor.pf == null ? "—" : fmt(phasor.pf, 3)} unit="" color={C.green} />
             <PhasorStat label="Tensão RMS" value={fmt(phasor.voltage, 2)} unit="V" color={C.cyan} />
             <PhasorStat label="Corrente RMS" value={fmt(phasor.current, 3)} unit="A" color={C.purple} />
             <PhasorStat label="Potência reativa" value={fmt(phasor.reactivePower, 2)} unit="VAr" color={phasor.reactivePower < 0 ? C.purple : C.cyan} />
-          </div>
-          <div className="phasor-note">
-            Comprimentos de V e I usam escalas independentes para manter os fasores legíveis no painel.
           </div>
         </div>
       </div>
