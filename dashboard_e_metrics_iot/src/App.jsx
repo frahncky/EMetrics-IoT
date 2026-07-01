@@ -854,11 +854,11 @@ function PhasorDiagram({ telemetry }) {
             aria-label={`Diagrama fasorial com tensão em 0 graus e corrente em ${signedAngle(phasor.currentAngleDeg)}`}
           >
             <defs>
-              <marker id="phasorVoltageArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill={C.cyan} />
+              <marker id="phasorVoltageArrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M 0 0 L 9 4.5 L 0 9 z" fill={C.cyan} />
               </marker>
-              <marker id="phasorCurrentArrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill={currentTone} />
+              <marker id="phasorCurrentArrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M 0 0 L 9 4.5 L 0 9 z" fill={currentTone} />
               </marker>
             </defs>
 
@@ -898,7 +898,7 @@ function PhasorDiagram({ telemetry }) {
               x2={voltageEnd.x}
               y2={voltageEnd.y}
               stroke={C.cyan}
-              strokeWidth="6"
+              strokeWidth="5"
               strokeLinecap="round"
               markerEnd="url(#phasorVoltageArrow)"
             />
@@ -908,7 +908,7 @@ function PhasorDiagram({ telemetry }) {
               x2={currentEnd.x}
               y2={currentEnd.y}
               stroke={currentTone}
-              strokeWidth="6"
+              strokeWidth="5"
               strokeLinecap="round"
               markerEnd="url(#phasorCurrentArrow)"
             />
