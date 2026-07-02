@@ -1,4 +1,5 @@
 import mqtt from "mqtt";
+import { normalizePowerFactor } from "../utils.js";
 
 export const DEFAULT_MQTT_CONFIG = {
   // O ESP32 pode continuar publicando em mqtt://test.mosquitto.org:1883.
@@ -22,6 +23,23 @@ function optionalFiniteNumber(value) {
   if (value == null) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function firstOptionalFiniteNumber(...values) {
+  for (const value of values) {
+    const number = optionalFiniteNumber(value);
+    if (number != null) return number;
+  }
+  return null;
+}
+
+function firstOptionalText(...values) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const text = value.trim();
+    if (text) return text;
+  }
+  return null;
 }
 
 function measuredAtFromPayload(decoded) {
@@ -48,7 +66,27 @@ export function parseTelemetry(payload) {
   const current = Number(decoded.current);
   const power = Number(decoded.power);
   const apparentPower = voltage * current;
-  const reactivePower = Math.sqrt(Math.max(0, apparentPower ** 2 - power ** 2));
+  const estimatedReactivePower = Math.sqrt(Math.max(0, apparentPower ** 2 - power ** 2));
+  const reportedReactivePower = firstOptionalFiniteNumber(
+    decoded.reactivePower,
+    decoded.reactive_power,
+    decoded.reactive,
+    decoded.q,
+    decoded.var,
+  );
+  const reactivePower = reportedReactivePower ?? estimatedReactivePower;
+  const phaseAngleDeg = firstOptionalFiniteNumber(
+    decoded.phaseAngleDeg,
+    decoded.phase_angle_deg,
+    decoded.phaseAngle,
+    decoded.phase_angle,
+  );
+  const currentAngleDeg = firstOptionalFiniteNumber(
+    decoded.currentAngleDeg,
+    decoded.current_angle_deg,
+    decoded.currentPhaseDeg,
+    decoded.current_phase_deg,
+  );
   const receivedAt = new Date();
   const measuredAt = measuredAtFromPayload(decoded);
 
@@ -57,9 +95,19 @@ export function parseTelemetry(payload) {
     current,
     power,
     apparentPower,
-    // O payload não diferencia carga indutiva de capacitiva; portanto Q é módulo.
     reactivePower,
-    pf: Number(decoded.pf),
+    reactivePowerSource: reportedReactivePower == null ? "estimated" : "payload",
+    pf: normalizePowerFactor(decoded.pf),
+    phaseAngleDeg,
+    currentAngleDeg,
+    loadType: firstOptionalText(
+      decoded.loadType,
+      decoded.load_type,
+      decoded.reactiveType,
+      decoded.reactive_type,
+      decoded.powerType,
+      decoded.power_type,
+    ),
     frequency: Number(decoded.frequency),
     energy: Number(decoded.energy),
     temperature: optionalFiniteNumber(decoded.temperature),

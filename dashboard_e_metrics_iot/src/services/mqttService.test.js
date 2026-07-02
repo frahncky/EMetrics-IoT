@@ -22,3 +22,35 @@ test("não trata timestamp sem sincronização como uma medição atual", () => 
 
   assert.equal(telemetry.measuredAt, null);
 });
+
+test("preserva angulos fasoriais opcionais do payload", () => {
+  const telemetry = parseTelemetry(
+    '{"voltage":220.1,"current":0.51,"power":112,"pf":0.98,' +
+    '"frequency":60,"energy":1.23,"phase_angle_deg":11.48,' +
+    '"currentAngleDeg":-11.48}',
+  );
+
+  assert.equal(telemetry.phaseAngleDeg, 11.48);
+  assert.equal(telemetry.currentAngleDeg, -11.48);
+});
+
+test("preserva potencia reativa assinada e tipo de carga", () => {
+  const telemetry = parseTelemetry(
+    '{"voltage":220.1,"current":0.51,"power":112,"pf":0.98,' +
+    '"frequency":60,"energy":1.23,"reactivePower":-24.5,' +
+    '"loadType":"capacitiva"}',
+  );
+
+  assert.equal(telemetry.reactivePower, -24.5);
+  assert.equal(telemetry.reactivePowerSource, "payload");
+  assert.equal(telemetry.loadType, "capacitiva");
+});
+
+test("normaliza fator de potência em percentual no payload", () => {
+  const telemetry = parseTelemetry(
+    '{"voltage":220.1,"current":0.51,"power":112,"pf":98,' +
+    '"frequency":60,"energy":1.23}',
+  );
+
+  assert.equal(telemetry.pf, 0.98);
+});

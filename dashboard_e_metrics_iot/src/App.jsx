@@ -9,7 +9,7 @@ import {
   publishCommand,
   DEFAULT_MQTT_CONFIG,
 } from "./services/mqttService";
-import { err, fmt, sign, computeStats, parseCsvToData } from "./utils";
+import { err, fmt, sign, computeStats, parseCsvToData, inferLoadType, loadTypeLabel, normalizeLoadType, normalizePowerFactor } from "./utils";
 
 // ─── Paleta de cores (tema instrumento técnico) ───────────────────────────────
 const C = {
@@ -671,6 +671,382 @@ function LiveChartPlaceholder({ label }) {
   );
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeDegrees(value) {
+  if (!Number.isFinite(value)) return 0;
+  const normalized = ((((value + 180) % 360) + 360) % 360) - 180;
+  return normalized === -180 ? 180 : normalized;
+}
+
+function phasorPoint(cx, cy, length, angleDeg) {
+  const radians = angleDeg * Math.PI / 180;
+  return {
+    x: cx + Math.cos(radians) * length,
+    y: cy - Math.sin(radians) * length,
+  };
+}
+
+function signedAngle(value) {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.05) return "0.0°";
+  return `${value > 0 ? "+" : ""}${fmt(value, 1)}°`;
+}
+
+function normalizeLoadDirection(value) {
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!text) return null;
+  if (/(capacitiv|leading|adiantad|cap\b)/.test(text)) return "capacitive";
+  if (/(indutiv|inductive|lagging|atrasad|ind\b)/.test(text)) return "inductive";
+  return null;
+}
+
+function directionLabel(direction) {
+  if (direction === "capacitive") return "Capacitiva";
+  if (direction === "inductive") return "Indutiva";
+  return "—";
+}
+
+function angleForDirection(magnitude, direction) {
+  if (!Number.isFinite(magnitude)) return 0;
+  return direction === "capacitive" ? Math.abs(magnitude) : -Math.abs(magnitude);
+}
+
+function detectDirectionFromSample(sample) {
+  const loadTypeDirection = normalizeLoadDirection(sample?.loadType);
+  if (loadTypeDirection) return { direction: loadTypeDirection, source: "loadType" };
+
+  const reactivePower = Number(sample?.reactivePower);
+  if (
+    sample?.reactivePowerSource === "payload"
+    && Number.isFinite(reactivePower)
+    && Math.abs(reactivePower) > 0.05
+  ) {
+    return {
+      direction: reactivePower < 0 ? "capacitive" : "inductive",
+      source: "signedReactivePower",
+    };
+  }
+
+  const currentAngleDeg = Number(sample?.currentAngleDeg);
+  if (Number.isFinite(currentAngleDeg) && Math.abs(currentAngleDeg) > 0.2) {
+    return {
+      direction: currentAngleDeg > 0 ? "capacitive" : "inductive",
+      source: "currentAngleDeg",
+    };
+  }
+
+  return { direction: null, source: null };
+}
+
+function resolveDirectionFromHistory(telemetry, history = []) {
+  const recent = [...history, telemetry].slice(-20);
+  let scoreCap = 0;
+  let scoreInd = 0;
+  let votes = 0;
+  let usedSource = null;
+
+  recent.forEach((sample, index) => {
+    const { direction, source } = detectDirectionFromSample(sample);
+    if (!direction) return;
+    const weight = index + 1;
+    votes += 1;
+    if (!usedSource) usedSource = source;
+    if (direction === "capacitive") scoreCap += weight;
+    else scoreInd += weight;
+  });
+
+  if (!votes) return { direction: null, source: null };
+
+  const scoreDiff = Math.abs(scoreCap - scoreInd);
+  const scoreTotal = scoreCap + scoreInd;
+  const confidence = scoreTotal > 0 ? scoreDiff / scoreTotal : 0;
+  if (confidence < 0.15) return { direction: null, source: null };
+
+  const direction = scoreCap > scoreInd ? "capacitive" : "inductive";
+  return {
+    direction,
+    source: `Histórico recente (${votes} amostras${usedSource ? `, base ${usedSource}` : ""})`,
+  };
+}
+
+function resolvePhasor(telemetry, history = [], directionMode = "auto") {
+  if (!telemetry) return null;
+
+  const voltage = Number(telemetry.voltage);
+  const current = Number(telemetry.current);
+  if (!Number.isFinite(voltage) || !Number.isFinite(current)) return null;
+
+  const apparentPower = Number.isFinite(telemetry.apparentPower)
+    ? telemetry.apparentPower
+    : voltage * current;
+  const activePower = Number(telemetry.power);
+  const pfFromPower = apparentPower > 0 && Number.isFinite(activePower)
+    ? normalizePowerFactor(activePower / apparentPower)
+    : null;
+  const rawPf = normalizePowerFactor(telemetry.pf);
+  const pf = rawPf ?? pfFromPower;
+  const derivedPhase = pf == null ? null : Math.acos(pf) * 180 / Math.PI;
+  const reactivePower = Number.isFinite(telemetry.reactivePower)
+    ? telemetry.reactivePower
+    : Math.sqrt(Math.max(0, apparentPower ** 2 - activePower ** 2));
+  const manualDirection = directionMode === "inductive"
+    ? "inductive"
+    : directionMode === "capacitive"
+      ? "capacitive"
+      : null;
+  const currentDirection = detectDirectionFromSample({
+    loadType: telemetry.loadType,
+    reactivePower,
+    reactivePowerSource: telemetry.reactivePowerSource,
+    currentAngleDeg: telemetry.currentAngleDeg,
+  });
+  const historyDirection = resolveDirectionFromHistory(telemetry, history);
+  const detectedDirection = currentDirection.direction ?? historyDirection.direction;
+  const explicitLoadType = normalizeLoadType(telemetry.loadType);
+  const loadTypeInfo = inferLoadType({
+    loadType: explicitLoadType,
+    reactivePower,
+    currentAngleDeg: telemetry.currentAngleDeg,
+    pf,
+  }, detectedDirection);
+  const loadType = loadTypeInfo.type;
+  const direction = manualDirection ?? detectedDirection ?? null;
+  const explicitCurrentAngle = Number.isFinite(telemetry.currentAngleDeg)
+    ? normalizeDegrees(telemetry.currentAngleDeg)
+    : null;
+  const phaseAngle = Number.isFinite(telemetry.phaseAngleDeg)
+    ? telemetry.phaseAngleDeg
+    : null;
+  const angleMagnitude = Math.abs(
+    explicitCurrentAngle ?? phaseAngle ?? derivedPhase ?? 0,
+  );
+  const currentAngleDeg = normalizeDegrees(
+    manualDirection
+      ? angleForDirection(angleMagnitude, manualDirection)
+      : explicitCurrentAngle ?? (direction ? angleForDirection(angleMagnitude, direction) : 0),
+  );
+  const phaseAngleDeg = Math.abs(currentAngleDeg);
+  const relation = currentAngleDeg < -0.05
+    ? "Corrente em atraso (indutiva)"
+    : currentAngleDeg > 0.05
+      ? "Corrente adiantada (capacitiva)"
+      : "Tensão e corrente em fase";
+  const source = (() => {
+    if (manualDirection) return "Direção manual";
+    if (explicitCurrentAngle != null) return "Ângulo informado pelo payload";
+    if (loadTypeInfo.source === "payload") return "Tipo de carga informado pelo payload";
+    if (loadTypeInfo.source === "signedReactivePower") return "Tipo inferido por Q assinado";
+    if (loadTypeInfo.source === "currentAngleDeg") return "Tipo inferido por ângulo da corrente";
+    if (loadTypeInfo.source === "powerFactor") return "Carga resistiva inferida pelo FP";
+    if (loadTypeInfo.source === "fallbackDirection") return "Tipo herdado do histórico recente";
+    return "Dados insuficientes para inferir o tipo automaticamente";
+  })();
+
+  return {
+    voltage,
+    current,
+    apparentPower,
+    activePower,
+    reactivePower,
+    pf,
+    phaseAngleDeg,
+    currentAngleDeg,
+    direction,
+    loadType,
+    loadTypeInfo,
+    relation,
+    source,
+  };
+}
+
+function PhasorStat({ label, value, unit, color = C.text, sub }) {
+  return (
+    <div className="phasor-stat">
+      <div className="phasor-stat-label">{label}</div>
+      <div className="phasor-stat-value" style={{ color }}>
+        {value}<span>{unit}</span>
+      </div>
+      {sub && <div className="phasor-stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
+function PhasorDiagram({ telemetry, history = [] }) {
+  const [directionMode, setDirectionMode] = useState("auto");
+  const phasor = useMemo(
+    () => resolvePhasor(telemetry, history, directionMode),
+    [telemetry, history, directionMode],
+  );
+  const phasorLoadType = loadTypeLabel(phasor?.loadType);
+  const phasorLoadTypeConfidence = phasor?.loadTypeInfo?.confidence ?? 0;
+
+  if (!phasor) {
+    return (
+      <Card title="Diagrama fasorial em tempo real" accent={`${C.cyan}44`}>
+        <LiveChartPlaceholder label="Aguardando telemetria para desenhar tensão e corrente." />
+      </Card>
+    );
+  }
+
+  const cx = 210;
+  const cy = 210;
+  const outerRadius = 170;
+  const voltageLength = phasor.voltage > 0 ? outerRadius : 0;
+  const currentLength = phasor.current > 0 ? 118 : 0;
+  const voltageEnd = phasorPoint(cx, cy, voltageLength, 0);
+  const currentEnd = phasorPoint(cx, cy, currentLength, phasor.currentAngleDeg);
+  const voltageLabel = phasorPoint(cx, cy, voltageLength + 16, 0);
+  const currentLabel = phasorPoint(cx, cy, currentLength + 22, phasor.currentAngleDeg);
+  const arcRadius = 55;
+  const arcStart = phasorPoint(cx, cy, arcRadius, 0);
+  const arcEnd = phasorPoint(cx, cy, arcRadius, phasor.currentAngleDeg);
+  const arcLabel = phasorPoint(cx, cy, arcRadius + 20, phasor.currentAngleDeg / 2);
+  const sweepFlag = phasor.currentAngleDeg < 0 ? 1 : 0;
+  const currentTone = phasor.direction === "capacitive" ? "#a35cff" : "#ff9f1c";
+  const voltageTone = "#2f6bff";
+  const gridTone = "#edf5ff";
+  const axisTone = "#f4f8ff";
+  const modeOptions = [
+    ["auto", "Auto"],
+    ["inductive", "Indutiva"],
+    ["capacitive", "Capacitiva"],
+  ];
+
+  return (
+    <Card title="Diagrama fasorial em tempo real" accent={`${C.cyan}44`}>
+      <div className="phasor-card-grid">
+        <div className="phasor-plot-shell">
+          <svg
+            className="phasor-svg"
+            viewBox="0 0 420 420"
+            role="img"
+            aria-label={`Diagrama fasorial com tensão em 0 graus e corrente em ${signedAngle(phasor.currentAngleDeg)}`}
+          >
+            <defs>
+              <marker id="phasorVoltageArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={voltageTone} />
+              </marker>
+              <marker id="phasorCurrentArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={currentTone} />
+              </marker>
+            </defs>
+
+            <rect x="0" y="0" width="420" height="420" fill="#162238" />
+            {[42.5, 85, 127.5, 170].map(radius => (
+              <circle key={radius} cx={cx} cy={cy} r={radius} fill="none" stroke={gridTone} strokeOpacity="0.88" strokeWidth="1.2" />
+            ))}
+            <line x1="20" y1={cy} x2="400" y2={cy} stroke={axisTone} strokeOpacity="0.95" strokeWidth="1.3" />
+            <line x1={cx} y1="18" x2={cx} y2="402" stroke={axisTone} strokeOpacity="0.95" strokeWidth="1.3" />
+
+            {phasor.phaseAngleDeg > 0.4 && (
+              <>
+                <path
+                  d={`M ${arcStart.x} ${arcStart.y} A ${arcRadius} ${arcRadius} 0 0 ${sweepFlag} ${arcEnd.x} ${arcEnd.y}`}
+                  fill="none"
+                  stroke={C.amber}
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                />
+                <text x={arcLabel.x} y={arcLabel.y} textAnchor="middle" fill={C.amber} fontSize="12" fontWeight="800">
+                  {fmt(phasor.phaseAngleDeg, 1)}°
+                </text>
+              </>
+            )}
+
+            <line
+              x1={cx}
+              y1={cy}
+              x2={voltageEnd.x}
+              y2={voltageEnd.y}
+              stroke={voltageTone}
+              strokeWidth="3.4"
+              strokeLinecap="round"
+              markerEnd="url(#phasorVoltageArrow)"
+            />
+            <line
+              x1={cx}
+              y1={cy}
+              x2={currentEnd.x}
+              y2={currentEnd.y}
+              stroke={currentTone}
+              strokeWidth="3.4"
+              strokeLinecap="round"
+              markerEnd="url(#phasorCurrentArrow)"
+            />
+            <circle cx={cx} cy={cy} r="4" fill="#00d0b6" />
+            <text x={Math.min(voltageLabel.x, 348)} y={voltageLabel.y - 8} fill={voltageTone} fontSize="12" fontWeight="800">
+              V
+            </text>
+            <text
+              x={currentLabel.x}
+              y={currentLabel.y + (phasor.currentAngleDeg < 0 ? 14 : -4)}
+              textAnchor={currentLabel.x < cx ? "end" : "start"}
+              fill={currentTone}
+              fontSize="12"
+              fontWeight="800"
+            >
+              I
+            </text>
+          </svg>
+        </div>
+
+        <div className="phasor-details">
+          <div className="phasor-header-row">
+            <div>
+              <div className="phasor-relation">{phasor.relation}</div>
+              <div className="phasor-source">{phasor.source} · tensão usada como referência em 0°.</div>
+            </div>
+            <div className="phasor-mode-toggle" aria-label="Direção da carga no fasorial">
+              {[
+                ["auto", "Auto"],
+                ["inductive", "Indutiva"],
+                ["capacitive", "Capacitiva"],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={directionMode === mode ? "active" : ""}
+                  onClick={() => setDirectionMode(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="phasor-angle-panel">
+            <div>
+              <div className="phasor-angle-label">Ângulo da corrente</div>
+              <div className="phasor-angle-value">{signedAngle(phasor.currentAngleDeg)}</div>
+            </div>
+            <div className="phasor-direction-pill" data-direction={phasor.direction}>
+              {directionLabel(phasor.direction)}
+            </div>
+          </div>
+          <div className="phasor-stat-grid">
+            <PhasorStat label="Fator de potência" value={phasor.pf == null ? "—" : fmt(phasor.pf, 3)} unit="" color={C.green} />
+            <PhasorStat
+              label="Tipo de carga"
+              value={phasorLoadType}
+              unit=""
+              color={phasor.loadType === "capacitive" ? C.cyan : phasor.loadType === "inductive" ? C.purple : C.amber}
+              sub={phasor.loadTypeInfo?.source === "insufficient-data" ? "PZEM não fornece sinal para distinguir indutiva de capacitiva sem dados extras." : `Método: ${phasor.loadTypeInfo?.source ?? "—"} · confiança ${fmt(phasorLoadTypeConfidence * 100, 0)}%`}
+            />
+            <PhasorStat label="Tensão RMS" value={fmt(phasor.voltage, 2)} unit="V" color={C.cyan} />
+            <PhasorStat label="Corrente RMS" value={fmt(phasor.current, 3)} unit="A" color={C.purple} />
+            <PhasorStat label="Potência reativa" value={fmt(phasor.reactivePower, 2)} unit="VAr" color={phasor.reactivePower < 0 ? C.purple : C.cyan} />
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
 function MonitorDashboard({
   telemetry,
   history,
@@ -727,9 +1103,11 @@ function MonitorDashboard({
         <MetricCard label="Potência aparente" value={format(telemetry?.apparentPower, 2)} unit="VA" accent={C.cyan} />
         <MetricCard label="Potência ativa" value={format(telemetry?.power, 2)} unit="W" accent={C.amber} />
         <MetricCard label="Potência reativa*" value={format(telemetry?.reactivePower, 2)} unit="VAr" accent={C.purple} />
-        <MetricCard label="Fator de potência" value={format(telemetry?.pf)} unit="" accent={C.green} />
+        <MetricCard label="Fator de potência" value={format(telemetry?.pf, 3)} unit="" accent={C.green} />
         <MetricCard label="Erros CRC" value={telemetry?.crcErrors != null ? String(telemetry.crcErrors) : "—"} unit="" accent={telemetry?.crcErrors > 0 ? C.red : C.green} />
       </div>
+
+      <PhasorDiagram telemetry={telemetry} history={history} />
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
         <ChartCard title="Tensão — tendência ao vivo" fileName="tendencia_tensao.png">
@@ -838,7 +1216,7 @@ function MonitorDashboard({
       </div>
 
       <div style={{ color: C.muted, fontSize: 11, margin: "-6px 0 18px" }}>
-        * Potência reativa estimada em módulo; o PZEM não informa se a carga é indutiva ou capacitiva.
+        * Q positivo indica carga indutiva e Q negativo indica carga capacitiva quando o payload envia sinal; sem sinal, use o modo do fasorial.
       </div>
 
       <Card title="Limites de alerta">
@@ -1158,6 +1536,10 @@ export default function App() {
             current: nextTelemetry.current,
             frequency: nextTelemetry.frequency,
             pf: nextTelemetry.pf,
+            phaseAngleDeg: nextTelemetry.phaseAngleDeg,
+            currentAngleDeg: nextTelemetry.currentAngleDeg,
+            loadType: nextTelemetry.loadType,
+            reactivePowerSource: nextTelemetry.reactivePowerSource,
             energy: nextTelemetry.energy,
             temperature: nextTelemetry.temperature,
           }].slice(-300));
