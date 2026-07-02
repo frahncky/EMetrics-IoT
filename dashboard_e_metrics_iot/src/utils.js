@@ -52,30 +52,55 @@ export function loadTypeLabel(value) {
 }
 
 /**
- * Resolve o tipo de carga mais útil para exibição a partir da telemetria.
+ * Infere o tipo de carga a partir da telemetria disponível.
+ * Retorna a melhor classificação possível sem inventar sinal quando os dados
+ * do PZEM não permitem distinguir capacitiva de indutiva.
  */
-export function resolveLoadType(sample, fallbackDirection = null) {
+export function inferLoadType(sample, fallbackDirection = null) {
   const explicitLoadType = normalizeLoadType(sample?.loadType);
-  if (explicitLoadType) return explicitLoadType;
+  if (explicitLoadType) {
+    return { type: explicitLoadType, source: "payload", confidence: 1 };
+  }
 
   const reactivePower = Number(sample?.reactivePower);
-  if (Number.isFinite(reactivePower) && Math.abs(reactivePower) > 0.05) {
-    return reactivePower < 0 ? "capacitive" : "inductive";
+  if (
+    sample?.reactivePowerSource === "payload"
+    && Number.isFinite(reactivePower)
+    && Math.abs(reactivePower) > 0.05
+  ) {
+    return {
+      type: reactivePower < 0 ? "capacitive" : "inductive",
+      source: "signedReactivePower",
+      confidence: 0.95,
+    };
   }
 
   const currentAngleDeg = Number(sample?.currentAngleDeg);
   if (Number.isFinite(currentAngleDeg) && Math.abs(currentAngleDeg) > 0.2) {
-    return currentAngleDeg > 0 ? "capacitive" : "inductive";
+    return {
+      type: currentAngleDeg > 0 ? "capacitive" : "inductive",
+      source: "currentAngleDeg",
+      confidence: 0.9,
+    };
   }
 
   const pf = normalizePowerFactor(sample?.pf);
-  if (pf != null && pf >= 0.98) return "resistive";
-
-  if (fallbackDirection === "capacitive" || fallbackDirection === "inductive") {
-    return fallbackDirection;
+  if (pf != null && pf >= 0.98) {
+    return { type: "resistive", source: "powerFactor", confidence: 0.8 };
   }
 
-  return null;
+  if (fallbackDirection === "capacitive" || fallbackDirection === "inductive") {
+    return { type: fallbackDirection, source: "fallbackDirection", confidence: 0.55 };
+  }
+
+  return { type: null, source: "insufficient-data", confidence: 0 };
+}
+
+/**
+ * Resolve o tipo de carga mais útil para exibição a partir da telemetria.
+ */
+export function resolveLoadType(sample, fallbackDirection = null) {
+  return inferLoadType(sample, fallbackDirection).type;
 }
 
 /**

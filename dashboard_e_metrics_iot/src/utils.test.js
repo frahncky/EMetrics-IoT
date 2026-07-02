@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  err, fmt, sign, computeStats, formatDuration, parseCsvToData, normalizePowerFactor, loadTypeLabel, resolveLoadType,
+  err, fmt, sign, computeStats, formatDuration, parseCsvToData, normalizePowerFactor, loadTypeLabel, inferLoadType, resolveLoadType,
 } from "./utils.js";
 
 // ─── err / fmt / sign ────────────────────────────────────────────────────────
@@ -34,6 +34,10 @@ test("normalizePowerFactor aceita decimal e percentual", () => {
 test("loadTypeLabel e resolveLoadType classificam tipo de carga corretamente", () => {
   assert.equal(loadTypeLabel("capacitiva"), "Capacitiva");
   assert.equal(loadTypeLabel("resistiva"), "Resistiva");
+  assert.equal(inferLoadType({ loadType: "capacitiva" }).type, "capacitive");
+  assert.equal(inferLoadType({ reactivePower: -12, reactivePowerSource: "payload" }).type, "capacitive");
+  assert.equal(inferLoadType({ pf: 0.99 }).type, "resistive");
+  assert.equal(inferLoadType({ pf: 0.72 }).type, null);
   assert.equal(resolveLoadType({ loadType: "mista" }), "mixed");
   assert.equal(resolveLoadType({ pf: 0.99 }), "resistive");
 });

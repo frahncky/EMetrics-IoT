@@ -9,7 +9,7 @@ import {
   publishCommand,
   DEFAULT_MQTT_CONFIG,
 } from "./services/mqttService";
-import { err, fmt, sign, computeStats, parseCsvToData, loadTypeLabel, normalizeLoadType, normalizePowerFactor, resolveLoadType } from "./utils";
+import { err, fmt, sign, computeStats, parseCsvToData, inferLoadType, loadTypeLabel, normalizeLoadType, normalizePowerFactor } from "./utils";
 
 // ─── Paleta de cores (tema instrumento técnico) ───────────────────────────────
 const C = {
@@ -810,13 +810,14 @@ function resolvePhasor(telemetry, history = [], directionMode = "auto") {
   const historyDirection = resolveDirectionFromHistory(telemetry, history);
   const detectedDirection = currentDirection.direction ?? historyDirection.direction;
   const explicitLoadType = normalizeLoadType(telemetry.loadType);
-  const loadType = resolveLoadType({
+  const loadTypeInfo = inferLoadType({
     loadType: explicitLoadType,
     reactivePower,
     currentAngleDeg: telemetry.currentAngleDeg,
     pf,
   }, detectedDirection);
-  const direction = manualDirection ?? detectedDirection ?? (loadType === "resistive" || loadType === "mixed" ? null : "inductive");
+  const loadType = loadTypeInfo.type;
+  const direction = manualDirection ?? detectedDirection ?? null;
   const explicitCurrentAngle = Number.isFinite(telemetry.currentAngleDeg)
     ? normalizeDegrees(telemetry.currentAngleDeg)
     : null;
@@ -837,17 +838,16 @@ function resolvePhasor(telemetry, history = [], directionMode = "auto") {
     : currentAngleDeg > 0.05
       ? "Corrente adiantada (capacitiva)"
       : "Tensão e corrente em fase";
-  const source = manualDirection
-    ? "Direção manual"
-    : explicitCurrentAngle != null
-      ? "Ângulo informado pelo payload"
-      : explicitLoadType != null
-        ? "Tipo de carga informado pelo payload"
-        : currentDirection.source === "signedReactivePower"
-          ? "Direção por Q assinado"
-          : currentDirection.source === "currentAngleDeg"
-            ? "Direção por ângulo da corrente"
-            : historyDirection.source ?? "Fallback indutivo pelo FP";
+  const source = (() => {
+    if (manualDirection) return "Direção manual";
+    if (explicitCurrentAngle != null) return "Ângulo informado pelo payload";
+    if (loadTypeInfo.source === "payload") return "Tipo de carga informado pelo payload";
+    if (loadTypeInfo.source === "signedReactivePower") return "Tipo inferido por Q assinado";
+    if (loadTypeInfo.source === "currentAngleDeg") return "Tipo inferido por ângulo da corrente";
+    if (loadTypeInfo.source === "powerFactor") return "Carga resistiva inferida pelo FP";
+    if (loadTypeInfo.source === "fallbackDirection") return "Tipo herdado do histórico recente";
+    return "Dados insuficientes para inferir o tipo automaticamente";
+  })();
 
   return {
     voltage,
@@ -860,6 +860,7 @@ function resolvePhasor(telemetry, history = [], directionMode = "auto") {
     currentAngleDeg,
     direction,
     loadType,
+    loadTypeInfo,
     relation,
     source,
   };
@@ -884,6 +885,7 @@ function PhasorDiagram({ telemetry, history = [] }) {
     [telemetry, history, directionMode],
   );
   const phasorLoadType = loadTypeLabel(phasor?.loadType);
+  const phasorLoadTypeConfidence = phasor?.loadTypeInfo?.confidence ?? 0;
 
   if (!phasor) {
     return (
@@ -1029,7 +1031,13 @@ function PhasorDiagram({ telemetry, history = [] }) {
           </div>
           <div className="phasor-stat-grid">
             <PhasorStat label="Fator de potência" value={phasor.pf == null ? "—" : fmt(phasor.pf, 3)} unit="" color={C.green} />
-            <PhasorStat label="Tipo de carga" value={phasorLoadType} unit="" color={phasor.loadType === "capacitive" ? C.cyan : phasor.loadType === "inductive" ? C.purple : C.amber} />
+            <PhasorStat
+              label="Tipo de carga"
+              value={phasorLoadType}
+              unit=""
+              color={phasor.loadType === "capacitive" ? C.cyan : phasor.loadType === "inductive" ? C.purple : C.amber}
+              sub={phasor.loadTypeInfo?.source === "insufficient-data" ? "PZEM não fornece sinal para distinguir indutiva de capacitiva sem dados extras." : `Método: ${phasor.loadTypeInfo?.source ?? "—"} · confiança ${fmt(phasorLoadTypeConfidence * 100, 0)}%`}
+            />
             <PhasorStat label="Tensão RMS" value={fmt(phasor.voltage, 2)} unit="V" color={C.cyan} />
             <PhasorStat label="Corrente RMS" value={fmt(phasor.current, 3)} unit="A" color={C.purple} />
             <PhasorStat label="Potência reativa" value={fmt(phasor.reactivePower, 2)} unit="VAr" color={phasor.reactivePower < 0 ? C.purple : C.cyan} />
