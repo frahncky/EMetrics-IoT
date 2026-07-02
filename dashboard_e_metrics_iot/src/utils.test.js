@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  err, fmt, sign, computeStats, formatDuration, parseCsvToData,
+  err, fmt, sign, computeStats, formatDuration, parseCsvToData, normalizePowerFactor, loadTypeLabel, resolveLoadType,
 } from "./utils.js";
 
 // ─── err / fmt / sign ────────────────────────────────────────────────────────
@@ -21,6 +21,21 @@ test("sign adiciona sinal explícito", () => {
   assert.equal(sign(1.5), "+1.50");
   assert.equal(sign(-2.3), "-2.30");
   assert.equal(sign(0), "+0.00");
+});
+
+// ─── normalizePowerFactor / loadTypeLabel / resolveLoadType ─────────────────
+
+test("normalizePowerFactor aceita decimal e percentual", () => {
+  assert.equal(normalizePowerFactor(0.98), 0.98);
+  assert.equal(normalizePowerFactor(98), 0.98);
+  assert.equal(normalizePowerFactor("87.5"), 0.875);
+});
+
+test("loadTypeLabel e resolveLoadType classificam tipo de carga corretamente", () => {
+  assert.equal(loadTypeLabel("capacitiva"), "Capacitiva");
+  assert.equal(loadTypeLabel("resistiva"), "Resistiva");
+  assert.equal(resolveLoadType({ loadType: "mista" }), "mixed");
+  assert.equal(resolveLoadType({ pf: 0.99 }), "resistive");
 });
 
 // ─── computeStats ─────────────────────────────────────────────────────────────
@@ -69,6 +84,14 @@ test("parseCsvToData lê CSV válido corretamente", () => {
   assert.equal(rows[0].load, "Resistiva");
   assert.equal(rows[0].fp, 1.0);
   assert.equal(rows[0].v_esp, 219.8);
+});
+
+test("parseCsvToData normaliza FP em percentual", () => {
+  const csv =
+    "load,fp,thd,v_esp,v_ref,i_esp,i_ref,p_esp,p_ref,wh_esp,wh_ref\n" +
+    "Indutiva,98,3,219.8,220.1,4.52,4.54,993,998,82.7,83.2";
+  const rows = parseCsvToData(csv);
+  assert.equal(rows[0].fp, 0.98);
 });
 
 test("parseCsvToData lança erro quando CSV não tem dados", () => {

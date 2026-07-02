@@ -9,7 +9,7 @@ import {
   publishCommand,
   DEFAULT_MQTT_CONFIG,
 } from "./services/mqttService";
-import { err, fmt, sign, computeStats, parseCsvToData } from "./utils";
+import { err, fmt, sign, computeStats, parseCsvToData, loadTypeLabel, normalizeLoadType, normalizePowerFactor, resolveLoadType } from "./utils";
 
 // ─── Paleta de cores (tema instrumento técnico) ───────────────────────────────
 const C = {
@@ -718,7 +718,65 @@ function angleForDirection(magnitude, direction) {
   return direction === "capacitive" ? Math.abs(magnitude) : -Math.abs(magnitude);
 }
 
-function resolvePhasor(telemetry, directionMode = "auto") {
+function detectDirectionFromSample(sample) {
+  const loadTypeDirection = normalizeLoadDirection(sample?.loadType);
+  if (loadTypeDirection) return { direction: loadTypeDirection, source: "loadType" };
+
+  const reactivePower = Number(sample?.reactivePower);
+  if (
+    sample?.reactivePowerSource === "payload"
+    && Number.isFinite(reactivePower)
+    && Math.abs(reactivePower) > 0.05
+  ) {
+    return {
+      direction: reactivePower < 0 ? "capacitive" : "inductive",
+      source: "signedReactivePower",
+    };
+  }
+
+  const currentAngleDeg = Number(sample?.currentAngleDeg);
+  if (Number.isFinite(currentAngleDeg) && Math.abs(currentAngleDeg) > 0.2) {
+    return {
+      direction: currentAngleDeg > 0 ? "capacitive" : "inductive",
+      source: "currentAngleDeg",
+    };
+  }
+
+  return { direction: null, source: null };
+}
+
+function resolveDirectionFromHistory(telemetry, history = []) {
+  const recent = [...history, telemetry].slice(-20);
+  let scoreCap = 0;
+  let scoreInd = 0;
+  let votes = 0;
+  let usedSource = null;
+
+  recent.forEach((sample, index) => {
+    const { direction, source } = detectDirectionFromSample(sample);
+    if (!direction) return;
+    const weight = index + 1;
+    votes += 1;
+    if (!usedSource) usedSource = source;
+    if (direction === "capacitive") scoreCap += weight;
+    else scoreInd += weight;
+  });
+
+  if (!votes) return { direction: null, source: null };
+
+  const scoreDiff = Math.abs(scoreCap - scoreInd);
+  const scoreTotal = scoreCap + scoreInd;
+  const confidence = scoreTotal > 0 ? scoreDiff / scoreTotal : 0;
+  if (confidence < 0.15) return { direction: null, source: null };
+
+  const direction = scoreCap > scoreInd ? "capacitive" : "inductive";
+  return {
+    direction,
+    source: `Histórico recente (${votes} amostras${usedSource ? `, base ${usedSource}` : ""})`,
+  };
+}
+
+function resolvePhasor(telemetry, history = [], directionMode = "auto") {
   if (!telemetry) return null;
 
   const voltage = Number(telemetry.voltage);
@@ -730,10 +788,10 @@ function resolvePhasor(telemetry, directionMode = "auto") {
     : voltage * current;
   const activePower = Number(telemetry.power);
   const pfFromPower = apparentPower > 0 && Number.isFinite(activePower)
-    ? activePower / apparentPower
+    ? normalizePowerFactor(activePower / apparentPower)
     : null;
-  const rawPf = Number.isFinite(telemetry.pf) ? telemetry.pf : pfFromPower;
-  const pf = rawPf == null ? null : clampNumber(Math.abs(rawPf), 0, 1);
+  const rawPf = normalizePowerFactor(telemetry.pf);
+  const pf = rawPf ?? pfFromPower;
   const derivedPhase = pf == null ? null : Math.acos(pf) * 180 / Math.PI;
   const reactivePower = Number.isFinite(telemetry.reactivePower)
     ? telemetry.reactivePower
@@ -743,14 +801,22 @@ function resolvePhasor(telemetry, directionMode = "auto") {
     : directionMode === "capacitive"
       ? "capacitive"
       : null;
-  const loadTypeDirection = normalizeLoadDirection(telemetry.loadType);
-  const signedReactiveDirection = telemetry.reactivePowerSource === "payload"
-    && Number.isFinite(reactivePower)
-    && Math.abs(reactivePower) > 0.05
-    ? reactivePower < 0 ? "capacitive" : "inductive"
-    : null;
-  const detectedDirection = loadTypeDirection ?? signedReactiveDirection;
-  const direction = manualDirection ?? detectedDirection ?? "inductive";
+  const currentDirection = detectDirectionFromSample({
+    loadType: telemetry.loadType,
+    reactivePower,
+    reactivePowerSource: telemetry.reactivePowerSource,
+    currentAngleDeg: telemetry.currentAngleDeg,
+  });
+  const historyDirection = resolveDirectionFromHistory(telemetry, history);
+  const detectedDirection = currentDirection.direction ?? historyDirection.direction;
+  const explicitLoadType = normalizeLoadType(telemetry.loadType);
+  const loadType = resolveLoadType({
+    loadType: explicitLoadType,
+    reactivePower,
+    currentAngleDeg: telemetry.currentAngleDeg,
+    pf,
+  }, detectedDirection);
+  const direction = manualDirection ?? detectedDirection ?? (loadType === "resistive" || loadType === "mixed" ? null : "inductive");
   const explicitCurrentAngle = Number.isFinite(telemetry.currentAngleDeg)
     ? normalizeDegrees(telemetry.currentAngleDeg)
     : null;
@@ -763,7 +829,7 @@ function resolvePhasor(telemetry, directionMode = "auto") {
   const currentAngleDeg = normalizeDegrees(
     manualDirection
       ? angleForDirection(angleMagnitude, manualDirection)
-      : explicitCurrentAngle ?? angleForDirection(angleMagnitude, direction),
+      : explicitCurrentAngle ?? (direction ? angleForDirection(angleMagnitude, direction) : 0),
   );
   const phaseAngleDeg = Math.abs(currentAngleDeg);
   const relation = currentAngleDeg < -0.05
@@ -775,11 +841,13 @@ function resolvePhasor(telemetry, directionMode = "auto") {
     ? "Direção manual"
     : explicitCurrentAngle != null
       ? "Ângulo informado pelo payload"
-      : loadTypeDirection
+      : explicitLoadType != null
         ? "Tipo de carga informado pelo payload"
-        : signedReactiveDirection
+        : currentDirection.source === "signedReactivePower"
           ? "Direção por Q assinado"
-          : "Fallback indutivo pelo FP";
+          : currentDirection.source === "currentAngleDeg"
+            ? "Direção por ângulo da corrente"
+            : historyDirection.source ?? "Fallback indutivo pelo FP";
 
   return {
     voltage,
@@ -791,6 +859,7 @@ function resolvePhasor(telemetry, directionMode = "auto") {
     phaseAngleDeg,
     currentAngleDeg,
     direction,
+    loadType,
     relation,
     source,
   };
@@ -808,12 +877,13 @@ function PhasorStat({ label, value, unit, color = C.text, sub }) {
   );
 }
 
-function PhasorDiagram({ telemetry }) {
+function PhasorDiagram({ telemetry, history = [] }) {
   const [directionMode, setDirectionMode] = useState("auto");
   const phasor = useMemo(
-    () => resolvePhasor(telemetry, directionMode),
-    [telemetry, directionMode],
+    () => resolvePhasor(telemetry, history, directionMode),
+    [telemetry, history, directionMode],
   );
+  const phasorLoadType = loadTypeLabel(phasor?.loadType);
 
   if (!phasor) {
     return (
@@ -959,6 +1029,7 @@ function PhasorDiagram({ telemetry }) {
           </div>
           <div className="phasor-stat-grid">
             <PhasorStat label="Fator de potência" value={phasor.pf == null ? "—" : fmt(phasor.pf, 3)} unit="" color={C.green} />
+            <PhasorStat label="Tipo de carga" value={phasorLoadType} unit="" color={phasor.loadType === "capacitive" ? C.cyan : phasor.loadType === "inductive" ? C.purple : C.amber} />
             <PhasorStat label="Tensão RMS" value={fmt(phasor.voltage, 2)} unit="V" color={C.cyan} />
             <PhasorStat label="Corrente RMS" value={fmt(phasor.current, 3)} unit="A" color={C.purple} />
             <PhasorStat label="Potência reativa" value={fmt(phasor.reactivePower, 2)} unit="VAr" color={phasor.reactivePower < 0 ? C.purple : C.cyan} />
@@ -1024,11 +1095,11 @@ function MonitorDashboard({
         <MetricCard label="Potência aparente" value={format(telemetry?.apparentPower, 2)} unit="VA" accent={C.cyan} />
         <MetricCard label="Potência ativa" value={format(telemetry?.power, 2)} unit="W" accent={C.amber} />
         <MetricCard label="Potência reativa*" value={format(telemetry?.reactivePower, 2)} unit="VAr" accent={C.purple} />
-        <MetricCard label="Fator de potência" value={format(telemetry?.pf)} unit="" accent={C.green} />
+        <MetricCard label="Fator de potência" value={format(telemetry?.pf, 3)} unit="" accent={C.green} />
         <MetricCard label="Erros CRC" value={telemetry?.crcErrors != null ? String(telemetry.crcErrors) : "—"} unit="" accent={telemetry?.crcErrors > 0 ? C.red : C.green} />
       </div>
 
-      <PhasorDiagram telemetry={telemetry} />
+      <PhasorDiagram telemetry={telemetry} history={history} />
 
       <div className="live-chart-grid" style={{ display: "grid", gap: 16 }}>
         <ChartCard title="Tensão — tendência ao vivo" fileName="tendencia_tensao.png">

@@ -45,3 +45,12 @@ test("preserva potencia reativa assinada e tipo de carga", () => {
   assert.equal(telemetry.reactivePowerSource, "payload");
   assert.equal(telemetry.loadType, "capacitiva");
 });
+
+test("normaliza fator de potência em percentual no payload", () => {
+  const telemetry = parseTelemetry(
+    '{"voltage":220.1,"current":0.51,"power":112,"pf":98,' +
+    '"frequency":60,"energy":1.23}',
+  );
+
+  assert.equal(telemetry.pf, 0.98);
+});

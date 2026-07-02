@@ -1,4 +1,5 @@
 import mqtt from "mqtt";
+import { normalizePowerFactor } from "../utils.js";
 
 export const DEFAULT_MQTT_CONFIG = {
   // O ESP32 pode continuar publicando em mqtt://test.mosquitto.org:1883.
@@ -96,7 +97,7 @@ export function parseTelemetry(payload) {
     apparentPower,
     reactivePower,
     reactivePowerSource: reportedReactivePower == null ? "estimated" : "payload",
-    pf: Number(decoded.pf),
+    pf: normalizePowerFactor(decoded.pf),
     phaseAngleDeg,
     currentAngleDeg,
     loadType: firstOptionalText(
