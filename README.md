@@ -117,6 +117,11 @@ Automático (GitHub + Pages):
 
 Para o diagrama fasorial, envie `reactivePower`/`q` com sinal quando disponível: positivo para carga indutiva e negativo para carga capacitiva. Também é aceito `currentAngleDeg` assinado ou `loadType` (`indutiva`/`capacitiva`).
 
+## 📚 Autores para citação
+
+- Lucas Silva Pinheiro
+- Francisco dos Santos Viana
+
 ## 🔒 Licença
 
 Projeto privado.

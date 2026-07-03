@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "Se você usar este projeto, por favor cite usando os metadados abaixo."
+title: "E-Metrics IoT"
+authors:
+  - family-names: "Pinheiro"
+    given-names: "Lucas Silva"
+  - family-names: "Viana"
+    given-names: "Francisco dos Santos"
