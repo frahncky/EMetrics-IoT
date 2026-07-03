@@ -1,6 +1,16 @@
 cff-version: 1.2.0
 message: "Se você usar este projeto, por favor cite usando os metadados abaixo."
 title: "E-Metrics IoT"
+abstract: "Plataforma IoT para monitoramento, histórico e análise de grandezas elétricas em tempo real."
+version: "1.0.0"
+repository-code: "https://github.com/frahncky/EMetrics-IoT"
+url: "https://github.com/frahncky/EMetrics-IoT"
+keywords:
+  - IoT
+  - MQTT
+  - Flutter
+  - ESP32
+  - monitoramento elétrico
 authors:
   - family-names: "Pinheiro"
     given-names: "Lucas Silva"
