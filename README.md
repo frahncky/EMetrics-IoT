@@ -108,11 +108,19 @@ Automático (GitHub + Pages):
   "frequency": 60.02,
   "power": 1146.25,
   "apparentPower": 1210.4,
-  "reactivePower": 386.77,
+  "reactivePower": -386.77,
   "energy": 45.601,
-  "pf": 0.98
+  "pf": 0.98,
+  "loadType": "capacitiva"
 }
 ```
+
+Para o diagrama fasorial, envie `reactivePower`/`q` com sinal quando disponível: positivo para carga indutiva e negativo para carga capacitiva. Também é aceito `currentAngleDeg` assinado ou `loadType` (`indutiva`/`capacitiva`).
+
+## 📚 Autores para citação
+
+- Lucas Silva Pinheiro
+- Francisco dos Santos Viana
 
 ## 🔒 Licença
 
