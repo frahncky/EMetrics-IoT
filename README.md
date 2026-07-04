@@ -26,6 +26,10 @@
   <img alt="Cloudflare Pages" src="https://img.shields.io/badge/Cloudflare_Pages-F38020?style=for-the-badge&logo=cloudflarepages&logoColor=white">
 </p>
 
+<p align="center">
+  <img src="imagens/projeto_preview.png" alt="Prévia visual do projeto E-Metrics IoT" width="820">
+</p>
+
 ## Visão Geral
 
 O **E-Metrics IoT** integra hardware, aplicativo móvel/desktop e dashboard web para acompanhar medições elétricas em tempo real. O sistema recebe telemetria de um dispositivo IoT via MQTT, apresenta indicadores e gráficos, registra histórico local, gera alertas e permite exportar os dados para análise.
