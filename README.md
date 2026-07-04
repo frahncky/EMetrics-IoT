@@ -238,7 +238,7 @@ BibTeX:
 ```bibtex
 @software{pinheiro_viana_emetrics_iot,
   author = {Pinheiro, Lucas Silva and Viana, Francisco dos Santos},
-  title = {{E-Metrics IoT: plataforma IoT para monitoramento de métricas elétricas}},
+  title = {{Desenvolvimento de um Sistema de Medição e Monitoramento de Energia Elétrica via IoT}},
   year = {2026},
   version = {1.0.0},
   url = {https://github.com/frahncky/EMetrics-IoT}
