@@ -1,4 +1,4 @@
-# E-Metrics IoT
+# E-Metrics IoT 📊⚡
 
 <p align="center">
   <img src="assets/icon.png" alt="Logotipo do E-Metrics IoT" width="120">
@@ -30,13 +30,13 @@
   <img src="imagens/projeto_preview.png" alt="Prévia visual do projeto E-Metrics IoT" width="820">
 </p>
 
-## Visão Geral
+## 🎯 Visão Geral
 
 O **E-Metrics IoT** integra hardware, aplicativo móvel/desktop e dashboard web para acompanhar medições elétricas em tempo real. O sistema recebe telemetria de um dispositivo IoT via MQTT, apresenta indicadores e gráficos, registra histórico local, gera alertas e permite exportar os dados para análise.
 
 O projeto foi pensado para bancadas, demonstradores acadêmicos e monitoramento de cargas elétricas em pequena escala, unindo protótipo físico, firmware ESP32, app Flutter multiplataforma e dashboard web em React.
 
-## Destaques
+## ✨ Destaques
 
 | Área | Recursos |
 |---|---|
@@ -48,7 +48,7 @@ O projeto foi pensado para bancadas, demonstradores acadêmicos e monitoramento 
 | Integração | Envio opcional para API REST, fila offline e suporte a OAuth Device Flow |
 | Hardware | Medidor baseado em ESP32, PZEM-004T, display LCD, armazenamento local e gabinete 3D |
 
-## Galeria do Projeto
+## 🖼️ Galeria do Projeto
 
 <table>
   <tr>
@@ -77,7 +77,7 @@ O projeto foi pensado para bancadas, demonstradores acadêmicos e monitoramento 
   </tr>
 </table>
 
-## Arquitetura
+## 🏗️ Arquitetura
 
 ```mermaid
 flowchart LR
@@ -92,9 +92,9 @@ flowchart LR
     App -. provisionamento Wi-Fi/MQTT .-> ESP
 ```
 
-## Aplicações
+## 🧩 Aplicações
 
-### App Flutter
+### 📱 App Flutter
 
 O aplicativo principal concentra operação local, visualização em tempo real, histórico, exportação, alertas e configurações do dispositivo. A interface usa Riverpod para orquestrar estados, MQTT para entrada de dados e SQLite para persistência local.
 
@@ -104,17 +104,17 @@ Principais telas:
 - **Histórico:** filtros por período, gráfico histórico, solicitação de dados ao dispositivo, exportação CSV/PDF.
 - **Configurações:** perfis MQTT, limites de alerta, integração REST, tema, conta e provisionamento do ESP32.
 
-### Dashboard Web
+### 🌐 Dashboard Web
 
 O dashboard em `dashboard_e_metrics_iot/` oferece uma visualização web em tempo real da telemetria MQTT e pode ser publicado no Cloudflare Pages.
 
 Link de produção: <https://emetricsiot.pages.dev>
 
-### Firmware e Hardware
+### 🔌 Firmware e Hardware
 
 A pasta `firmware/` contém exemplos para ESP32 com leitura de métricas e publicação via MQTT. Os arquivos em `imagens/`, `model_3D/` e `projeto_medidor_proteus/` documentam a evolução física do medidor, incluindo PCB, gabinete e materiais de bancada.
 
-## Stack Tecnológica
+## 🧰 Stack Tecnológica
 
 | Camada | Tecnologias |
 |---|---|
@@ -126,7 +126,7 @@ A pasta `firmware/` contém exemplos para ESP32 com leitura de métricas e publi
 | Dashboard web | React, Vite, Cloudflare Pages |
 | Hardware | ESP32, PZEM-004T, LCD I2C, fonte AC/DC |
 
-## Estrutura do Repositório
+## 🗂️ Estrutura do Repositório
 
 ```text
 lib/                         app Flutter
@@ -147,9 +147,9 @@ docs/                        manual do usuário
 protocolo_experimental/      materiais de bancada e protocolo experimental
 ```
 
-## Como Rodar
+## 🚀 Como Rodar
 
-### App Flutter
+### 📱 App Flutter
 
 ```bash
 flutter pub get
@@ -164,7 +164,7 @@ flutter test
 flutter build apk
 ```
 
-### Dashboard Web
+### 🌐 Dashboard Web
 
 ```bash
 cd dashboard_e_metrics_iot
@@ -190,7 +190,7 @@ Configuração usada no Cloudflare Pages:
 | Build command | `npm run build` |
 | Build output directory | `dist` |
 
-## Payload MQTT
+## 📡 Payload MQTT
 
 O dispositivo deve publicar uma mensagem JSON no tópico configurado. Exemplo:
 
@@ -221,7 +221,7 @@ Campos mínimos esperados pelo app:
 
 Para o diagrama fasorial, envie `reactivePower` ou `q` com sinal quando disponível: positivo para carga indutiva e negativo para carga capacitiva. Também são aceitos `currentAngleDeg` assinado ou `loadType` (`indutiva`/`capacitiva`).
 
-## Documentação
+## 📚 Documentação
 
 - [Manual do usuário](docs/USER_MANUAL.md)
 - [Firmware ESP32](firmware/esp32_pzem/README.md)
@@ -229,7 +229,7 @@ Para o diagrama fasorial, envie `reactivePower` ou `q` com sinal quando disponí
 - [Política de segurança](SECURITY.md)
 - [Changelog](CHANGELOG.md)
 
-## Como Citar
+## 🎓 Como Citar
 
 Se este projeto for utilizado em trabalhos acadêmicos, demonstrações ou materiais derivados, cite os autores e o repositório.
 
@@ -251,11 +251,11 @@ BibTeX:
 
 O repositório também inclui o arquivo [CITATION.cff](CITATION.cff), usado pelo GitHub para gerar citações automaticamente.
 
-## Autores
+## 👥 Autores
 
-- Lucas Silva Pinheiro
-- Francisco dos Santos Viana
+- 👨‍💻 Lucas Silva Pinheiro
+- 👨‍💻 Francisco dos Santos Viana
 
-## Licença e Uso
+## 🔒 Licença e Uso
 
 Projeto privado. O uso, a redistribuição e a publicação de derivados dependem de autorização dos autores.
