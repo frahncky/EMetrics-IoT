@@ -231,7 +231,7 @@ Se este projeto for utilizado em trabalhos acadêmicos, demonstrações ou mater
 
 Formato sugerido em ABNT:
 
-> PINHEIRO, Lucas Silva; VIANA, Francisco dos Santos. **E-Metrics IoT: plataforma IoT para monitoramento de métricas elétricas**. 2026. Software. Disponível em: <https://github.com/frahncky/EMetrics-IoT>.
+> PINHEIRO, Lucas Silva; VIANA, Francisco dos Santos. **Desenvolvimento de um Sistema de Medição e Monitoramento de Energia Elétrica via IoT**. 2026. Software e hardware. Disponível em: <https://github.com/frahncky/EMetrics-IoT>.
 
 BibTeX:
 
