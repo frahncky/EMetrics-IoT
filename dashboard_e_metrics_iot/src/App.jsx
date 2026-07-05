@@ -1030,7 +1030,6 @@ function PhasorDiagram({ telemetry, history = [] }) {
             </div>
           </div>
           <div className="phasor-stat-grid">
-            <PhasorStat label="Fator de potência" value={phasor.pf == null ? "—" : fmt(phasor.pf, 3)} unit="" color={C.green} />
             <PhasorStat
               label="Tipo de carga"
               value={phasorLoadType}
