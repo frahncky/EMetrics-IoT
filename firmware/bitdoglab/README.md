@@ -11,15 +11,24 @@ pela `command_ack` e pela telemetria.
 
 ## Uso
 
-| Botao | Acao |
+| Controle | Acao |
 |---|---|
-| A (toque) | Escolhe a proxima partida da lista do quadro |
-| A (segurar 1,2 s) | Da a partida escolhida (`ENABLE_MOTOR_COMMANDS = True`) |
+| Joystick esquerda/direita | Troca a tela: Eletrica, Sensores, Uso, Partida |
+| Joystick cima/baixo | Na tela Partida, escolhe a partida |
+| A (toque) | Vai para a tela Partida |
+| A (segurar 1,2 s) | Liga com a partida escolhida (`ENABLE_MOTOR_COMMANDS = True`) |
 | B | Desliga (`stop`); sempre enviado |
-| Joystick | Paginas: U/I/P, E/f/FP, temperatura/vibracao, partida |
+| SW (botao do joystick) | Silencia o alarme sonoro atual |
 
-LED: azul parado, verde ligado, amarelo partindo, vermelho sem MQTT,
-quadro offline ou desarme.
+Tela: cabecalho com o nome da tela e a posicao; rodape unico com o estado
+(mensagem, comando pendente, LIGADO com tempo, Parado, DESARME, offline).
+
+LED (brilho em `LED_BRIGHTNESS`, padrao 6%): azul parado, verde ligado,
+amarelo partindo, vermelho sem conexao, quadro offline ou alarme.
+
+Buzzer (GPIO21, `BUZZER_ENABLED`): clique nos controles, dois bipes quando o
+quadro aceita, bipe grave na recusa e bipe duplo a cada 3 s com alarme ou
+desarme ativo, ate ser silenciado no SW.
 
 A partida e recusada localmente se o quadro estiver sem telemetria, exigir
 comando cifrado (`secure`), estiver em modo instrumentacao ou ja estiver ligado.
