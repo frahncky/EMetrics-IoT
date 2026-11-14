@@ -2,10 +2,18 @@
 # NAO publique config.py com credenciais.
 WIFI_SSID = "SUA_REDE"
 WIFI_PASSWORD = "SUA_SENHA"
+# Opcional: redes tentadas em ordem (tem prioridade sobre WIFI_SSID).
+WIFI_NETWORKS = [
+    ("SUA_REDE", "SUA_SENHA"),
+    ("REDE_RESERVA", "SENHA_RESERVA"),
+]
 
 # Use o MESMO broker MQTT do E-Metrics IoT (preferencialmente privado).
 MQTT_HOST = "192.168.1.10"
 MQTT_PORT = 1883
+MQTT_USE_TLS = False
+MQTT_USE_WEBSOCKET = False
+MQTT_WEBSOCKET_PATH = "/mqtt"
 MQTT_USER = ""
 MQTT_PASSWORD = ""
 MQTT_CLIENT_ID = "emetrics-bitdoglab"

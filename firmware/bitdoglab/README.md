@@ -39,15 +39,22 @@ Sem Wi-Fi no Pico (modelo sem W), a comunicacao proposta exige modulo de rede.
 2. Pelo Thonny, instale/copiei as bibliotecas `umqtt.simple` e `ssd1306`
    para o dispositivo (em algumas builds `umqtt.simple` ja esta disponivel).
 3. Copie `config.example.py` para `config.py` no proprio dispositivo;
-   ajuste SSID, senha, broker, credenciais e `TELEMETRY_TOPIC` para
+   ajuste SSID, senha, broker, porta, transporte, credenciais e
+   `TELEMETRY_TOPIC` para
    coincidir com o perfil MQTT ja utilizado pelo ESP32/E-Metrics.
 4. Copie `main.py` para o dispositivo. Execute e veja o OLED.
 5. O botao do joystick alterna tensao/corrente e potencia/energia.
 6. Deixe `ENABLE_MOTOR_COMMANDS = False` enquanto nao houver controlador.
 
 O arquivo `config.py` contem segredos: nao o envie ao GitHub.
-O exemplo utiliza MQTT TCP; em redes reais, use broker privado, autenticao,
-ACLs por topico e transporte criptografado em versao adaptada/validada.
+O exemplo aceita MQTT TCP (`MQTT_USE_TLS = False`, normalmente porta 1883) ou
+TLS (`MQTT_USE_TLS = True`, normalmente porta 8883). A implementacao `umqtt.simple`
+incluida em algumas builds do MicroPython cifra o transporte, mas pode nao validar
+o certificado do broker; em redes reais, instale uma cadeia CA e valide o servidor,
+alem de usar broker privado, autenticacao e ACLs por topico.
+Para MQTT sobre WebSocket, use `MQTT_USE_WEBSOCKET = True` e configure
+`MQTT_WEBSOCKET_PATH` (por exemplo, `/mqtt`). Use porta 8080 sem TLS (`ws`) ou
+8081 com TLS (`wss`), conforme o broker.
 **Nunca exponha um topico de comando de motor em broker publico de teste.**
 
 ## Topicos

@@ -87,28 +87,68 @@ def disconnect():
     mqtt = None
     motor = "desconhecido"
 
-def connect():
-    global mqtt, last_ping
-    if not nic.isconnected():
-        nic.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
+def wifi_networks():
+    nets = getattr(config, "WIFI_NETWORKS", None)
+    if nets:
+        return list(nets)
+    return [(config.WIFI_SSID, config.WIFI_PASSWORD)]
+
+def connect_wifi():
+    known = wifi_networks()
+    try:
+        visible = set(n[0].decode() for n in nic.scan())
+    except Exception as exc:
+        print("Falha no scan Wi-Fi:", exc)
+        visible = None
+    candidates = [n for n in known if visible is None or n[0] in visible] or known
+    for ssid, password in candidates:
+        print("Conectando ao Wi-Fi:", ssid)
+        try:
+            nic.disconnect()
+        except Exception:
+            pass
+        nic.connect(ssid, password)
         deadline = time.ticks_add(time.ticks_ms(), 12000)
         while not nic.isconnected() and time.ticks_diff(deadline, time.ticks_ms()) > 0:
             time.sleep_ms(200)
-        if not nic.isconnected():
-            raise OSError("Wi-Fi indisponivel")
+        if nic.isconnected():
+            print("Wi-Fi conectado:", ssid, nic.ifconfig()[0])
+            return
+    raise OSError("Wi-Fi indisponivel")
+
+def connect():
+    global mqtt, last_ping
+    if not nic.isconnected():
+        connect_wifi()
     mac = nic.config("mac")
     client_id = (config.MQTT_CLIENT_ID + "-%02x%02x%02x" % (mac[-3], mac[-2], mac[-1])).encode()
     user = config.MQTT_USER.encode() if config.MQTT_USER else None
     password = config.MQTT_PASSWORD.encode() if config.MQTT_PASSWORD else None
-    c = MQTTClient(client_id, config.MQTT_HOST, port=config.MQTT_PORT,
-                   user=user, password=password, keepalive=45)
+    use_tls = getattr(config, "MQTT_USE_TLS", False)
+    use_websocket = getattr(config, "MQTT_USE_WEBSOCKET", False)
+    if use_websocket:
+        from mqtt_websocket import WebSocketMQTTClient
+        c = WebSocketMQTTClient(
+            client_id, config.MQTT_HOST, port=config.MQTT_PORT,
+            path=getattr(config, "MQTT_WEBSOCKET_PATH", "/mqtt"),
+            use_tls=use_tls, user=user, password=password, keepalive=45,
+        )
+    else:
+        ssl_params = {"server_hostname": config.MQTT_HOST} if use_tls else {}
+        c = MQTTClient(client_id, config.MQTT_HOST, port=config.MQTT_PORT,
+                       user=user, password=password, keepalive=45,
+                       ssl=use_tls, ssl_params=ssl_params)
     c.set_callback(callback)
     c.connect()
     for t in (config.TELEMETRY_TOPIC, config.MOTOR_STATUS_TOPIC, config.MOTOR_ALARM_TOPIC):
         c.subscribe(t.encode())
     mqtt = c
     last_ping = time.ticks_ms()
-    print("Conectada ao MQTT:", config.MQTT_HOST)
+    transport = "WSS" if use_websocket and use_tls else (
+        "WS" if use_websocket else ("TLS" if use_tls else "TCP")
+    )
+    print("Conectada ao MQTT %s: %s:%d" %
+          (transport, config.MQTT_HOST, config.MQTT_PORT))
 
 def request_motor(command):
     global pending, pending_at
