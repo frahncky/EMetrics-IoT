@@ -16,7 +16,7 @@ pela `command_ack` e pela telemetria.
 | A (toque) | Escolhe a proxima partida da lista do quadro |
 | A (segurar 1,2 s) | Da a partida escolhida (`ENABLE_MOTOR_COMMANDS = True`) |
 | B | Desliga (`stop`); sempre enviado |
-| Joystick | Paginas: U/I/P, E/f/FP, partida |
+| Joystick | Paginas: U/I/P, E/f/FP, temperatura/vibracao, partida |
 
 LED: azul parado, verde ligado, amarelo partindo, vermelho sem MQTT,
 quadro offline ou desarme.
@@ -33,6 +33,7 @@ comando cifrado (`secure`), estiver em modo instrumentacao ou ja estiver ligado.
 | `iotmotor/esp32-01/status` | `online`/`offline` |
 | `iotmotor/esp32-01/command` | `{"v":1,"device_id":"esp32-01","seq":"...","action":"start","boot":"...","profile":"direta"}` |
 | `iotmotor/esp32-01/command_ack` | Aceite ou motivo da recusa |
+| `iotmotor/esp32-02/telemetry` | `temperature`, `vibration_mms`, `vibration_axis`, `alarms_firing` |
 
 O `seq` vem do `ts` da telemetria em microssegundos, compativel com o
 `Date.now()*1000` do painel e do app.

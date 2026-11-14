@@ -22,6 +22,7 @@ MQTT_CLIENT_ID = "emetrics-bitdoglab"
 # Topicos: <PREFIX>/<BOARD>/telemetry, profiles, status, command, command_ack.
 IOTMOTOR_PREFIX = "iotmotor"
 IOTMOTOR_BOARD = "esp32-01"
+IOTMOTOR_SENSORS_BOARD = "esp32-02"  # temperatura e vibracao
 
 # True: botao A (segurar) envia "start" da partida escolhida.
 # "stop" (botao B) e sempre enviado. Permissivos e protecoes ficam no quadro.

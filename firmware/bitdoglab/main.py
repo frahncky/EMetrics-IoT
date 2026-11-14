@@ -25,7 +25,10 @@ T_PROFILES = "%s/%s/profiles" % (PREFIX, BOARD)
 T_STATUS = "%s/%s/status" % (PREFIX, BOARD)
 T_COMMAND = "%s/%s/command" % (PREFIX, BOARD)
 T_ACK = "%s/%s/command_ack" % (PREFIX, BOARD)
-PAGES = 3
+SENSORS = getattr(config, "IOTMOTOR_SENSORS_BOARD", "esp32-02")
+T_SENSORS = "%s/%s/telemetry" % (PREFIX, SENSORS)
+PAGES = 4
+PAGE_PROFILE = 3
 
 a = Pin(config.PIN_BUTTON_A, Pin.IN, Pin.PULL_UP)
 b = Pin(config.PIN_BUTTON_B, Pin.IN, Pin.PULL_UP)
@@ -49,6 +52,8 @@ tele = {}              # ultima telemetria do quadro
 tele_ms = None
 tele_ts_ms = None      # ticks em que chegou a ultima telemetria com ts
 board_online = None
+sens = {}              # ultima telemetria da placa de sensores
+sens_ms = None
 profiles = []          # [(id, nome_sem_acento)]
 sel = 0
 pending = None         # (seq, action)
@@ -86,6 +91,7 @@ def show(text):
 
 def callback(topic, raw):
     global tele, tele_ms, tele_ts_ms, board_online, profiles, sel, pending
+    global sens, sens_ms
     t = topic.decode() if isinstance(topic, bytes) else topic
     if t == T_STATUS:
         board_online = raw == b"online"
@@ -96,7 +102,11 @@ def callback(topic, raw):
         return
     if not isinstance(data, dict):
         return
-    if t == T_TELEMETRY:
+    if t == T_SENSORS:
+        data.pop("vib", None)  # diagnostico por eixo: grande e nao usado aqui
+        sens = data
+        sens_ms = time.ticks_ms()
+    elif t == T_TELEMETRY:
         tele = data
         tele_ms = time.ticks_ms()
         if data.get("ts"):
@@ -182,7 +192,7 @@ def connect():
     c.set_callback(callback)
     try:
         c.connect()
-        for t in (T_STATUS, T_PROFILES, T_ACK, T_TELEMETRY):
+        for t in (T_STATUS, T_PROFILES, T_ACK, T_TELEMETRY, T_SENSORS):
             c.subscribe(t.encode())
     except Exception:
         try:
@@ -269,15 +279,18 @@ def buttons():
     if not av and was_a:
         if not a_long_done and profiles:
             sel = (sel + 1) % len(profiles)
-            page = 2
+            page = PAGE_PROFILE
         a_start = None
     if sv and not was_sw:
         page = (page + 1) % PAGES
     was_a, was_b, was_sw = av, bv, sv
 
-def number(key, suffix="", places=1):
+def sensors_fresh():
+    return sens_ms is not None and time.ticks_diff(time.ticks_ms(), sens_ms) <= config.TELEMETRY_STALE_MS
+
+def number(key, suffix="", places=1, src=None):
     try:
-        return ("%." + str(places) + "f" + suffix) % float(tele[key])
+        return ("%." + str(places) + "f" + suffix) % float((tele if src is None else src)[key])
     except (KeyError, TypeError, ValueError):
         return "--" + suffix
 
@@ -294,7 +307,8 @@ def motor_text():
 
 def render():
     fresh = telemetry_fresh()
-    if mqtt is None or not fresh or tele.get("trip_alarm"):
+    sens_alarm = sensors_fresh() and sens.get("alarm_active")
+    if mqtt is None or not fresh or tele.get("trip_alarm") or sens_alarm:
         led(red=1)
     elif tele.get("motor_running"):
         led(green=1)
@@ -315,6 +329,15 @@ def render():
         oled.text("E: " + number("energy", "kWh", 2), 0, 22)
         oled.text("f: " + number("frequency", "Hz"), 0, 32)
         oled.text("FP: " + number("pf", "", 2), 0, 42)
+    elif page == 2:
+        if sensors_fresh():
+            oled.text("T: " + number("temperature", "C", 1, sens), 0, 22)
+            oled.text("Vib: " + number("vibration_mms", "mm/s", 2, sens), 0, 32)
+            firing = sens.get("alarms_firing") or []
+            oled.text(("ALM:" + ",".join(firing))[:16] if firing else
+                      "Eixo: " + str(sens.get("vibration_axis", "-")), 0, 42)
+        else:
+            oled.text("Sensores offline", 0, 22)
     else:
         oled.text("Partida:", 0, 22)
         if profiles:
