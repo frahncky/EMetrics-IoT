@@ -15,8 +15,6 @@
   ·
   <a href="firmware/esp32_pzem/README.md">Firmware ESP32</a>
   ·
-  <a href="firmware/bitdoglab/README.md">Painel BitDogLab</a>
-  ·
   <a href="backend_example/README.md">Backend de exemplo</a>
 </p>
 
@@ -36,7 +34,7 @@
 
 O **E-Metrics IoT** integra hardware, aplicativo móvel/desktop e dashboard web para acompanhar medições elétricas em tempo real. O sistema recebe telemetria de um dispositivo IoT via MQTT, apresenta indicadores e gráficos, registra histórico local, gera alertas e permite exportar os dados para análise.
 
-O projeto foi pensado para bancadas, demonstradores acadêmicos e monitoramento de cargas elétricas em pequena escala, unindo protótipo físico, firmware ESP32, app Flutter multiplataforma, dashboard web em React e um painel de bolso na **BitDogLab** que também liga e desliga o motor do quadro de comando IoT Motor.
+O projeto foi pensado para bancadas, demonstradores acadêmicos e monitoramento de cargas elétricas em pequena escala, unindo protótipo físico, firmware ESP32, app Flutter multiplataforma e dashboard web em React.
 
 ## ✨ Destaques
 
@@ -49,7 +47,6 @@ O projeto foi pensado para bancadas, demonstradores acadêmicos e monitoramento 
 | Alertas | Notificações locais para limites de tensão e consumo |
 | Integração | Envio opcional para API REST, fila offline e suporte a OAuth Device Flow |
 | Hardware | Medidor baseado em ESP32, PZEM-004T, display LCD, armazenamento local e gabinete 3D |
-| Painel BitDogLab | Telas OLED com medições, temperatura e vibração, escolha da partida, liga/desliga do motor, buzzer e matriz de LED com estado e nível de carga |
 
 ## 🖼️ Galeria do Projeto
 
@@ -93,9 +90,6 @@ flowchart LR
     App --> Exports["CSV / PDF"]
     App -->|opcional| API["API REST externa"]
     App -. provisionamento Wi-Fi/MQTT .-> ESP
-    Broker --> Bitdog["BitDogLab<br/>painel MicroPython"]
-    Bitdog -->|start / stop| Broker
-    Broker <--> Quadro["Quadro IoT Motor<br/>ESP32 contatores + sensores"]
 ```
 
 ## 🧩 Aplicações
@@ -116,15 +110,6 @@ O dashboard em `dashboard_e_metrics_iot/` oferece uma visualização web em temp
 
 Link de produção: <https://emetricsiot.pages.dev>
 
-### 🎛️ Painel BitDogLab
-
-O firmware em [`firmware/bitdoglab/`](firmware/bitdoglab/README.md) transforma a BitDogLab (Raspberry Pi Pico W, MicroPython) em um painel de bolso conectado ao mesmo broker MQTT, via WebSocket:
-
-- **Telas OLED:** elétrica (tensão, corrente, potência, FP), sensores (temperatura e vibração), uso (energia, frequência, horímetro, partidas) e escolha da partida.
-- **Comando do motor:** escolhe uma das partidas gravadas no quadro IoT Motor (direta, estrela‑triângulo…), liga segurando o botão A e desliga pelo B. O quadro valida, aciona os contatores e confirma pela `command_ack`.
-- **Sinalização:** LED RGB atenuado, buzzer para cliques, aceite, recusa e alarme, e matriz 5×5 com ícone de estado, Y/Δ durante a estrela‑triângulo e nível de carga ou vibração na linha de baixo.
-- **Rede:** várias redes Wi‑Fi em ordem de preferência e reconexão automática.
-
 ### 🔌 Firmware e Hardware
 
 A pasta `firmware/` contém exemplos para ESP32 com leitura de métricas e publicação via MQTT. Os arquivos em `imagens/`, `model_3D/` e `projeto_medidor_proteus/` documentam a evolução física do medidor, incluindo PCB, gabinete e materiais de bancada.
@@ -140,7 +125,6 @@ A pasta `firmware/` contém exemplos para ESP32 com leitura de métricas e publi
 | Notificações | flutter_local_notifications |
 | Dashboard web | React, Vite, Cloudflare Pages |
 | Hardware | ESP32, PZEM-004T, LCD I2C, fonte AC/DC |
-| Painel de bolso | BitDogLab (Raspberry Pi Pico W), MicroPython, umqtt sobre WebSocket, OLED SSD1306, WS2812 |
 
 ## 🗂️ Estrutura do Repositório
 
@@ -156,7 +140,7 @@ lib/                         app Flutter
 
 dashboard_e_metrics_iot/     dashboard web React/Vite
 backend_example/             servidor Node.js opcional
-firmware/                    firmware ESP32 (PZEM) e painel BitDogLab (MicroPython)
+firmware/                    exemplos de firmware ESP32
 imagens/                     figuras do protótipo, PCB e gabinete
 model_3D/                    modelos 3D do gabinete
 docs/                        manual do usuário
@@ -241,7 +225,6 @@ Para o diagrama fasorial, envie `reactivePower` ou `q` com sinal quando disponí
 
 - [Manual do usuário](docs/USER_MANUAL.md)
 - [Firmware ESP32](firmware/esp32_pzem/README.md)
-- [Painel BitDogLab](firmware/bitdoglab/README.md)
 - [Backend de exemplo](backend_example/README.md)
 - [Política de segurança](SECURITY.md)
 - [Changelog](CHANGELOG.md)
