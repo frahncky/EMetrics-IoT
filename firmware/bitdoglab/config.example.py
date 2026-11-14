@@ -45,5 +45,11 @@ JOYSTICK_Y_SIGN = 1   # troque para -1 se cima/baixo estiverem invertidos
 PIN_BUZZER = 21
 BUZZER_ENABLED = True
 LED_BRIGHTNESS = 0.06  # 0.0 a 1.0
+PIN_MATRIX = 7            # matriz 5x5 WS2812
+MATRIX_BRIGHTNESS = 0.04  # 0.0 a 1.0
+MATRIX_FLIP = False       # True se os icones aparecerem de cabeca para baixo
+# Reservas, usadas so ate chegar motor_info/alarms retidos do broker:
+MOTOR_NOMINAL_A = None
+VIBRATION_LIMIT_MMS = 4.5
 START_HOLD_MS = 1200
 TELEMETRY_STALE_MS = 15000

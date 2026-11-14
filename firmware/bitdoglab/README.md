@@ -25,6 +25,7 @@ quadro ---command_ack-------------------> broker ---> BitDogLab
 | Arquivo | Conteudo |
 |---|---|
 | `main.py` | Programa: Wi-Fi, MQTT, telas, controles, LED e buzzer |
+| `matrix.py` | Matriz 5x5 WS2812: icones e barras |
 | `mqtt_websocket.py` | Cliente `umqtt.simple` sobre WebSocket (porta 8080) |
 | `config.example.py` | Modelo de configuracao; copie para `config.py` |
 | `config.py` | Configuracao real com senhas. **Ignorado pelo Git** |
@@ -63,6 +64,33 @@ ligado, amarelo partindo, vermelho sem conexao, quadro offline ou alarme.
 quando o quadro aceita, bipe grave na recusa e bipe duplo a cada 3 s com
 alarme ou desarme ativo. O SW silencia; um alarme diferente volta a tocar.
 
+## Matriz de LED 5x5
+
+A matriz mostra o estado de longe, com brilho baixo (`MATRIX_BRIGHTNESS`, 4%).
+Prioridade:
+
+| Situacao | Matriz |
+|---|---|
+| Sem conexao ou quadro offline | X azul |
+| Alarme ou desarme | ! vermelho piscando |
+| Estrela-triangulo em curso | Y ciano na estrela, traco no tempo morto, triangulo por 3 s apos a troca |
+| Motor ligado, tela Sensores | Barra de vibracao (mm/s / limite do alarme de vibracao) |
+| Motor ligado | Barra de carga (corrente / corrente nominal) |
+| Partindo (rele ligado, sem corrente) | Play amarelo piscando |
+| Parado | Quadrado azul |
+
+Barras: 4 colunas = 100% (nominal ou limite); a 5a, vermelha, acende acima
+disso. Verde ate 75%, amarelo ate 100%.
+
+- A corrente nominal vem de `iotmotor/esp32-01/motor_info` (`current_a`, ou
+  `current_y_a` com o motor ligado em estrela). Sem ela, o motor ligado
+  aparece como play verde. `MOTOR_NOMINAL_A` no `config.py` e a reserva.
+- O limite de vibracao vem do alarme `vibration_mms` em
+  `iotmotor/esp32-02/alarms`; reserva `VIBRATION_LIMIT_MMS` (4,5 mm/s).
+- Estrela e triangulo saem da partida gravada: o contator que desliga no
+  meio (`off > 0`) e a estrela; o que liga depois dele e o triangulo.
+- Icones de cabeca para baixo: `MATRIX_FLIP = True`.
+
 ## Partida e parada
 
 - **Partida:** segure A por 1,2 s. A placa envia `start` com o `boot` da
@@ -93,6 +121,8 @@ Prefixo e placas em `IOTMOTOR_PREFIX`, `IOTMOTOR_BOARD` e
 | `iotmotor/esp32-01/status` | recebe | `online` / `offline` |
 | `iotmotor/esp32-01/command` | envia | `start` e `stop` |
 | `iotmotor/esp32-01/command_ack` | recebe | Aceite ou motivo da recusa |
+| `iotmotor/esp32-01/motor_info` | recebe | Corrente nominal para a barra de carga (retido) |
+| `iotmotor/esp32-02/alarms` | recebe | Limite de vibracao para a barra (retido) |
 | `iotmotor/esp32-02/telemetry` | recebe | `temperature`, `vibration_mms`, `vibration_axis`, `alarm_active`, `alarms_firing` |
 
 Exemplo de partida enviada:
@@ -113,6 +143,7 @@ BitDogLab v6.3 com Raspberry Pi Pico W. Confirme os pinos em outras revisoes.
 | OLED 128x64 SDA / SCL | 14 / 15 | `PIN_OLED_SDA`, `PIN_OLED_SCL` |
 | LED R / G / B (PWM) | 13 / 11 / 12 | `PIN_LED_R`, `PIN_LED_G`, `PIN_LED_B` |
 | Buzzer (PWM) | 21 | `PIN_BUZZER` |
+| Matriz 5x5 WS2812 | 7 | `PIN_MATRIX` |
 
 Se o joystick estiver invertido, troque `JOYSTICK_X_SIGN` ou
 `JOYSTICK_Y_SIGN` para `-1`.
@@ -130,7 +161,7 @@ Se o joystick estiver invertido, troque `JOYSTICK_X_SIGN` ou
 4. Envie os arquivos e reinicie:
 
    ```sh
-   mpremote connect COM5 cp main.py :main.py + cp mqtt_websocket.py :mqtt_websocket.py + cp config.py :config.py + reset
+   mpremote connect COM5 cp main.py :main.py + cp matrix.py :matrix.py + cp mqtt_websocket.py :mqtt_websocket.py + cp config.py :config.py + reset
    ```
 
 5. Acompanhe pelo serial (115200). Esperado:

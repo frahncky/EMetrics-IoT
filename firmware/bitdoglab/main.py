@@ -12,6 +12,10 @@ Controles:
   A (toque)         -> vai para a tela Partida
   B                 -> desliga (sempre enviado)
   SW (joystick)     -> silencia o alarme sonoro
+
+Matriz 5x5: alarme (pisca), Y/triangulo na estrela-triangulo, barra de carga
+(corrente/nominal) com o motor ligado, barra de vibracao na tela Sensores e
+icone de estado com o motor parado.
 """
 import json
 import time
@@ -29,6 +33,8 @@ T_STATUS = "%s/%s/status" % (PREFIX, BOARD)
 T_COMMAND = "%s/%s/command" % (PREFIX, BOARD)
 T_ACK = "%s/%s/command_ack" % (PREFIX, BOARD)
 T_SENSORS = "%s/%s/telemetry" % (PREFIX, SENSORS)
+T_MOTOR_INFO = "%s/%s/motor_info" % (PREFIX, BOARD)
+T_ALARMS = "%s/%s/alarms" % (PREFIX, SENSORS)
 
 PAGE_NAMES = ("Eletrica", "Sensores", "Uso", "Partida")
 PAGE_PROFILE = 3
@@ -58,6 +64,16 @@ try:
 except Exception as exc:
     print("Display OLED indisponivel:", exc)
 
+mat = None
+try:
+    from matrix import Matrix, GREEN, YELLOW, RED, BLUE, CYAN
+    mat = Matrix(getattr(config, "PIN_MATRIX", 7),
+                 getattr(config, "MATRIX_BRIGHTNESS", 0.04),
+                 getattr(config, "MATRIX_FLIP", False))
+    mat.clear()
+except Exception as exc:
+    print("Matriz de LED indisponivel:", exc)
+
 nic = network.WLAN(network.STA_IF)
 nic.active(True)
 
@@ -69,6 +85,9 @@ tele_ts_ms = None
 sens = {}
 sens_ms = None
 profiles = []          # [(id, nome_sem_acento)]
+profile_cnt = {}       # id e nome -> lista cnt da partida
+nominal_a = getattr(config, "MOTOR_NOMINAL_A", None)
+vib_limit = getattr(config, "VIBRATION_LIMIT_MMS", 4.5)
 sel = 0
 pending = None         # (seq, action)
 pending_at = 0
@@ -135,6 +154,7 @@ def show(text):
 # ---------------------------------------------------------------- MQTT
 def callback(topic, raw):
     global tele, tele_ms, tele_ts_ms, profiles, sel, pending, sens, sens_ms
+    global profile_cnt, nominal_a, vib_limit
     t = topic.decode() if isinstance(topic, bytes) else topic
     if t == T_STATUS:
         return
@@ -158,8 +178,21 @@ def callback(topic, raw):
         current = profiles[sel][0] if profiles else None
         profiles = [(p.get("id"), ascii_text(p.get("name", p.get("id"))))
                     for p in data.get("profiles", []) if p.get("id")]
+        profile_cnt = {}
+        for p in data.get("profiles", []):
+            for k in (p.get("id"), p.get("name")):
+                if k:
+                    profile_cnt[k] = p.get("cnt") or []
         ids = [p[0] for p in profiles]
         sel = ids.index(current) if current in ids else 0
+    elif t == T_MOTOR_INFO:
+        key = "current_y_a" if data.get("connection") == "star" else "current_a"
+        if data.get(key):
+            nominal_a = float(data[key])
+    elif t == T_ALARMS:
+        for al in data.get("alarms", []):
+            if al.get("field") == "vibration_mms" and al.get("above") and al.get("limit"):
+                vib_limit = float(al["limit"])
     elif t == T_ACK:
         if pending and str(data.get("seq")) == pending[0]:
             pending = None
@@ -236,7 +269,7 @@ def connect():
     c.set_callback(callback)
     try:
         c.connect()
-        for t in (T_STATUS, T_PROFILES, T_ACK, T_TELEMETRY, T_SENSORS):
+        for t in (T_STATUS, T_PROFILES, T_ACK, T_TELEMETRY, T_SENSORS, T_MOTOR_INFO, T_ALARMS):
             c.subscribe(t.encode())
     except Exception:
         try:
@@ -473,6 +506,75 @@ def render():
     oled.text(status_line()[:16], 0, 56)
     oled.show()
 
+# ---------------------------------------------------------------- matriz
+def star_delta_phase():
+    """'star', 'delta', 'dead' ou None, pelos contatores da partida em curso.
+
+    Na partida gravada, o contator que desliga no meio (off > 0) e a estrela;
+    o que liga depois desse instante e o triangulo.
+    """
+    cnt = profile_cnt.get(tele.get("profile"))
+    relays = tele.get("relays") or []
+    if not cnt or not relays or tele.get("mode") != "profile_bench":
+        return None
+    star = delta = None
+    for i, c in enumerate(cnt):
+        if c.get("use") and c.get("off", 0) > 0:
+            star = i
+    if star is None:
+        return None
+    for i, c in enumerate(cnt):
+        if i != star and c.get("use") and c.get("on", 0) >= cnt[star]["off"]:
+            delta = i
+    if delta is None:
+        return None
+    if star < len(relays) and relays[star]:
+        return "star"
+    if delta < len(relays) and relays[delta]:
+        return "delta" if tele.get("profile_ms", 0) < cnt[delta]["on"] + 3000 else None
+    return "dead"
+
+def matrix_tick(now):
+    if mat is None:
+        return
+    blink = (now // 400) % 2 == 0
+    if mqtt is None or not fresh(tele_ms):
+        mat.icon("off", BLUE)
+        return
+    if alarm_key():
+        if blink:
+            mat.icon("alert", RED)
+        else:
+            mat.clear()
+        return
+    phase = star_delta_phase()
+    if phase == "star":
+        mat.icon("star", CYAN)
+        return
+    if phase == "delta":
+        mat.icon("delta", CYAN)
+        return
+    if phase == "dead":
+        mat.icon("dash", CYAN)
+        return
+    running = tele.get("motor_running")
+    if page == 1 and running and fresh(sens_ms) and sens.get("vibration_mms") is not None:
+        mat.bar(float(sens["vibration_mms"]) / vib_limit)
+        return
+    if running:
+        if nominal_a and tele.get("current") is not None:
+            mat.bar(float(tele["current"]) / nominal_a)
+        else:
+            mat.icon("play", GREEN)
+        return
+    if any(tele.get("relays") or []):
+        if blink:
+            mat.icon("play", YELLOW)
+        else:
+            mat.clear()
+        return
+    mat.icon("stop", BLUE)
+
 # ---------------------------------------------------------------- laco
 def main():
     global last_wifi_attempt, last_ping, pending
@@ -511,6 +613,7 @@ def main():
         if time.ticks_diff(now, last_ui) > 250:
             last_ui = now
             render()
+            matrix_tick(now)
         time.sleep_ms(20)
 
 main()
