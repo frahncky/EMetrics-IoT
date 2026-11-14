@@ -1,25 +1,41 @@
-# Integracao BitDogLab ao E-Metrics IoT
+# BitDogLab: painel MQTT do quadro IoT Motor
 
-Adicao **nao invasiva**: um terceiro terminal MQTT, em paralelo com o dashboard web e
-o aplicativo Flutter. Os codigos atuais do ESP32/PZEM, do dashboard, do app, o
-armazenamento local e a infraestrutura MQTT nao sao alterados nesta entrega.
+Terminal MQTT adicional, em paralelo com o painel web e o app. Mostra a
+telemetria **real** do quadro de comando (`esp32-01`, PZEM-004T e estado do
+motor), lista as partidas gravadas no quadro e envia `start`/`stop` pelo
+protocolo do projeto IoT Motor (`iot_motor/docs/mqtt.md`).
 
-## Fluxo
+Quem aciona os contatores, aplica intertravamentos, limites e desarmes e
+confirma o estado e o **quadro**. A BitDogLab so pede; o resultado aparece
+pela `command_ack` e pela telemetria.
 
-```
-ESP32 + PZEM --telemetria--> broker MQTT --+--> App Flutter atual
-                                           +--> Dashboard web atual
-                                           +--> BitDogLab (este firmware)
+## Uso
 
-BitDogLab --solicitacao de comando--> MQTT --> controlador de motor COMPATIVEL
-controlador --estado confirmado/alarmes--> MQTT --> BitDogLab
-```
+| Botao | Acao |
+|---|---|
+| A (toque) | Escolhe a proxima partida da lista do quadro |
+| A (segurar 1,2 s) | Da a partida escolhida (`ENABLE_MOTOR_COMMANDS = True`) |
+| B | Desliga (`stop`); sempre enviado |
+| Joystick | Paginas: U/I/P, E/f/FP, partida |
 
-**Importante:** o firmware atual `esp32_pzem.ino` publica grandezas e trata
-configuracao e historico MQTT, mas **nao implementa acionamento de motor**.
-Este novo cliente ja pode **ler as medicoes** sem alterar nada. Os botoes de
-partida/parada so podem funcionar apos existir um controlador de motor que
-aceite o contrato MQTT abaixo. O exemplo nao aciona GPIO de potencia/contator.
+LED: azul parado, verde ligado, amarelo partindo, vermelho sem MQTT,
+quadro offline ou desarme.
+
+A partida e recusada localmente se o quadro estiver sem telemetria, exigir
+comando cifrado (`secure`), estiver em modo instrumentacao ou ja estiver ligado.
+
+## Topicos (`IOTMOTOR_PREFIX`/`IOTMOTOR_BOARD`)
+
+| Topico | Uso |
+|---|---|
+| `iotmotor/esp32-01/telemetry` | Medicoes, `boot`, `ts`, `motor_running`, `relays`, `start_phase`, `trip_alarm` |
+| `iotmotor/esp32-01/profiles` | Partidas gravadas (retido) |
+| `iotmotor/esp32-01/status` | `online`/`offline` |
+| `iotmotor/esp32-01/command` | `{"v":1,"device_id":"esp32-01","seq":"...","action":"start","boot":"...","profile":"direta"}` |
+| `iotmotor/esp32-01/command_ack` | Aceite ou motivo da recusa |
+
+O `seq` vem do `ts` da telemetria em microssegundos, compativel com o
+`Date.now()*1000` do painel e do app.
 
 ## Hardware
 
@@ -56,33 +72,6 @@ Para MQTT sobre WebSocket, use `MQTT_USE_WEBSOCKET = True` e configure
 `MQTT_WEBSOCKET_PATH` (por exemplo, `/mqtt`). Use porta 8080 sem TLS (`ws`) ou
 8081 com TLS (`wss`), conforme o broker.
 **Nunca exponha um topico de comando de motor em broker publico de teste.**
-
-## Topicos
-
-A configuracao padrao acompanha a telemetria MQTT existente:
-
-| Direcao | Topico | Funcao |
-|---|---|---|
-| ESP32 → broker → BitDogLab | `emetrics/pzem` | JSON de metrica atual |
-| BitDogLab → broker | `emetrics/motor/command` | Solicitacao de comando (nao retained) |
-| Controlador → broker | `emetrics/motor/status` | Estado real confirmado |
-| Controlador → broker | `emetrics/motor/alarms` | Alarmes e falhas |
-
-Exemplo de partida **solicitada** (nao representa partida fisica confirmada):
-
-```json
-{"deviceId":"motor01","command":"startMotor","source":"bitdoglab","commandId":"bitdog-123456"}
-```
-
-Exemplo de resposta que o controlador devera publicar:
-
-```json
-{"deviceId":"motor01","state":"running","alarm":""}
-```
-
-Valores de `state`: `starting`, `running`, `stopping`,
-`stopped`, `fault`. Para uso com varios motores, separe topicos por
-identificador de motor ou filtre `deviceId` em todas as mensagens.
 
 ## Protecao e limites
 

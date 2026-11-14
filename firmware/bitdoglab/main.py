@@ -1,7 +1,15 @@
-"""Painel MQTT adicional BitDogLab para E-Metrics IoT (MicroPython / Pico W).
+"""Painel MQTT BitDogLab para o quadro de comando IoT Motor (MicroPython / Pico W).
 
-Este programa NAO altera o ESP32, o app Flutter ou o dashboard web.
-Controle de motor: apenas solicita ao controlador externo; NUNCA aciona rede eletrica.
+Le a telemetria real do quadro (PZEM e estado do motor), lista as partidas
+gravadas no quadro e envia start/stop pelo protocolo documentado em
+iot_motor/docs/mqtt.md. Quem aciona contatores e aplica permissivos,
+intertravamentos e desarmes e o quadro; a BitDogLab so pede.
+
+Botoes:
+  A (toque)      -> proxima partida da lista
+  A (segurar)    -> da a partida escolhida
+  B              -> desliga (sempre enviado, mesmo sem partida em andamento)
+  Joystick (SW)  -> troca a pagina do display
 """
 import json
 import time
@@ -9,6 +17,15 @@ import network
 from machine import Pin, SoftI2C
 from umqtt.simple import MQTTClient
 import config
+
+PREFIX = getattr(config, "IOTMOTOR_PREFIX", "iotmotor")
+BOARD = getattr(config, "IOTMOTOR_BOARD", "esp32-01")
+T_TELEMETRY = "%s/%s/telemetry" % (PREFIX, BOARD)
+T_PROFILES = "%s/%s/profiles" % (PREFIX, BOARD)
+T_STATUS = "%s/%s/status" % (PREFIX, BOARD)
+T_COMMAND = "%s/%s/command" % (PREFIX, BOARD)
+T_ACK = "%s/%s/command_ack" % (PREFIX, BOARD)
+PAGES = 3
 
 a = Pin(config.PIN_BUTTON_A, Pin.IN, Pin.PULL_UP)
 b = Pin(config.PIN_BUTTON_B, Pin.IN, Pin.PULL_UP)
@@ -28,64 +45,75 @@ except Exception as exc:
 nic = network.WLAN(network.STA_IF)
 nic.active(True)
 mqtt = None
-metrics = {}
-last_metrics_ms = None
-motor = "desconhecido"
-alarm = ""
-pending = None
+tele = {}              # ultima telemetria do quadro
+tele_ms = None
+tele_ts_ms = None      # ticks em que chegou a ultima telemetria com ts
+board_online = None
+profiles = []          # [(id, nome_sem_acento)]
+sel = 0
+pending = None         # (seq, action)
 pending_at = 0
+message = ""
+message_at = 0
+seq_counter = 0
 page = 0
 a_start = None
-was_a = False
-was_b = False
-was_sw = False
+a_long_done = False
+was_a = was_b = was_sw = False
 last_wifi_attempt = time.ticks_ms() - 5000
 last_ping = time.ticks_ms()
+
+ACCENTS = {
+    "á": "a", "à": "a", "â": "a", "ã": "a", "é": "e", "ê": "e", "í": "i",
+    "ó": "o", "ô": "o", "õ": "o", "ú": "u", "ç": "c", "Á": "A", "À": "A",
+    "Â": "A", "Ã": "A", "É": "E", "Ê": "E", "Í": "I", "Ó": "O", "Ô": "O",
+    "Õ": "O", "Ú": "U", "Ç": "C",
+}
+
+def ascii_text(text):
+    return "".join(ACCENTS.get(ch, ch if ord(ch) < 128 else "?") for ch in str(text))
 
 def led(red=0, green=0, blue=0):
     led_r.value(red)
     led_g.value(green)
     led_b.value(blue)
 
+def show(text):
+    global message, message_at
+    message = ascii_text(text)[:21]
+    message_at = time.ticks_ms()
+    print(text)
+
 def callback(topic, raw):
-    global metrics, last_metrics_ms, motor, alarm, pending
+    global tele, tele_ms, tele_ts_ms, board_online, profiles, sel, pending
+    t = topic.decode() if isinstance(topic, bytes) else topic
+    if t == T_STATUS:
+        board_online = raw == b"online"
+        return
     try:
         data = json.loads(raw)
-        if not isinstance(data, dict):
-            return
     except (ValueError, TypeError):
         return
-    t = topic.decode() if isinstance(topic, bytes) else topic
-    if t == config.TELEMETRY_TOPIC:
-        if all(k in data for k in ("voltage", "current", "power")):
-            metrics = data
-            last_metrics_ms = time.ticks_ms()
-    elif t == config.MOTOR_STATUS_TOPIC:
-        state = data.get("state", data.get("status", "desconhecido"))
-        if state in ("running", "stopped", "starting", "stopping", "fault"):
-            motor = state
-            if pending == "startMotor" and state == "running":
-                pending = None
-            elif pending == "stopMotor" and state == "stopped":
-                pending = None
-        if "alarm" in data:
-            alarm = str(data["alarm"])[:24] if data["alarm"] else ""
-        if state == "fault":
+    if not isinstance(data, dict):
+        return
+    if t == T_TELEMETRY:
+        tele = data
+        tele_ms = time.ticks_ms()
+        if data.get("ts"):
+            tele_ts_ms = tele_ms
+    elif t == T_PROFILES:
+        current = profiles[sel][0] if profiles else None
+        profiles = [(p.get("id"), ascii_text(p.get("name", p.get("id"))))
+                    for p in data.get("profiles", []) if p.get("id")]
+        ids = [p[0] for p in profiles]
+        sel = ids.index(current) if current in ids else 0
+    elif t == T_ACK:
+        if pending and str(data.get("seq")) == pending[0]:
             pending = None
-    elif t == config.MOTOR_ALARM_TOPIC:
-        alarm = str(data.get("message", data.get("alarm", "Falha")))[:24]
-        motor = "fault"
-        pending = None
-
-def disconnect():
-    global mqtt, motor
-    if mqtt:
-        try:
-            mqtt.disconnect()
-        except Exception:
-            pass
-    mqtt = None
-    motor = "desconhecido"
+            if data.get("accepted"):
+                show("OK: " + str(data.get("phase") or data.get("action")))
+            else:
+                show("Recusado: " + str(data.get("reason")))
 
 def wifi_networks():
     nets = getattr(config, "WIFI_NETWORKS", None)
@@ -116,6 +144,19 @@ def connect_wifi():
             return
     raise OSError("Wi-Fi indisponivel")
 
+def disconnect():
+    global mqtt, pending
+    if mqtt:
+        try:
+            mqtt.disconnect()
+        except Exception:
+            try:
+                mqtt.sock.close()
+            except Exception:
+                pass
+    mqtt = None
+    pending = None
+
 def connect():
     global mqtt, last_ping
     if not nic.isconnected():
@@ -141,7 +182,7 @@ def connect():
     c.set_callback(callback)
     try:
         c.connect()
-        for t in (config.TELEMETRY_TOPIC, config.MOTOR_STATUS_TOPIC, config.MOTOR_ALARM_TOPIC):
+        for t in (T_STATUS, T_PROFILES, T_ACK, T_TELEMETRY):
             c.subscribe(t.encode())
     except Exception:
         try:
@@ -151,99 +192,150 @@ def connect():
         raise
     mqtt = c
     last_ping = time.ticks_ms()
-    transport = "WSS" if use_websocket and use_tls else (
-        "WS" if use_websocket else ("TLS" if use_tls else "TCP")
-    )
-    print("Conectada ao MQTT %s: %s:%d" %
-          (transport, config.MQTT_HOST, config.MQTT_PORT))
+    print("Conectada ao MQTT: %s:%d, quadro %s" % (config.MQTT_HOST, config.MQTT_PORT, BOARD))
 
-def request_motor(command):
+def next_seq():
+    # O quadro exige seq crescente; painel e app usam Date.now()*1000.
+    # Sem relogio proprio, usa o ts (s UTC) da telemetria mais o tempo decorrido.
+    global seq_counter
+    seq_counter = (seq_counter + 1) % 1000
+    ms = int(tele["ts"]) * 1000 + time.ticks_diff(time.ticks_ms(), tele_ts_ms)
+    return str(ms * 1000 + seq_counter)
+
+def telemetry_fresh():
+    return tele_ms is not None and time.ticks_diff(time.ticks_ms(), tele_ms) <= config.TELEMETRY_STALE_MS
+
+def send(action, extra=None):
     global pending, pending_at
-    if not config.ENABLE_MOTOR_COMMANDS:
-        print("Solicitacao desativada em config.py")
-        return
     if mqtt is None:
-        print("Sem MQTT: comando nao enviado")
+        show("Sem MQTT")
         return
-    if command == "startMotor" and (alarm or motor == "fault"):
-        print("Partida bloqueada: alarme/falha reportada")
+    if action != "stop" and (tele_ts_ms is None or not telemetry_fresh()):
+        show("Quadro sem telemetria")
         return
-    # Nao confie no botao para seguranca: controlador precisa validar permissivos.
-    payload = {
-        "deviceId": config.MOTOR_ID, "command": command,
-        "source": "bitdoglab", "commandId": "bitdog-%d" % time.ticks_ms()
-    }
+    if tele_ts_ms is None:
+        seq = str(time.ticks_ms())  # stop aceita qualquer seq
+    else:
+        seq = next_seq()
+    cmd = {"v": 1, "device_id": BOARD, "seq": seq, "action": action}
+    if extra:
+        cmd.update(extra)
     try:
-        # Sem retained: um comando antigo nunca deve ser repetido na reconexao.
-        mqtt.publish(config.MOTOR_COMMAND_TOPIC.encode(),
-                     json.dumps(payload).encode(), retain=False, qos=0)
-        pending = command
+        mqtt.publish(T_COMMAND.encode(), json.dumps(cmd).encode(), retain=False, qos=0)
+        pending = (seq, action)
         pending_at = time.ticks_ms()
-        print("Solicitacao enviada:", command)
+        show("Enviado: " + action)
     except OSError as exc:
         print("Erro ao enviar:", exc)
         disconnect()
 
+def request_start():
+    if not config.ENABLE_MOTOR_COMMANDS:
+        show("Comandos desativados")
+        return
+    if not profiles:
+        show("Sem lista de partidas")
+        return
+    if tele.get("secure"):
+        show("Quadro exige selo")
+        return
+    if tele.get("actuation") is False:
+        show("Modo instrumentacao")
+        return
+    if tele.get("motor_running") or any(tele.get("relays") or []):
+        show("Motor ja ligado")
+        return
+    send("start", {"boot": tele.get("boot"), "profile": profiles[sel][0]})
+
+def request_stop():
+    # Parar e o lado seguro: vai sempre, mesmo com comandos desativados.
+    send("stop")
+
 def buttons():
-    global was_a, was_b, was_sw, a_start, page
+    global was_a, was_b, was_sw, a_start, a_long_done, page, sel
     av = a.value() == 0
     bv = b.value() == 0
     sv = sw.value() == 0
     now = time.ticks_ms()
+    if bv and not was_b:
+        request_stop()
     if av and not was_a:
         a_start = now
-    if not av and was_a and a_start is not None:
-        if time.ticks_diff(now, a_start) >= config.START_HOLD_MS and not bv:
-            request_motor("startMotor")
+        a_long_done = False
+    if av and a_start is not None and not a_long_done and not bv:
+        if time.ticks_diff(now, a_start) >= config.START_HOLD_MS:
+            a_long_done = True
+            request_start()
+    if not av and was_a:
+        if not a_long_done and profiles:
+            sel = (sel + 1) % len(profiles)
+            page = 2
         a_start = None
-    if bv and not was_b:
-        request_motor("stopMotor")
     if sv and not was_sw:
-        page = (page + 1) % 2
+        page = (page + 1) % PAGES
     was_a, was_b, was_sw = av, bv, sv
 
 def number(key, suffix="", places=1):
     try:
-        return ("%." + str(places) + "f" + suffix) % float(metrics[key])
+        return ("%." + str(places) + "f" + suffix) % float(tele[key])
     except (KeyError, TypeError, ValueError):
         return "--" + suffix
 
+def motor_text():
+    if not telemetry_fresh():
+        return "Quadro offline"
+    if tele.get("trip_alarm"):
+        return "Desarme: " + ascii_text(tele.get("trip_field") or tele["trip_alarm"])
+    if tele.get("motor_running"):
+        return "Motor LIGADO"
+    if any(tele.get("relays") or []):
+        return "Partindo..."
+    return "Motor parado"
+
 def render():
-    if mqtt is None or motor == "fault" or alarm:
+    fresh = telemetry_fresh()
+    if mqtt is None or not fresh or tele.get("trip_alarm"):
         led(red=1)
-    elif motor == "running":
+    elif tele.get("motor_running"):
         led(green=1)
-    elif motor == "stopped":
-        led(blue=1)
+    elif any(tele.get("relays") or []):
+        led(green=1, red=1)
     else:
-        led(blue=1, green=1)
+        led(blue=1)
     if oled is None:
         return
-    stale = last_metrics_ms is None or time.ticks_diff(time.ticks_ms(), last_metrics_ms) > config.TELEMETRY_STALE_MS
     oled.fill(0)
-    oled.text("E-Metrics IoT", 0, 0)
-    oled.text("MQTT:" + ("OK" if mqtt else "OFF") + " Motor:", 0, 10)
-    oled.text(motor[:18], 0, 20)
-    if stale:
-        oled.text("Medicao: offline", 0, 30)
-    elif page == 0:
-        oled.text("U: " + number("voltage", "V"), 0, 30)
-        oled.text("I: " + number("current", "A", 2), 0, 40)
+    oled.text("MQTT:" + ("OK" if mqtt else "OFF") + " " + BOARD, 0, 0)
+    oled.text(motor_text()[:16], 0, 10)
+    if page == 0:
+        oled.text("U: " + number("voltage", "V"), 0, 22)
+        oled.text("I: " + number("current", "A", 2), 0, 32)
+        oled.text("P: " + number("power", "W"), 0, 42)
+    elif page == 1:
+        oled.text("E: " + number("energy", "kWh", 2), 0, 22)
+        oled.text("f: " + number("frequency", "Hz"), 0, 32)
+        oled.text("FP: " + number("pf", "", 2), 0, 42)
     else:
-        oled.text("P: " + number("power", "W"), 0, 30)
-        oled.text("E: " + number("energy", "kWh", 2), 0, 40)
-    if alarm:
-        oled.text(("ALM: " + alarm)[:21], 0, 50)
+        oled.text("Partida:", 0, 22)
+        if profiles:
+            oled.text("> " + profiles[sel][1][:14], 0, 32)
+            oled.text("(%d/%d) A:troca" % (sel + 1, len(profiles)), 0, 42)
+        else:
+            oled.text("aguardando lista", 0, 32)
+    if message and time.ticks_diff(time.ticks_ms(), message_at) < 5000:
+        oled.text(message[:16], 0, 54)
     elif pending:
-        oled.text("Aguardando status", 0, 50)
+        oled.text("Aguardando quadro", 0, 54)
+    elif fresh and tele.get("start_phase"):
+        oled.text(ascii_text(tele["start_phase"])[:16], 0, 54)
     else:
-        oled.text("SW:ver  A:start B:stop"[:21], 0, 50)
+        oled.text("SW:pag B:desliga", 0, 54)
     oled.show()
 
 def main():
     global last_wifi_attempt, last_ping, pending
-    print("E-Metrics / BitDogLab: interface adicional.")
-    print("Comando de motor habilitado:", config.ENABLE_MOTOR_COMMANDS)
+    print("BitDogLab: painel do quadro", BOARD)
+    print("Partida habilitada:", config.ENABLE_MOTOR_COMMANDS)
     last_ui = 0
     while True:
         now = time.ticks_ms()
@@ -261,11 +353,11 @@ def main():
                 if time.ticks_diff(now, last_ping) > 20000:
                     mqtt.ping()
                     last_ping = now
-            except OSError as exc:
+            except (OSError, MemoryError) as exc:
                 print("MQTT caiu:", exc)
                 disconnect()
         if pending and time.ticks_diff(now, pending_at) > 10000:
-            print("Comando sem confirmacao:", pending)
+            show("Sem resposta: " + pending[1])
             pending = None
         if time.ticks_diff(now, last_ui) > 400:
             last_ui = now

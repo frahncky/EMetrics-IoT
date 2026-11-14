@@ -17,15 +17,14 @@ MQTT_WEBSOCKET_PATH = "/mqtt"
 MQTT_USER = ""
 MQTT_PASSWORD = ""
 MQTT_CLIENT_ID = "emetrics-bitdoglab"
-TELEMETRY_TOPIC = "emetrics/pzem"
 
-# Topicos opcionais, para um controlador de motor compativel.
-MOTOR_ID = "motor01"
-MOTOR_COMMAND_TOPIC = "emetrics/motor/command"
-MOTOR_STATUS_TOPIC = "emetrics/motor/status"
-MOTOR_ALARM_TOPIC = "emetrics/motor/alarms"
+# Quadro de comando do IoT Motor (protocolo em iot_motor/docs/mqtt.md).
+# Topicos: <PREFIX>/<BOARD>/telemetry, profiles, status, command, command_ack.
+IOTMOTOR_PREFIX = "iotmotor"
+IOTMOTOR_BOARD = "esp32-01"
 
-# Deixe FALSE ate existir atuador com permissivos e protecoes verificadas.
+# True: botao A (segurar) envia "start" da partida escolhida.
+# "stop" (botao B) e sempre enviado. Permissivos e protecoes ficam no quadro.
 ENABLE_MOTOR_COMMANDS = False
 
 # Mapeamento da BitDogLab v6.3 com Raspberry Pi Pico W.
