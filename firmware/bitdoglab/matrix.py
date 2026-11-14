@@ -67,9 +67,9 @@ class Matrix:
         self._write(("icon", name, color))
 
     def bar(self, fraction, label_color=None):
-        """Barra vertical de 0 a 5 colunas: verde, amarela e vermelha.
+        """Nivel de 0 a 5 LEDs so na linha de baixo: verde, amarelo e vermelho.
 
-        fraction 1.0 = nominal/limite (4 colunas); acima disso acende a 5a.
+        fraction 1.0 = nominal/limite (4 LEDs); acima disso acende o 5o.
         """
         if fraction is None:
             self.icon("dash", WHITE)
@@ -78,9 +78,5 @@ class Matrix:
         self.np.fill((0, 0, 0))
         for c in range(cols):
             color = GREEN if c < 3 else (YELLOW if c == 3 else RED)
-            col = self._scale(color)
-            for r in range(5):
-                # Colunas crescem em altura: efeito de "rampa".
-                if r >= 4 - min(4, c + 1) or c >= 3:
-                    self._set(r, c, col)
+            self._set(4, c, self._scale(color))
         self._write(("bar", cols))

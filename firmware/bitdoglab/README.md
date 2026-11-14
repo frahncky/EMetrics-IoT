@@ -79,7 +79,7 @@ Prioridade:
 | Partindo (rele ligado, sem corrente) | Play amarelo piscando |
 | Parado | Quadrado azul |
 
-Barras: 4 colunas = 100% (nominal ou limite); a 5a, vermelha, acende acima
+Barras: so a linha de baixo da matriz. 4 LEDs = 100% (nominal ou limite); o 5o, vermelho, acende acima
 disso. Verde ate 75%, amarelo ate 100%.
 
 - A corrente nominal vem de `iotmotor/esp32-01/motor_info` (`current_a`, ou
