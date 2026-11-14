@@ -136,7 +136,7 @@ Se o joystick estiver invertido, troque `JOYSTICK_X_SIGN` ou
 5. Acompanhe pelo serial (115200). Esperado:
 
    ```
-   Wi-Fi conectado: Francisco_wifi 2G 192.168.0.5
+   Wi-Fi conectado: MinhaRede 2G 192.168.0.50
    Conectada ao MQTT: test.mosquitto.org:8080
    ```
 
