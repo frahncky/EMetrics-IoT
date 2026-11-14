@@ -139,9 +139,16 @@ def connect():
                        user=user, password=password, keepalive=45,
                        ssl=use_tls, ssl_params=ssl_params)
     c.set_callback(callback)
-    c.connect()
-    for t in (config.TELEMETRY_TOPIC, config.MOTOR_STATUS_TOPIC, config.MOTOR_ALARM_TOPIC):
-        c.subscribe(t.encode())
+    try:
+        c.connect()
+        for t in (config.TELEMETRY_TOPIC, config.MOTOR_STATUS_TOPIC, config.MOTOR_ALARM_TOPIC):
+            c.subscribe(t.encode())
+    except Exception:
+        try:
+            c.sock.close()
+        except Exception:
+            pass
+        raise
     mqtt = c
     last_ping = time.ticks_ms()
     transport = "WSS" if use_websocket and use_tls else (

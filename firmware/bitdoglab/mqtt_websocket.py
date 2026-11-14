@@ -31,7 +31,14 @@ class WebSocketStream:
         self.sock = socket.socket()
         self.sock.settimeout(timeout)
         address = socket.getaddrinfo(host, port)[0][-1]
-        self.sock.connect(address)
+        try:
+            self.sock.connect(address)
+            self._setup(host, use_tls, timeout)
+        except Exception:
+            self.sock.close()
+            raise
+
+    def _setup(self, host, use_tls, timeout):
         if use_tls:
             try:
                 import ssl
@@ -43,6 +50,12 @@ class WebSocketStream:
         self._payload_buffer = bytearray()
         self._blocking = True
         self._handshake()
+
+    def _recv(self, size):
+        # read(n) no MicroPython espera n bytes; recv devolve o que chegou.
+        if hasattr(self.sock, "recv"):
+            return self.sock.recv(size)
+        return self.sock.read(size)
 
     def _send_all(self, data):
         sent = 0
@@ -75,7 +88,7 @@ class WebSocketStream:
 
         response = bytearray()
         while b"\r\n\r\n" not in response:
-            chunk = self.sock.read(256)
+            chunk = self._recv(256)
             if not chunk:
                 raise OSError("Broker encerrou o handshake WebSocket")
             response.extend(chunk)
@@ -125,7 +138,7 @@ class WebSocketStream:
 
     def _read_from_network(self):
         try:
-            chunk = self.sock.read(512)
+            chunk = self._recv(512)
         except OSError as exc:
             if not self._blocking and exc.args and exc.args[0] in (11, 110, 116):
                 return False
@@ -168,7 +181,7 @@ class WebSocketStream:
         if len(data) < end:
             return False
         payload = bytearray(data[offset:end])
-        del data[:end]
+        self._network_buffer = data[end:]
         if mask:
             for index in range(length):
                 payload[index] ^= mask[index & 3]
@@ -191,7 +204,7 @@ class WebSocketStream:
             if not self._read_from_network():
                 return None
         result = bytes(self._payload_buffer[:size])
-        del self._payload_buffer[:size]
+        self._payload_buffer = self._payload_buffer[size:]
         return result
 
     def setblocking(self, enabled):
